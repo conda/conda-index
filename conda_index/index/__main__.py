@@ -6,12 +6,11 @@ import logging
 # printing messages twice
 # conda resets logging on each subdir
 logging.basicConfig(
-    format="%(asctime)s %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-    level=logging.INFO
+    format="%(asctime)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S", level=logging.INFO
 )
 logging.getLogger("conda_build.index").setLevel(logging.DEBUG)
-import conda_build.cli.main_index   # must import *after* logging config
+import conda_build.cli.main_index  # must import *after* logging config
+
 # assert that filtering is happening; remove conda DuplicateFilter
 assert len(logging.getLogger("conda_build.index").filters)
 logging.getLogger("conda_build.index").filters = []

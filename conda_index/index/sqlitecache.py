@@ -16,7 +16,6 @@ from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 from yaml.reader import ReaderError
 
-from conda_package_handling.api import InvalidArchiveError
 from zipfile import BadZipFile
 
 from os.path import join
@@ -221,10 +220,9 @@ class CondaIndexCache:
             retval = fn, mtime, size, index_json
 
         except (
-            InvalidArchiveError,  # libarchive
             KeyError,
             EOFError,
-            JSONDecodeError,
+            json.JSONDecodeError,
             BadZipFile,  # stdlib zipfile
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):

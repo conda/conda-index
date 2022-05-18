@@ -48,10 +48,11 @@ from concurrent.futures import Executor
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
 
-from conda.api import MatchSpec, VersionOrder, human_bytes, context
-from conda.api import CondaHTTPError, get_index, url_path
-from ..conda_interface import TemporaryDirectory
-from ..conda_interface import Resolve
+from conda.exports import MatchSpec, VersionOrder, human_bytes
+
+# from conda.api import CondaHTTPError, get_index, url_path, context
+from conda_build.conda_interface import TemporaryDirectory
+from conda_build.conda_interface import Resolve
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,

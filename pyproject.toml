@@ -4,9 +4,21 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "conda_index"
-authors = [{name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io"}]
+authors = [
+    { name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io" },
+]
+license = { "file" = "LICENSE" }
 readme = "README.md"
 dynamic = ["version", "description"]
+requires-python = ">=3.9"
+dependencies = [
+    "conda >=4.12.0",
+    "conda-build >=3.21.8",
+    "conda-package-handling >=1.7.3",
+    "more_itertools",
+    "PyYAML >=6",
+    "zstandard >=0.17", # https://github.com/indygreg/python-zstandard
+]
 
 [project.urls]
 Home = "https://github.com/conda-incubator/conda-index"
