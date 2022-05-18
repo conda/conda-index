@@ -17,7 +17,7 @@ dependencies = [
     "conda-package-handling >=1.7.3",
     "more_itertools",
     "PyYAML >=6",
-    "zstandard >=0.17", # https://github.com/indygreg/python-zstandard
+    "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
 [project.urls]
