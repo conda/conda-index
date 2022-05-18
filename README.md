@@ -38,4 +38,6 @@ collections of conda packages.
 
 * Updated Python and dependency requirements.
 
+* Mercilessly cull less-used features.
+
 * Format with `black`

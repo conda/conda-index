@@ -282,6 +282,7 @@ def update_index(
     warn=True,
     current_index_versions=None,
     debug=False,
+    index_file=None,
 ):
     """
     If dir_path contains a directory named 'noarch', the path tree therein is treated

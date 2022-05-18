@@ -19,6 +19,7 @@ def update_index(
     progress=False,
     hotfix_source_repo=None,
     current_index_versions=None,
+    index_file=None,
     **kwargs
 ):
     import yaml

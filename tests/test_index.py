@@ -276,34 +276,34 @@ def test_file_index_on_single_subdir_1(testing_workdir):
                 "tags": None,
                 "timestamp": 1508520039,
             },
-            "fly": {
-                "activate.d": False,
-                "binary_prefix": False,
-                "deactivate.d": False,
-                "description": "A command line interface that runs a build in a container with ATC.",
-                "dev_url": None,
-                "doc_source_url": None,
-                "doc_url": None,
-                "home": "https://github.com/concourse/fly",
-                "icon_hash": None,
-                "icon_url": None,
-                "identifiers": None,
-                "keywords": None,
-                "license": "Apache",
-                "post_link": False,
-                "pre_link": False,
-                "pre_unlink": False,
-                "recipe_origin": None,
-                "run_exports": {},
-                "source_git_url": "/Users/scastellarin/projects/fly-package/https:/github.com/concourse/concourse.git",
-                "source_url": None,
-                "subdirs": ["osx-64"],
-                "summary": "A command line interface that runs a build in a container with ATC.",
-                "tags": None,
-                "text_prefix": False,
-                "timestamp": 0,
-                "version": "2.5.2",
-            },
+            # "fly": {
+            #     "activate.d": False,
+            #     "binary_prefix": False,
+            #     "deactivate.d": False,
+            #     "description": "A command line interface that runs a build in a container with ATC.",
+            #     "dev_url": None,
+            #     "doc_source_url": None,
+            #     "doc_url": None,
+            #     "home": "https://github.com/concourse/fly",
+            #     "icon_hash": None,
+            #     "icon_url": None,
+            #     "identifiers": None,
+            #     "keywords": None,
+            #     "license": "Apache",
+            #     "post_link": False,
+            #     "pre_link": False,
+            #     "pre_unlink": False,
+            #     "recipe_origin": None,
+            #     "run_exports": {},
+            #     "source_git_url": "/Users/scastellarin/projects/fly-package/https:/github.com/concourse/concourse.git",
+            #     "source_url": None,
+            #     "subdirs": ["osx-64"],
+            #     "summary": "A command line interface that runs a build in a container with ATC.",
+            #     "tags": None,
+            #     "text_prefix": False,
+            #     "timestamp": 0,
+            #     "version": "2.5.2",
+            # },
         },
         "subdirs": ["noarch", "osx-64"],
     }
@@ -430,6 +430,8 @@ def test_index_noarch_osx64_1(testing_workdir):
     assert actual_channeldata_json == expected_channeldata_json
 
 
+# feature will be provided with a different mechanism
+@pytest.mark.skip("removed feature")
 def test_file_index_noarch_osx64_1(testing_workdir):
     test_package_path = join(
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
@@ -673,6 +675,7 @@ def _build_test_index(workdir):
     assert "remove_test-1.0-0.tar.bz2" in pkg_list
 
 
+# SLOW
 def test_gen_patch_py(testing_workdir):
     """
     This is a channel-wide file that applies to many subdirs.  It must have a function with this signature:
