@@ -995,8 +995,11 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", debug=True
     )
-    # extract should get called once by default.  Within a channel, we assume that a .tar.bz2 and .conda have the same contents.
-    cph_extract.assert_called_once_with(test_package_path + ".conda", mock.ANY, "info")
+
+    # conda-index standalone REMOVES the re-use info between .conda/.tar.bz2 feature
+    # other speedups should even us out, but this feature could be brought back.
+    cph_extract.assert_any_call(test_package_path + ".conda")
+    cph_extract.assert_any_call(test_package_path + ".tar.bz2")
 
     with open(join(testing_workdir, "osx-64", "repodata.json")) as fh:
         actual_repodata_json = json.loads(fh.read())
