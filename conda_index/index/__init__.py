@@ -39,7 +39,6 @@ import fnmatch
 from functools import partial
 import logging
 import conda_package_handling.api
-from conda_package_handling.api import InvalidArchiveError
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import Executor
@@ -50,21 +49,23 @@ from conda.models.channel import Channel
 
 from conda.exports import MatchSpec, VersionOrder, human_bytes
 
-# from conda.api import CondaHTTPError, get_index, url_path, context
+from conda_build.conda_interface import context
+
+from conda.exports import CondaHTTPError, get_index, url_path
+
 from conda_build.conda_interface import TemporaryDirectory
 from conda_build.conda_interface import Resolve
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    FileNotFoundError,
-    JSONDecodeError,
-    get_logger,
 )
+
+from .. import utils
 
 from . import sqlitecache
 
-log = get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
@@ -107,10 +108,6 @@ local_output_folder = ""
 cached_channels = []
 channel_data = {}
 
-
-# TODO: support for libarchive seems to have broken ability to use multiple threads here.
-#    The new conda format is so much faster that it more than makes up for it.  However, it
-#    would be nice to fix this at some point.
 MAX_THREADS_DEFAULT = (
     os.cpu_count() if (hasattr(os, "cpu_count") and os.cpu_count() > 1) else 1
 )
@@ -174,15 +171,8 @@ def get_build_index(
         #     then channels from condarc.
         urls = list(channel_urls)
 
-        loggers = utils.LoggingContext.default_loggers + [__name__]
-        if debug:
-            log_context = partial(utils.LoggingContext, logging.DEBUG, loggers=loggers)
-        elif verbose:
-            log_context = partial(utils.LoggingContext, logging.WARN, loggers=loggers)
-        else:
-            log_context = partial(
-                utils.LoggingContext, logging.CRITICAL + 1, loggers=loggers
-            )
+        log_context = utils.LoggingContext()
+
         with log_context():
             # this is where we add the "local" channel.  It's a little smarter than conda, because
             #     conda does not know about our output_folder when it is not the default setting.
@@ -245,7 +235,7 @@ def get_build_index(
                                 with open(channeldata_file, "r+") as f:
                                     channel_data[channel.name] = json.load(f)
                                 break
-                            except (OSError, JSONDecodeError):
+                            except (OSError, json.JSONDecodeError):
                                 time.sleep(0.2)
                                 retry += 1
                 else:
@@ -1025,7 +1015,7 @@ class ChannelIndex:
         try:
             with open(repodata_json_path) as fh:
                 old_repodata = json.load(fh) or {}
-        except (OSError, JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             # log.info("no repodata found at %s", repodata_json_path)
             old_repodata = {}
 

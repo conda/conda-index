@@ -13,11 +13,12 @@ import conda_package_handling.api
 
 from conda_build import api
 from conda_build.conda_interface import context
-import conda_build.index
+import conda_index.index
 from conda_build.utils import copy_into, rm_rf
 from conda_build.conda_interface import subdir
 from conda_build.conda_interface import conda_47
 from .utils import metadata_dir, archive_dir
+
 
 log = getLogger(__name__)
 
@@ -45,7 +46,7 @@ def test_index_on_single_subdir_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     # #######################################
     # tests for osx-64 subdir
@@ -142,7 +143,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     # #######################################
     # tests for osx-64 subdir
@@ -200,7 +201,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
     # with open(os.path.join(testing_workdir, 'index_file'), 'a+') as fh:
     #     fh.write("osx-64/fly-2.5.2-0.tar.bz2\n")
 
-    # conda_build.index.update_index(testing_workdir, channel_name='test-channel', index_file=p)
+    # conda_index.index.update_index(testing_workdir, channel_name='test-channel', index_file=p)
 
     updated_packages = expected_repodata_json.get("packages")
 
@@ -323,7 +324,7 @@ def test_index_noarch_osx64_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     # #######################################
     # tests for osx-64 subdir
@@ -442,7 +443,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     # #######################################
     # tests for osx-64 subdir
@@ -524,7 +525,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
         fh.write("noarch/flask-0.11.1-py_0.tar.bz2\n")
         fh.write("osx/fly-2.5.2-0.tar.bz2\n")
 
-    conda_build.index.update_index(
+    conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", index_file=p
     )
 
@@ -726,7 +727,7 @@ def _patch_repodata(repodata, subdir):
 
     # indexing a second time with the same patchset should keep the removals
     for i in (1, 2):
-        conda_build.index.update_index(
+        conda_index.index.update_index(
             testing_workdir, patch_generator=patch_file, verbose=True
         )
         with open(os.path.join(testing_workdir, subdir, "repodata.json")) as f:
@@ -804,7 +805,7 @@ def test_channel_patch_instructions_json(testing_workdir):
     ) as f:
         json.dump(patch, f)
 
-    conda_build.index.update_index(testing_workdir)
+    conda_index.index.update_index(testing_workdir)
 
     with open(os.path.join(testing_workdir, subdir, "repodata.json")) as f:
         patched_metadata = json.load(f)
@@ -880,7 +881,7 @@ def test_patch_from_tarball(testing_workdir):
     with tarfile.open("patch_archive.tar.bz2", "w:bz2") as archive:
         archive.add("patch_instructions.json", "%s/patch_instructions.json" % subdir)
 
-    conda_build.index.update_index(
+    conda_index.index.update_index(
         testing_workdir, patch_generator="patch_archive.tar.bz2"
     )
 
@@ -965,10 +966,10 @@ def test_stat_cache_used(testing_workdir, mocker):
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     download(test_package_url, test_package_path)
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     cph_extract = mocker.spy(conda_package_handling.api, "extract")
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
     cph_extract.assert_not_called()
 
 
@@ -985,10 +986,10 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
         )
     # mock the extract function, so that we can assert that it is not called
     #     with the .tar.bz2, because the .conda should be preferred
-    import conda_build.index.package_streaming
+    import conda_index.index.package_streaming
 
-    cph_extract = mocker.spy(conda_build.index.package_streaming, "stream_conda_info")
-    conda_build.index.update_index(
+    cph_extract = mocker.spy(conda_index.index.package_streaming, "stream_conda_info")
+    conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", debug=True
     )
     # extract should get called once by default.  Within a channel, we assume that a .tar.bz2 and .conda have the same contents.
@@ -1041,7 +1042,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     #     being loaded resulted in incorrect hashes/sizes for either the .tar.bz2 or .conda, depending
     #     on which of those 2 existed in the cache.
     rm_rf(os.path.join(testing_workdir, "osx-64", "stat.json"))
-    conda_build.index.update_index(
+    conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", debug=True
     )
 
@@ -1060,7 +1061,7 @@ def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
         os.path.join(archive_dir, "conda-index-pkg-a-1.0-py27h5e241af_0" + ".tar.bz2"),
         test_package_path + ".tar.bz2",
     )
-    conda_build.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     # mock the extract function, so that we can assert that it is not called, because the stat cache should exist
     #    if this doesn't work, something about the stat cache is confused.  It's a little convoluted, because
@@ -1071,7 +1072,7 @@ def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
         test_package_path + ".conda",
     )
     cph_extract = mocker.spy(conda_package_handling.api, "extract")
-    conda_build.index.update_index(
+    conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", debug=True
     )
     cph_extract.assert_not_called()
@@ -1131,7 +1132,7 @@ def test_current_index_reduces_space():
         repodata = json.load(f)
     assert len(repodata["packages"]) == 7
     assert len(repodata["packages.conda"]) == 3
-    trimmed_repodata = conda_build.index._build_current_repodata(
+    trimmed_repodata = conda_index.index._build_current_repodata(
         "linux-64", repodata, None
     )
 
@@ -1154,7 +1155,7 @@ def test_current_index_reduces_space():
         }
 
     # we can keep more than one version series using a collection of keys
-    trimmed_repodata = conda_build.index._build_current_repodata(
+    trimmed_repodata = conda_index.index._build_current_repodata(
         "linux-64", repodata, {"one-gets-filtered": ["1.2", "1.3"]}
     )
     if conda_47:
