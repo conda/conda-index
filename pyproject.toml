@@ -20,5 +20,13 @@ dependencies = [
     "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
+[tool.flit.metadata.requires-extra]
+test = [
+    "pytest >=7",
+    "pytest-cov",
+    "pytest-mock",
+]
+# testing also requires the conda-build source code at the moment
+
 [project.urls]
 Home = "https://github.com/conda-incubator/conda-index"

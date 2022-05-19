@@ -1,0 +1,80 @@
+{
+  "channeldata_version": 1,
+  "packages": {
+    "dummy-package": {
+      "activate.d": false,
+      "binary_prefix": false,
+      "deactivate.d": false,
+      "description": null,
+      "dev_url": null,
+      "doc_source_url": null,
+      "doc_url": null,
+      "home": null,
+      "icon_hash": null,
+      "icon_url": null,
+      "identifiers": null,
+      "keywords": null,
+      "license": null,
+      "post_link": false,
+      "pre_link": false,
+      "pre_unlink": false,
+      "recipe_origin": null,
+      "run_exports": {},
+      "source_git_url": null,
+      "source_url": null,
+      "subdirs": [
+        "osx-64"
+      ],
+      "summary": null,
+      "tags": null,
+      "text_prefix": false,
+      "timestamp": 1557771563,
+      "version": "2.0"
+    },
+    "run_exports_versions": {
+      "activate.d": false,
+      "binary_prefix": false,
+      "deactivate.d": false,
+      "description": null,
+      "dev_url": null,
+      "doc_source_url": null,
+      "doc_url": null,
+      "home": null,
+      "icon_hash": null,
+      "icon_url": null,
+      "identifiers": null,
+      "keywords": null,
+      "license": null,
+      "post_link": false,
+      "pre_link": false,
+      "pre_unlink": false,
+      "recipe_origin": null,
+      "run_exports": {
+        "1.0": {
+          "weak": [
+            "run_exports_version 1.0"
+          ]
+        },
+        "2.0": {
+          "weak": [
+            "run_exports_version 2.0"
+          ]
+        }
+      },
+      "source_git_url": null,
+      "source_url": null,
+      "subdirs": [
+        "noarch"
+      ],
+      "summary": null,
+      "tags": null,
+      "text_prefix": false,
+      "timestamp": 1561127261,
+      "version": "2.0"
+    }
+  },
+  "subdirs": [
+    "noarch",
+    "osx-64"
+  ]
+}
