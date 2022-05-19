@@ -2,7 +2,6 @@
 
 import bz2
 import copy
-import fnmatch
 import functools
 import json
 import logging
@@ -15,24 +14,11 @@ from concurrent.futures import Executor, ProcessPoolExecutor
 from datetime import datetime
 from itertools import chain
 from numbers import Number
-from os.path import (
-    abspath,
-    basename,
-    dirname,
-    getmtime,
-    getsize,
-    isfile,
-    join,
-    splitext,
-)
+from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
 from uuid import uuid4
 
 import conda_package_handling.api
 import pytz
-import yaml
-
-# Lots of conda internals here.  Should refactor to use exports.
-from conda.common.compat import ensure_binary
 
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
@@ -48,10 +34,6 @@ from conda.models.channel import Channel
 from conda_build.conda_interface import Resolve, TemporaryDirectory, context
 from jinja2 import Environment, PackageLoader
 from tqdm import tqdm
-from yaml.constructor import ConstructorError
-from yaml.parser import ParserError
-from yaml.reader import ReaderError
-from yaml.scanner import ScannerError
 
 from .. import utils
 from ..utils import (
@@ -62,6 +44,22 @@ from ..utils import (
 from . import sqlitecache
 
 log = logging.getLogger(__name__)
+
+
+def logging_config():
+    """For subprocess."""
+    import conda_index.index.logutil
+
+    conda_index.index.logutil.configure()
+
+
+def ensure_binary(value):
+    try:
+        return value.encode("utf-8")
+    except AttributeError:  # pragma: no cover
+        # AttributeError: '<>' object has no attribute 'encode'
+        # In this case assume already binary type and do nothing
+        return value
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
@@ -170,9 +168,9 @@ def get_build_index(
         #     then channels from condarc.
         urls = list(channel_urls)
 
-        log_context = utils.LoggingContext()
+        logging_context = utils.LoggingContext()
 
-        with log_context():
+        with logging_context():
             # this is where we add the "local" channel.  It's a little smarter than conda, because
             #     conda does not know about our output_folder when it is not the default setting.
             if os.path.isdir(output_folder):
@@ -293,23 +291,16 @@ def update_index(
     information will be updated.
 
     """
-    base_path, dirname = os.path.split(dir_path)
+    _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
         if warn:
             log.warn(
                 "The update_index function has changed to index all subdirs at once.  You're pointing it at a single subdir.  "
-                "Please update your code to point it at the channel root, rather than a subdir."
+                "Please update your code to point it at the channel root, rather than a subdir. "
+                "Use -s=<subdir> to update a single subdir."
             )
-        return update_index(
-            base_path,
-            check_md5=check_md5,
-            channel_name=channel_name,
-            threads=threads,
-            verbose=verbose,
-            progress=progress,
-            hotfix_source_repo=hotfix_source_repo,
-            current_index_versions=current_index_versions,
-        )
+        raise SystemExit()
+
     return ChannelIndex(
         dir_path,
         channel_name,
@@ -372,15 +363,6 @@ CHANNELDATA_FIELDS = (
     "recipe_origin",
     "commits",
 )
-
-
-def _clear_newline_chars(record, field_name):
-    if field_name in record:
-        try:
-            record[field_name] = record[field_name].strip().replace("\n", " ")
-        except AttributeError:
-            # sometimes description gets added as a list instead of just a string
-            record[field_name] = record[field_name][0].strip().replace("\n", " ")
 
 
 def _apply_instructions(subdir, repodata, instructions):
@@ -481,147 +463,6 @@ def _maybe_write(path, content, write_newline_end=False, content_is_binary=False
     return True
 
 
-def _make_build_string(build, build_number):
-    build_number_as_string = str(build_number)
-    if build.endswith(build_number_as_string):
-        build = build[: -len(build_number_as_string)]
-        build = build.rstrip("_")
-    build_string = build
-    return build_string
-
-
-def _warn_on_missing_dependencies(missing_dependencies, patched_repodata):
-    """
-    The following dependencies do not exist in the channel and are not declared
-    as external dependencies:
-
-    dependency1:
-        - subdir/fn1.tar.bz2
-        - subdir/fn2.tar.bz2
-    dependency2:
-        - subdir/fn3.tar.bz2
-        - subdir/fn4.tar.bz2
-
-    The associated packages are being removed from the index.
-    """
-
-    if missing_dependencies:
-        builder = [
-            "WARNING: The following dependencies do not exist in the channel",
-            "    and are not declared as external dependencies:",
-        ]
-        for dep_name in sorted(missing_dependencies):
-            builder.append("  %s" % dep_name)
-            for subdir_fn in sorted(missing_dependencies[dep_name]):
-                builder.append("    - %s" % subdir_fn)
-                subdir, fn = subdir_fn.split("/")
-                popped = patched_repodata["packages"].pop(fn, None)
-                if popped:
-                    patched_repodata["removed"].append(fn)
-
-        builder.append("The associated packages are being removed from the index.")
-        builder.append("")
-        log.warn("\n".join(builder))
-
-
-def _cache_post_install_details(paths_cache_path, post_install_cache_path):
-    post_install_details_json = {
-        "binary_prefix": False,
-        "text_prefix": False,
-        "activate.d": False,
-        "deactivate.d": False,
-        "pre_link": False,
-        "post_link": False,
-        "pre_unlink": False,
-    }
-    if os.path.lexists(paths_cache_path):
-        with open(paths_cache_path) as f:
-            paths = json.load(f).get("paths", [])
-
-        # get embedded prefix data from paths.json
-        for f in paths:
-            if f.get("prefix_placeholder"):
-                if f.get("file_mode") == "binary":
-                    post_install_details_json["binary_prefix"] = True
-                elif f.get("file_mode") == "text":
-                    post_install_details_json["text_prefix"] = True
-            # check for any activate.d/deactivate.d scripts
-            for k in ("activate.d", "deactivate.d"):
-                if not post_install_details_json.get(k) and f["_path"].startswith(
-                    "etc/conda/%s" % k
-                ):
-                    post_install_details_json[k] = True
-            # check for any link scripts
-            for pat in ("pre-link", "post-link", "pre-unlink"):
-                if not post_install_details_json.get(pat) and fnmatch.fnmatch(
-                    f["_path"], "*/.*-%s.*" % pat
-                ):
-                    post_install_details_json[pat.replace("-", "_")] = True
-
-    with open(post_install_cache_path, "w") as fh:
-        json.dump(post_install_details_json, fh)
-
-
-def _cache_recipe(tmpdir, recipe_cache_path):
-    recipe_path_search_order = (
-        "info/recipe/meta.yaml.rendered",
-        "info/recipe/meta.yaml",
-        "info/meta.yaml",
-    )
-    for path in recipe_path_search_order:
-        recipe_path = os.path.join(tmpdir, path)
-        if os.path.lexists(recipe_path):
-            break
-        recipe_path = None
-
-    recipe_json = {}
-    if recipe_path:
-        with open(recipe_path) as f:
-            try:
-                recipe_json = yaml.safe_load(f)
-            except (ConstructorError, ParserError, ScannerError, ReaderError):
-                pass
-    try:
-        recipe_json_str = json.dumps(recipe_json)
-    except TypeError:
-        recipe_json.get("requirements", {}).pop("build")
-        recipe_json_str = json.dumps(recipe_json)
-    with open(recipe_cache_path, "w") as fh:
-        fh.write(recipe_json_str)
-    return recipe_json
-
-
-def _cache_run_exports(tmpdir, run_exports_cache_path):
-    run_exports = {}
-    try:
-        with open(os.path.join(tmpdir, "info", "run_exports.json")) as f:
-            run_exports = json.load(f)
-    except (OSError, FileNotFoundError):
-        try:
-            with open(os.path.join(tmpdir, "info", "run_exports.yaml")) as f:
-                run_exports = yaml.safe_load(f)
-        except (OSError, FileNotFoundError):
-            log.debug("%s has no run_exports file (this is OK)" % tmpdir)
-    with open(run_exports_cache_path, "w") as fh:
-        json.dump(run_exports, fh)
-
-
-def _cache_icon(tmpdir, recipe_json, icon_cache_path):
-    # If a conda package contains an icon, also extract and cache that in an .icon/
-    # directory.  The icon file name is the name of the package, plus the extension
-    # of the icon file as indicated by the meta.yaml `app/icon` key.
-    # apparently right now conda-build renames all icons to 'icon.png'
-    # What happens if it's an ico file, or a svg file, instead of a png? Not sure!
-    app_icon_path = recipe_json.get("app", {}).get("icon")
-    if app_icon_path:
-        icon_path = os.path.join(tmpdir, "info", "recipe", app_icon_path)
-        if not os.path.lexists(icon_path):
-            icon_path = os.path.join(tmpdir, "info", "icon.png")
-        if os.path.lexists(icon_path):
-            icon_cache_path += splitext(app_icon_path)[-1]
-            utils.move_with_fallback(icon_path, icon_cache_path)
-
-
 def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
@@ -668,20 +509,6 @@ def _get_source_repo_git_info(path):
     return commits
 
 
-def _cache_info_file(tmpdir, info_fn, cache_path):
-    info_path = os.path.join(tmpdir, "info", info_fn)
-    if os.path.lexists(info_path):
-        utils.move_with_fallback(info_path, cache_path)
-
-
-def _alternate_file_extension(fn):
-    cache_fn = fn
-    for ext in CONDA_PACKAGE_EXTENSIONS:
-        cache_fn = cache_fn.replace(ext, "")
-    other_ext = set(CONDA_PACKAGE_EXTENSIONS) - {fn.replace(cache_fn, "")}
-    return cache_fn + next(iter(other_ext))
-
-
 def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
     packages = {}
     conda_packages = {}
@@ -714,21 +541,6 @@ def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
     index = {prec: prec for prec in precs or sd._package_records}
     r = Resolve(index, channels=(channel,))
     return r
-
-
-def _get_newest_versions(r, pins={}):
-    groups = {}
-    for g_name, g_recs in r.groups.items():
-        if g_name in pins:
-            matches = []
-            for pin in pins[g_name]:
-                version = r.find_matches(MatchSpec(f"{g_name}={pin}"))[0].version
-                matches.extend(r.find_matches(MatchSpec(f"{g_name}={version}")))
-        else:
-            version = r.groups[g_name][0].version
-            matches = r.find_matches(MatchSpec(f"{g_name}={version}"))
-        groups[g_name] = matches
-    return [pkg for group in groups.values() for pkg in group]
 
 
 def _add_missing_deps(new_r, original_r):
@@ -858,7 +670,7 @@ class ChannelIndex:
         self.thread_executor = (
             DummyExecutor()
             if (debug or sys.version_info.major == 2 or threads == 1)
-            else ProcessPoolExecutor(threads)
+            else ProcessPoolExecutor(threads, initializer=logging_config)
         )
         self.debug = debug
         self.deep_integrity_check = deep_integrity_check
@@ -902,78 +714,72 @@ class ChannelIndex:
                     with open(channeldata_file) as f:
                         channel_data = json.load(f)
                 # Step 2. Collect repodata from packages, save to pkg_repodata.json file
-                with tqdm(
-                    total=len(subdirs), disable=(verbose or not progress), leave=False
-                ) as t:
-                    for subdir in subdirs:
-                        t.set_description("Subdir: %s" % subdir)
-                        t.update()
-                        with tqdm(
-                            total=8, disable=(verbose or not progress), leave=False
-                        ) as t2:
-                            t2.set_description("Gathering repodata")
-                            t2.update()
-                            log.debug("gather repodata")
-                            _ensure_valid_channel(self.channel_root, subdir)
-                            repodata_from_packages = self.index_subdir(
-                                subdir, verbose=verbose, progress=progress
-                            )
+                t = tqdm(subdirs, disable=(verbose or not progress), leave=False)
+                for subdir in t:
+                    t.set_description("Subdir: %s" % subdir)
+                    t.update()
+                    with tqdm(
+                        total=8, disable=(verbose or not progress), leave=False
+                    ) as t2:
+                        t2.set_description("Gathering repodata")
+                        t2.update()
+                        log.debug("gather repodata")
+                        _ensure_valid_channel(self.channel_root, subdir)
+                        repodata_from_packages = self.index_subdir(
+                            subdir, verbose=verbose, progress=progress
+                        )
 
-                            t2.set_description("Writing pre-patch repodata")
-                            t2.update()
-                            log.debug("write repodata")
-                            self._write_repodata(
-                                subdir,
-                                repodata_from_packages,
-                                REPODATA_FROM_PKGS_JSON_FN,
-                            )
+                        t2.set_description("Writing pre-patch repodata")
+                        t2.update()
+                        log.debug("write repodata")
+                        self._write_repodata(
+                            subdir,
+                            repodata_from_packages,
+                            REPODATA_FROM_PKGS_JSON_FN,
+                        )
 
-                            # Step 3. Apply patch instructions.
-                            t2.set_description("Applying patch instructions")
-                            t2.update()
-                            log.debug("apply patch instructions")
-                            patched_repodata, _ = self._patch_repodata(
-                                subdir, repodata_from_packages, patch_generator
-                            )
+                        # Step 3. Apply patch instructions.
+                        t2.set_description("Applying patch instructions")
+                        t2.update()
+                        log.debug("apply patch instructions")
+                        patched_repodata, _ = self._patch_repodata(
+                            subdir, repodata_from_packages, patch_generator
+                        )
 
-                            # Step 4. Save patched and augmented repodata.
-                            # If the contents of repodata have changed, write a new repodata.json file.
-                            # Also create associated index.html.
+                        # Step 4. Save patched and augmented repodata.
+                        # If the contents of repodata have changed, write a new repodata.json file.
+                        # Also create associated index.html.
 
-                            t2.set_description("Writing patched repodata")
-                            t2.update()
-                            log.debug("write patched repodata")
-                            self._write_repodata(
-                                subdir, patched_repodata, REPODATA_JSON_FN
-                            )
-                            t2.set_description("Building current_repodata subset")
-                            t2.update()
-                            log.debug("build current_repodata")
-                            current_repodata = _build_current_repodata(
-                                subdir, patched_repodata, pins=current_index_versions
-                            )
-                            t2.set_description("Writing current_repodata subset")
-                            t2.update()
-                            log.debug("write current_repodata")
-                            self._write_repodata(
-                                subdir,
-                                current_repodata,
-                                json_filename="current_repodata.json",
-                            )
+                        t2.set_description("Writing patched repodata")
+                        t2.update()
+                        log.debug("write patched repodata")
+                        self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
+                        t2.set_description("Building current_repodata subset")
+                        t2.update()
+                        log.debug("build current_repodata")
+                        current_repodata = _build_current_repodata(
+                            subdir, patched_repodata, pins=current_index_versions
+                        )
+                        t2.set_description("Writing current_repodata subset")
+                        t2.update()
+                        log.debug("write current_repodata")
+                        self._write_repodata(
+                            subdir,
+                            current_repodata,
+                            json_filename="current_repodata.json",
+                        )
 
-                            t2.set_description("Writing subdir index HTML")
-                            t2.update()
-                            log.debug("write subdir index.html")
-                            self._write_subdir_index_html(subdir, patched_repodata)
+                        t2.set_description("Writing subdir index HTML")
+                        t2.update()
+                        log.debug("write subdir index.html")
+                        self._write_subdir_index_html(subdir, patched_repodata)
 
-                            t2.set_description("Updating channeldata")
-                            t2.update()
-                            log.debug("update channeldata")
-                            self._update_channeldata(
-                                channel_data, patched_repodata, subdir
-                            )
+                        t2.set_description("Updating channeldata")
+                        t2.update()
+                        log.debug("update channeldata")
+                        self._update_channeldata(channel_data, patched_repodata, subdir)
 
-                            log.debug("finish %s", subdir)
+                        log.debug("finish %s", subdir)
 
                 # Step 7. Create and write channeldata.
                 self._write_channeldata_index_html(channel_data)
@@ -1226,18 +1032,10 @@ class ChannelIndex:
                 cache.save_stat_cache(stat_cache)
         return new_repodata
 
-    @staticmethod
-    def _load_index_from_cache(channel_root, subdir, fn, stat_cache):
-        index_cache_path = join(channel_root, subdir, ".cache", "index", fn + ".json")
-        try:
-            with open(index_cache_path) as fh:
-                index_json = json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            index_json = fn
-
-        return fn, index_json
-
     def _write_repodata(self, subdir, repodata, json_filename):
+        """
+        Write repodata to :json_filename, but only if changed.
+        """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
         new_repodata_binary = json.dumps(
             repodata,
@@ -1248,7 +1046,7 @@ class ChannelIndex:
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
-            # XXX do this quickly or not at all
+            # XXX write bz2 quickly or not at all, delete old one
             repodata_bz2_path = repodata_json_path + ".bz2"
             bz2_content = bz2.compress(new_repodata_binary)
             _maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
@@ -1495,9 +1293,7 @@ class ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True).replace(
-            "':'", "': '"
-        )
+        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )

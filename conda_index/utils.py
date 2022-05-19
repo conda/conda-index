@@ -20,16 +20,16 @@ def LoggingContext(*args, **kwargs):
     return log_context()
 
 
-from conda_build.utils import (
+# multithreaded checksums
+from conda_package_handling.utils import checksums
+
+from .utils_build import (
     ensure_list,
     get_lock,
     merge_or_update_dict,
     move_with_fallback,
     try_acquire_locks,
 )
-
-# multithreaded checksums
-from conda_package_handling.utils import checksums
 
 
 def file_contents_match(pathA, pathB):
