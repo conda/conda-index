@@ -472,7 +472,7 @@ def _maybe_write(path, content, write_newline_end=False, content_is_binary=False
         if write_newline_end:
             fh.write(b"\n")
     if isfile(path):
-        if utils.md5_file(temp_path) == utils.md5_file(path):
+        if utils.file_contents_match(temp_path, path):
             # No need to change mtimes. The contents already match.
             os.unlink(temp_path)
             return False
@@ -895,6 +895,7 @@ class ChannelIndex:
             with utils.try_acquire_locks(
                 [utils.get_lock(self.channel_root)], timeout=900
             ):
+                # keeep channeldata in memory, update with each subdir
                 channel_data = {}
                 channeldata_file = os.path.join(self.channel_root, "channeldata.json")
                 if os.path.isfile(channeldata_file):
@@ -1259,11 +1260,12 @@ class ChannelIndex:
 
         def _add_extra_path(extra_paths, path):
             if isfile(join(self.channel_root, path)):
+                md5sum, sha256sum = utils.checksums(path, ("md5", "sha256"))
                 extra_paths[basename(path)] = {
                     "size": getsize(path),
                     "timestamp": int(getmtime(path)),
-                    "sha256": utils.sha256_checksum(path),
-                    "md5": utils.md5_file(path),
+                    "sha256": sha256sum,
+                    "md5": md5sum,
                 }
 
         extra_paths = OrderedDict()

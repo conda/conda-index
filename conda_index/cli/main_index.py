@@ -1,7 +1,7 @@
 import os
 import sys
 
-from conda_build.conda_interface import ArgumentParser
+from conda.exports import ArgumentParser
 
 from .. import api
 from ..index import MAX_THREADS_DEFAULT, logutil

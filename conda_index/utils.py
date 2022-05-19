@@ -1,3 +1,4 @@
+import hashlib
 from contextlib import contextmanager
 
 from conda.base.constants import (
@@ -19,15 +20,27 @@ def LoggingContext(*args, **kwargs):
     return log_context()
 
 
-# import from base definition where practical
-from conda_build.utils import (
-    sha256_checksum,  # multithreaded sha+md5 checksum is available
-)
 from conda_build.utils import (
     ensure_list,
     get_lock,
-    md5_file,
     merge_or_update_dict,
     move_with_fallback,
     try_acquire_locks,
 )
+
+# multithreaded checksums
+from conda_package_handling.utils import checksums
+
+
+def file_contents_match(pathA, pathB):
+    """
+    Return True if pathA and pathB have identical contents.
+    """
+    hashes = []
+    for path in (pathA, pathB):
+        hashfunc = hashlib.blake2b()
+        with open(path, "rb") as data:
+            while block := data.read(1 << 20):
+                hashfunc.update(block)
+        hashes.append(hashfunc.digest())
+    return hashes[0] == hashes[1]
