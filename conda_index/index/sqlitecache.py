@@ -107,7 +107,7 @@ class CondaIndexCache:
         conn = connect(self.db_filename)
         with conn:
             convert_cache.create(conn)
-            convert_cache.remove_prefix(conn)
+            convert_cache.migrate(conn)
         return conn
 
     def convert(self, force=False):

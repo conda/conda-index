@@ -6,8 +6,10 @@ collections of conda packages.
 
 ```bash
 conda create -n conda-index python=3.10 conda
+# in a parent directory
 pip install -e git+https://git@github.com/conda/conda-build.git#egg=conda-build
-pip install -e .[test]
+git clone (url of the conda-index repository)
+pip install -e conda-index[test] # pip >=22
 
 pytest
 ```
