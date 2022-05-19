@@ -10,4 +10,5 @@ from . import logutil
 logutil.configure()
 
 import conda_index.cli.main_index
+
 conda_index.cli.main_index.main()
