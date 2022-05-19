@@ -22,6 +22,9 @@ from . import common
 
 log = logging.getLogger(__name__)
 
+# maximum 'PRAGMA user_version' we support
+USER_VERSION = 1
+
 PATH_INFO = re.compile(
     r"""
     (?P<channel>[^/]*)/
@@ -49,45 +52,55 @@ TYPICAL_DIRECTORIES = {
     "clones/conda-forge/linux-64/.cache/post_install",
 }
 
+TABLE_NAMES = [
+    "about",
+    "icon",
+    "index_json",
+    "post_install",
+    "recipe_log",
+    "recipe",
+    "run_exports",
+]
+
 
 def create(conn):
-    with conn:
-        # BLOB columns are a little faster to LENGTH(col), returning number of
-        # bytes instead of number of (possibly multi-byte utf-8) characters
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS about (path TEXT PRIMARY KEY, about BLOB)"
-        )
-        # index is a sql keyword
-        # generated columns pulling fields from index_json could be nice
-        # has md5, shasum. older? packages do not include timestamp?
-        # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json from index_json
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS index_json (path TEXT PRIMARY KEY, index_json BLOB)"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS recipe (path TEXT PRIMARY KEY, recipe BLOB)"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS recipe_log (path TEXT PRIMARY KEY, recipe_log BLOB)"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS run_exports (path TEXT PRIMARY KEY, run_exports BLOB)"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS post_install (path TEXT PRIMARY KEY, post_install BLOB)"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS icon (path TEXT PRIMARY KEY, icon_png BLOB)"
-        )
-        # Stat data. Compare to other tables, on-disk mtimes to see what's changed.
-        #   "arrow-cpp-1.0.1-py310h33a019f_53_cuda.tar.bz2": {
-        #     "mtime": 1636410074,
-        #     "size": 22088344
-        #   },
-        # DATETIME(mtime, 'unixepoch')
-        # May or may not need all these columns
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS stat (
+    """
+    Create schema. Safe to call on every connection.
+    """
+    # BLOB columns are a little faster to LENGTH(col), returning number of
+    # bytes instead of number of (possibly multi-byte utf-8) characters
+    conn.execute("CREATE TABLE IF NOT EXISTS about (path TEXT PRIMARY KEY, about BLOB)")
+    # index is a sql keyword
+    # generated columns pulling fields from index_json could be nice
+    # has md5, shasum. older? packages do not include timestamp?
+    # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json from index_json
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS index_json (path TEXT PRIMARY KEY, index_json BLOB)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS recipe (path TEXT PRIMARY KEY, recipe BLOB)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS recipe_log (path TEXT PRIMARY KEY, recipe_log BLOB)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS run_exports (path TEXT PRIMARY KEY, run_exports BLOB)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS post_install (path TEXT PRIMARY KEY, post_install BLOB)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS icon (path TEXT PRIMARY KEY, icon_png BLOB)"
+    )
+    # Stat data. Compare to other tables, on-disk mtimes to see what's changed.
+    #   "arrow-cpp-1.0.1-py310h33a019f_53_cuda.tar.bz2": {
+    #     "mtime": 1636410074,
+    #     "size": 22088344
+    #   },
+    # DATETIME(mtime, 'unixepoch')
+    # May or may not need all these columns
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS stat (
                 stage TEXT NOT NULL DEFAULT 'indexed',
                 path TEXT NOT NULL,
                 mtime NUMBER,
@@ -97,10 +110,53 @@ def create(conn):
                 last_modified TEXT,
                 etag TEXT
             )"""
+    )
+
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stat ON stat (path, stage)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_stat_stage ON stat (stage, path)")
+
+
+def migrate(conn):
+    """
+    Call on every connection to ensure we have the correct schema.
+
+    Call inside a transaction.
+    """
+    user_version = conn.execute("PRAGMA user_version").fetchone()[0]
+
+    if user_version > USER_VERSION:
+        raise ValueError(
+            "conda-index cache is too new: version {user_version} > {USER_VERSION}"
         )
 
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stat ON stat (path, stage)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_stat_stage ON stat (stage, path)")
+    if user_version > 0:
+        return
+
+    remove_prefix(conn)
+
+    conn.execute("PRAGMA user_version=?", (1,))
+
+
+def remove_prefix(conn: sqlite3.Connection):
+    """
+    Store bare filenames in database instead of {channel}/{subdir}/{fn}
+
+    Could add a view or a virtual column to restore globally-unique paths.
+
+    Call inside a transaction.
+    """
+
+    def basename(path):
+        if not isinstance(path, str):
+            return path
+        return path.rsplit("/")[-1]
+
+    conn.create_function("migrate_basename", narg=1, func=basename, deterministic=True)
+
+    for table in TABLE_NAMES:
+        conn.execute(
+            f"UPDATE {table} SET path=migrate_basename(path) WHERE INSTR(path, '/')"
+        )
 
 
 def extract_cache(path):
@@ -169,6 +225,8 @@ def convert_cache(conn, cache_generator, override_channel=None):
     conn: sqlite3 connection
     cache_generator: extract_cache() or extract_cache_filesystem()
     override_channel: if channel_name is not in path
+
+    Commits own transactions.
     """
     # chunked must be as lazy as possible to prevent tar seeks
     for i, chunk in enumerate(ichunked(cache_generator, CHUNK_SIZE)):
@@ -230,13 +288,21 @@ def test_from_archive(archive_path):
     create(conn)
     with closing(conn):
         convert_cache(conn, extract_cache(archive_path))
+        remove_prefix(conn)
 
 
 def test():
-    extract_cache_filesystem(os.path.expanduser("~/miniconda3/osx-64/.cache"))
+    for i, _ in enumerate(
+        extract_cache_filesystem(os.path.expanduser("~/miniconda3/osx-64/.cache"))
+    ):
+        if i > 100:
+            break
 
 
 if __name__ == "__main__":
+    from . import logutil
+
+    logutil.configure()
     test()
     # email us if you're thinking about downloading conda-forge to
     # regenerate this 264MB file

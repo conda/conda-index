@@ -28,7 +28,7 @@ def update_index(
     from conda_index.index import update_index
     from conda_build.utils import ensure_list
 
-    dir_paths = [os.path.abspath(path) for path in dir_paths]
+    dir_paths = [os.path.abspath(path) for path in ensure_list(dir_paths)]
 
     if isinstance(current_index_versions, str):
         with open(current_index_versions) as f:

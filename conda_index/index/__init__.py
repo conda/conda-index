@@ -986,16 +986,14 @@ class ChannelIndex:
     def index_subdir_sql(self, subdir, verbose=False, progress=False):
         subdir_path = join(self.channel_root, subdir)
 
-        # filter by paths starting with
-        # should this be in sqlitecache?
-        path_like = f"{self.channel_name}/{subdir}/%"
-
         cache = sqlitecache.CondaIndexCache(
             channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
             cache.convert()
+
+        path_like = cache.database_path_like
 
         repodata_json_path = join(subdir_path, REPODATA_FROM_PKGS_JSON_FN)
 

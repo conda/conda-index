@@ -5,10 +5,9 @@ import sys
 from conda_build.conda_interface import ArgumentParser
 
 from .. import api
+from ..index import logutil
 from ..index import MAX_THREADS_DEFAULT
 from ..utils import DEFAULT_SUBDIRS
-
-logging.basicConfig(level=logging.INFO)
 
 
 def parse_args(args):
@@ -56,10 +55,6 @@ def parse_args(args):
         "_patch_repodata function or a .tar.bz2/.conda file which contains a "
         "patch_instructions.json file for each subdir",
     )
-    p.add_argument(
-        "--hotfix-source-repo",
-        help="Deprecated, will be removed in a future version of conda build",
-    )
     p.add_argument("--verbose", help="show extra debugging info", action="store_true")
     p.add_argument(
         "--no-progress",
@@ -75,10 +70,10 @@ def parse_args(args):
         will contain the newest from this series of versions.  For example:
 
         python:
-          - 2.7
-          - 3.6
+          - 3.8
+          - 3.9
 
-        will keep python 2.7.X and 3.6.Y in the current_index.json, instead of only the very latest python version.
+        will keep python 3.8.X and 3.9.Y in the current_index.json, instead of only the very latest python version.
         """,
     )
 
@@ -98,10 +93,10 @@ def execute(args):
         patch_generator=args.patch_generator,
         verbose=args.verbose,
         progress=args.progress,
-        hotfix_source_repo=args.hotfix_source_repo,
         current_index_versions=args.current_index_versions_file,
     )
 
 
 def main():
+    logutil.configure()
     return execute(sys.argv[1:])

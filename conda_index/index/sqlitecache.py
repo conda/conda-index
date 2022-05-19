@@ -110,7 +110,9 @@ class CondaIndexCache:
         Connection to our sqlite3 database.
         """
         conn = connect(self.db_filename)
-        convert_cache.create(conn)
+        with conn:
+            convert_cache.create(conn)
+            convert_cache.remove_prefix(conn)
         return conn
 
     def convert(self, force=False):
@@ -124,6 +126,9 @@ class CondaIndexCache:
                 convert_cache.extract_cache_filesystem(self.cache_dir),
                 override_channel=self.channel,
             )
+
+            with self.db:
+                convert_cache.remove_prefix(self.db)
 
     def stat_cache(self) -> dict:
         """
@@ -177,8 +182,22 @@ class CondaIndexCache:
         with self.db:  # transaction
             return self._extract_to_cache(channel_root, subdir, fn)
 
+    @property
+    def database_prefix(self):
+        """
+        All paths must be prefixed with this string.
+        """
+        return ""
+
+    @property
+    def database_path_like(self):
+        """
+        Pass to LIKE to filter paths belonging to this subdir only.
+        """
+        return self.database_prefix + "%"
+
     def database_path(self, fn):
-        return f"{self.channel}/{self.subdir}/{fn}"
+        return f"{self.database_prefix}{fn}"
 
     def _extract_to_cache(
         self, channel_root, subdir, fn, second_try=False, stat_result=None
