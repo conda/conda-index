@@ -117,8 +117,9 @@ LOCKFILE_NAME = ".lock"
 # TODO: this is to make sure that the index doesn't leak tokens.  It breaks use of private channels, though.
 # os.environ['CONDA_ADD_ANACONDA_TOKEN'] = "false"
 
-# not itertools.groupby
 try:
+    # Cython implementation of the toolz package
+    # not itertools.groupby
     from cytoolz.itertoolz import groupby
 except ImportError:  # pragma: no cover
     from conda._vendor.toolz.itertoolz import groupby  # NOQA
@@ -1230,7 +1231,7 @@ class ChannelIndex:
         try:
             with open(index_cache_path) as fh:
                 index_json = json.load(fh)
-        except (OSError, JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             index_json = fn
 
         return fn, index_json
