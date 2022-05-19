@@ -51,6 +51,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# modified during tests
+# TODO copy to temporary directory first
 tests/index_data/corrupt/
 tests/index_data/packages/
 
