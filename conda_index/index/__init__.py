@@ -463,49 +463,6 @@ def _maybe_write(path, content, write_newline_end=False, content_is_binary=False
     return True
 
 
-def _make_build_string(build, build_number):
-    build_number_as_string = str(build_number)
-    if build.endswith(build_number_as_string):
-        build = build[: -len(build_number_as_string)]
-        build = build.rstrip("_")
-    build_string = build
-    return build_string
-
-
-def _warn_on_missing_dependencies(missing_dependencies, patched_repodata):
-    """
-    The following dependencies do not exist in the channel and are not declared
-    as external dependencies:
-
-    dependency1:
-        - subdir/fn1.tar.bz2
-        - subdir/fn2.tar.bz2
-    dependency2:
-        - subdir/fn3.tar.bz2
-        - subdir/fn4.tar.bz2
-
-    The associated packages are being removed from the index.
-    """
-
-    if missing_dependencies:
-        builder = [
-            "WARNING: The following dependencies do not exist in the channel",
-            "    and are not declared as external dependencies:",
-        ]
-        for dep_name in sorted(missing_dependencies):
-            builder.append("  %s" % dep_name)
-            for subdir_fn in sorted(missing_dependencies[dep_name]):
-                builder.append("    - %s" % subdir_fn)
-                subdir, fn = subdir_fn.split("/")
-                popped = patched_repodata["packages"].pop(fn, None)
-                if popped:
-                    patched_repodata["removed"].append(fn)
-
-        builder.append("The associated packages are being removed from the index.")
-        builder.append("")
-        log.warn("\n".join(builder))
-
-
 def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
@@ -1076,6 +1033,9 @@ class ChannelIndex:
         return new_repodata
 
     def _write_repodata(self, subdir, repodata, json_filename):
+        """
+        Write repodata to :json_filename, but only if changed.
+        """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
         new_repodata_binary = json.dumps(
             repodata,
@@ -1086,7 +1046,7 @@ class ChannelIndex:
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
-            # XXX do this quickly or not at all
+            # XXX write bz2 quickly or not at all, delete old one
             repodata_bz2_path = repodata_json_path + ".bz2"
             bz2_content = bz2.compress(new_repodata_binary)
             _maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
