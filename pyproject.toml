@@ -20,7 +20,7 @@ dependencies = [
     "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
-[tool.flit.metadata.requires-extra]
+[project.optional-dependencies]]
 test = [
     "pytest >=7",
     "pytest-cov",
