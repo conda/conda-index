@@ -20,13 +20,17 @@ dependencies = [
     "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
-[project.optional-dependencies]]
+[project.optional-dependencies]
 test = [
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
 ]
 # testing also requires the conda-build source code at the moment
+
+[project.scripts]
+# conflicts with conda-build's conda-index... which script will win?
+conda-index = "conda_index.cli.main_index:main"
 
 [project.urls]
 Home = "https://github.com/conda-incubator/conda-index"

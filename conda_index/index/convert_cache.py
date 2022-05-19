@@ -134,7 +134,8 @@ def migrate(conn):
 
     remove_prefix(conn)
 
-    conn.execute("PRAGMA user_version=?", (1,))
+    # PRAGMA can't accept ?-substitution
+    conn.execute("PRAGMA user_version=1")
 
 
 def remove_prefix(conn: sqlite3.Connection):
