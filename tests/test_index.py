@@ -6,10 +6,8 @@ import shutil
 import tarfile
 
 import pytest
-from unittest import mock
 import conda_package_handling.api
 
-import conda_build.api
 from conda_build.conda_interface import context
 import conda_index.api
 import conda_index.index

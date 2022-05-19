@@ -6,6 +6,7 @@ import copy
 from datetime import datetime
 import functools
 import json
+from itertools import chain
 from numbers import Number
 import os
 from os.path import (
@@ -36,7 +37,6 @@ from yaml.scanner import ScannerError
 from yaml.reader import ReaderError
 
 import fnmatch
-from functools import partial
 import logging
 import conda_package_handling.api
 
@@ -121,13 +121,15 @@ LOCKFILE_NAME = ".lock"
 # TODO: this is to make sure that the index doesn't leak tokens.  It breaks use of private channels, though.
 # os.environ['CONDA_ADD_ANACONDA_TOKEN'] = "false"
 
-
+# not itertools.groupby
 try:
-    from cytoolz.itertoolz import concatv, groupby
+    from cytoolz.itertoolz import groupby
 except ImportError:  # pragma: no cover
-    from conda._vendor.toolz.itertoolz import concatv, groupby  # NOQA
+    from conda._vendor.toolz.itertoolz import groupby  # NOQA
 
-
+# XXX conda-build calls its version of get_build_index. Appears to combine
+# remote and local packages, updating the local index based on mtime. Standalone
+# conda-index does not yet use this function.
 def get_build_index(
     subdir,
     bldpkgs_dir,
@@ -189,7 +191,7 @@ def get_build_index(
             #      native content and the noarch content.
 
             if subdir == "noarch":
-                subdir = conda_interface.subdir
+                subdir = context.subdir
             try:
                 cached_index = get_index(
                     channel_urls=urls,
@@ -1173,7 +1175,7 @@ class ChannelIndex:
             # This is also where we update the contents of the stat_cache for successfully
             #   extracted packages.
             # Sorting here prioritizes .conda files ('c') over .tar.bz2 files ('b')
-            hash_extract_set = tuple(concatv(add_set, update_set))
+            hash_extract_set = tuple(chain(add_set, update_set))
 
             log.debug("extraction")
             extract_func = functools.partial(
