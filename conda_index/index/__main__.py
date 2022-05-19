@@ -8,10 +8,6 @@ from . import logutil
 # printing messages twice
 # conda resets logging on each subdir
 logutil.configure()
-logging.getLogger("conda_build.index").setLevel(logging.DEBUG)
-import conda_build.cli.main_index  # must import *after* logging config
 
-# assert that filtering is happening; remove conda DuplicateFilter
-assert len(logging.getLogger("conda_build.index").filters)
-logging.getLogger("conda_build.index").filters = []
-conda_build.cli.main_index.main()
+import conda_index.cli.main_index
+conda_index.cli.main_index.main()
