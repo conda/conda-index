@@ -130,3 +130,7 @@ dmypy.json
 
 # Editor
 .vscode
+
+# databases
+*.db
+*.db-*

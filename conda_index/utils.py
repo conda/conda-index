@@ -25,6 +25,7 @@ from conda_build.utils import (
     get_lock,
     move_with_fallback,
     merge_or_update_dict,
-    sha256_checksum,
-    md5_file
+    sha256_checksum,  # multithreaded sha+md5 checksum is available
+    md5_file,
+    ensure_list,
 )

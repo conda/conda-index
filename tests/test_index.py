@@ -2,22 +2,21 @@ import json
 from logging import getLogger
 import os
 from os.path import dirname, isdir, join, isfile
-import requests
 import shutil
 import tarfile
-import functools
 
 import pytest
 from unittest import mock
 import conda_package_handling.api
 
-from conda_build import api
+import conda_build.api
 from conda_build.conda_interface import context
+import conda_index.api
 import conda_index.index
 from conda_build.utils import copy_into, rm_rf
 from conda_build.conda_interface import subdir
 from conda_build.conda_interface import conda_47
-from .utils import metadata_dir, archive_dir
+from .utils import archive_dir
 
 
 log = getLogger(__name__)
@@ -649,10 +648,15 @@ def test_file_index_noarch_osx64_1(testing_workdir):
 
 
 def _build_test_index(workdir):
-    pkgs = api.build(os.path.join(metadata_dir, "_index_hotfix_pkgs"), croot=workdir)
-    for pkg in pkgs:
-        conda_package_handling.api.transmute(pkg, ".conda")
-    api.update_index(workdir)
+
+    # build index_hotfix_pkgs:
+    # pkgs = conda_build.api.build(os.path.join(utils.metadata_dir, "_index_hotfix_pkgs"), croot=workdir)
+    # for pkg in pkgs:
+    #     conda_package_handling.api.transmute(pkg, ".conda")
+    # api.update_index(workdir)
+
+    # workdir may be the same during a single test run?
+    shutil.copytree(join(here, "index_hotfix_pkgs"), workdir, dirs_exist_ok=True)
 
     with open(os.path.join(workdir, subdir, "repodata.json")) as f:
         original_metadata = json.load(f)
@@ -932,10 +936,10 @@ def test_patch_from_tarball(testing_workdir):
 
 
 def test_index_of_removed_pkg(testing_metadata):
-    out_files = api.build(testing_metadata)
+    out_files = conda_build.api.build(testing_metadata)
     for f in out_files:
         os.remove(f)
-    api.update_index(testing_metadata.config.croot)
+    conda_index.api.update_index(testing_metadata.config.croot)
     with open(
         os.path.join(testing_metadata.config.croot, subdir, "repodata.json")
     ) as f:
@@ -953,14 +957,14 @@ def test_index_of_removed_pkg(testing_metadata):
 def test_patch_instructions_with_missing_subdir(testing_workdir):
     os.makedirs("linux-64")
     os.makedirs("zos-z")
-    api.update_index(".")
+    conda_build.api.update_index(".")
     # we use conda-forge's patch instructions because they don't have zos-z data, and that triggers an error
     pkg = "conda-forge-repodata-patches"
     url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
         pkg
     )
     patch_instructions = download(url, os.path.join(os.getcwd(), "patches.tar.bz2"))
-    api.update_index(".", patch_generator=patch_instructions)
+    conda_index.api.update_index(".", patch_generator=patch_instructions)
 
 
 def test_stat_cache_used(testing_workdir, mocker):
@@ -1179,7 +1183,7 @@ def test_current_index_version_keys_keep_older_packages(testing_workdir):
     pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "packages")
 
     # pass no version file
-    api.update_index(pkg_dir)
+    conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "osx-64", "current_repodata.json")) as f:
         repodata = json.load(f)
     # only the newest version is kept
@@ -1187,7 +1191,7 @@ def test_current_index_version_keys_keep_older_packages(testing_workdir):
     assert list(repodata["packages"].values())[0]["version"] == "2.0"
 
     # pass version file
-    api.update_index(
+    conda_index.api.update_index(
         pkg_dir, current_index_versions=os.path.join(pkg_dir, "versions.yml")
     )
     with open(os.path.join(pkg_dir, "osx-64", "current_repodata.json")) as f:
@@ -1195,7 +1199,9 @@ def test_current_index_version_keys_keep_older_packages(testing_workdir):
     assert len(repodata["packages"]) == 2
 
     # pass dict that is equivalent to version file
-    api.update_index(pkg_dir, current_index_versions={"dummy-package": ["1.0"]})
+    conda_index.api.update_index(
+        pkg_dir, current_index_versions={"dummy-package": ["1.0"]}
+    )
     with open(os.path.join(pkg_dir, "osx-64", "current_repodata.json")) as f:
         repodata = json.load(f)
     assert list(repodata["packages"].values())[0]["version"] == "1.0"
@@ -1203,7 +1209,7 @@ def test_current_index_version_keys_keep_older_packages(testing_workdir):
 
 def test_channeldata_picks_up_all_versions_of_run_exports():
     pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "packages")
-    api.update_index(pkg_dir)
+    conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)
     run_exports = repodata["packages"]["run_exports_versions"]["run_exports"]
@@ -1214,7 +1220,7 @@ def test_channeldata_picks_up_all_versions_of_run_exports():
 
 def test_index_invalid_packages():
     pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "corrupt")
-    api.update_index(pkg_dir)
+    conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)
     assert len(repodata["packages"]) == 0
