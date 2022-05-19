@@ -649,11 +649,12 @@ def test_file_index_noarch_osx64_1(testing_workdir):
 
 def _build_test_index(workdir):
 
-    # build index_hotfix_pkgs:
-    # pkgs = conda_build.api.build(os.path.join(utils.metadata_dir, "_index_hotfix_pkgs"), croot=workdir)
-    # for pkg in pkgs:
+    # build index_hotfix_pkgs: pkgs =
+    # conda_build.api.build(os.path.join(utils.metadata_dir,
+    # "_index_hotfix_pkgs"), croot=workdir) for pkg in pkgs:
     #     conda_package_handling.api.transmute(pkg, ".conda")
-    # api.update_index(workdir)
+    # conda_index.api.update_index(workdir) # not testing update_index in the
+    # _build_test_index() helper
 
     # workdir may be the same during a single test run?
     shutil.copytree(join(here, "index_hotfix_pkgs"), workdir, dirs_exist_ok=True)
@@ -936,9 +937,34 @@ def test_patch_from_tarball(testing_workdir):
 
 
 def test_index_of_removed_pkg(testing_metadata):
-    out_files = conda_build.api.build(testing_metadata)
-    for f in out_files:
+
+    archive_name = "test_index_of_removed_pkg-1.0-1.tar.bz2"
+    archive_destination = os.path.join(
+        testing_metadata.config.croot, subdir, archive_name
+    )
+
+    # conda_build.api.build() calls update_index as a side effect.
+    # used to build on every test (38 seconds)
+
+    # out_files = conda_build.api.build(testing_metadata)
+
+    # instead, copy the package
+    os.makedirs(os.path.join(testing_metadata.config.croot, subdir))
+    shutil.copy(os.path.join(here, "archives", archive_name), archive_destination)
+
+    conda_index.api.update_index(testing_metadata.config.croot)
+
+    # repodata.json should exist here
+    with open(
+        os.path.join(testing_metadata.config.croot, subdir, "repodata.json")
+    ) as f:
+        repodata = json.load(f)
+    assert repodata["packages"]
+
+    for f in [archive_destination]:
         os.remove(f)
+
+    # repodata.json should be empty here
     conda_index.api.update_index(testing_metadata.config.croot)
     with open(
         os.path.join(testing_metadata.config.croot, subdir, "repodata.json")
@@ -957,7 +983,7 @@ def test_index_of_removed_pkg(testing_metadata):
 def test_patch_instructions_with_missing_subdir(testing_workdir):
     os.makedirs("linux-64")
     os.makedirs("zos-z")
-    conda_build.api.update_index(".")
+    conda_index.api.update_index(".")  # what is the current working directory?
     # we use conda-forge's patch instructions because they don't have zos-z data, and that triggers an error
     pkg = "conda-forge-repodata-patches"
     url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
