@@ -1,6 +1,8 @@
-# normally run with "conda index" or bin/conda-index
-# CONDA_DEBUG=1 python -m conda_build index --verbose ...
-import logging
+"""
+`python -m conda_index.index` is a more debugging-focused entry point compared
+to `conda-index` or `python -m conda_index`
+"""
+# CONDA_DEBUG=1 python -m conda_build.index --verbose --no-progress <directory>
 
 from . import logutil
 
@@ -8,6 +10,10 @@ from . import logutil
 # printing messages twice
 # conda resets logging on each subdir
 logutil.configure()
+
+import logging
+
+logging.getLogger("conda_index.index.sqlitecache").setLevel(logging.DEBUG)
 
 import conda_index.cli.main_index
 

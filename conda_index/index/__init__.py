@@ -2,7 +2,6 @@
 
 import bz2
 import copy
-import fnmatch
 import functools
 import json
 import logging
@@ -170,9 +169,9 @@ def get_build_index(
         #     then channels from condarc.
         urls = list(channel_urls)
 
-        log_context = utils.LoggingContext()
+        logging_context = utils.LoggingContext()
 
-        with log_context():
+        with logging_context():
             # this is where we add the "local" channel.  It's a little smarter than conda, because
             #     conda does not know about our output_folder when it is not the default setting.
             if os.path.isdir(output_folder):
@@ -374,15 +373,6 @@ CHANNELDATA_FIELDS = (
 )
 
 
-def _clear_newline_chars(record, field_name):
-    if field_name in record:
-        try:
-            record[field_name] = record[field_name].strip().replace("\n", " ")
-        except AttributeError:
-            # sometimes description gets added as a list instead of just a string
-            record[field_name] = record[field_name][0].strip().replace("\n", " ")
-
-
 def _apply_instructions(subdir, repodata, instructions):
     repodata.setdefault("removed", [])
     utils.merge_or_update_dict(
@@ -524,104 +514,6 @@ def _warn_on_missing_dependencies(missing_dependencies, patched_repodata):
         log.warn("\n".join(builder))
 
 
-def _cache_post_install_details(paths_cache_path, post_install_cache_path):
-    post_install_details_json = {
-        "binary_prefix": False,
-        "text_prefix": False,
-        "activate.d": False,
-        "deactivate.d": False,
-        "pre_link": False,
-        "post_link": False,
-        "pre_unlink": False,
-    }
-    if os.path.lexists(paths_cache_path):
-        with open(paths_cache_path) as f:
-            paths = json.load(f).get("paths", [])
-
-        # get embedded prefix data from paths.json
-        for f in paths:
-            if f.get("prefix_placeholder"):
-                if f.get("file_mode") == "binary":
-                    post_install_details_json["binary_prefix"] = True
-                elif f.get("file_mode") == "text":
-                    post_install_details_json["text_prefix"] = True
-            # check for any activate.d/deactivate.d scripts
-            for k in ("activate.d", "deactivate.d"):
-                if not post_install_details_json.get(k) and f["_path"].startswith(
-                    "etc/conda/%s" % k
-                ):
-                    post_install_details_json[k] = True
-            # check for any link scripts
-            for pat in ("pre-link", "post-link", "pre-unlink"):
-                if not post_install_details_json.get(pat) and fnmatch.fnmatch(
-                    f["_path"], "*/.*-%s.*" % pat
-                ):
-                    post_install_details_json[pat.replace("-", "_")] = True
-
-    with open(post_install_cache_path, "w") as fh:
-        json.dump(post_install_details_json, fh)
-
-
-def _cache_recipe(tmpdir, recipe_cache_path):
-    recipe_path_search_order = (
-        "info/recipe/meta.yaml.rendered",
-        "info/recipe/meta.yaml",
-        "info/meta.yaml",
-    )
-    for path in recipe_path_search_order:
-        recipe_path = os.path.join(tmpdir, path)
-        if os.path.lexists(recipe_path):
-            break
-        recipe_path = None
-
-    recipe_json = {}
-    if recipe_path:
-        with open(recipe_path) as f:
-            try:
-                recipe_json = yaml.safe_load(f)
-            except (ConstructorError, ParserError, ScannerError, ReaderError):
-                pass
-    try:
-        recipe_json_str = json.dumps(recipe_json)
-    except TypeError:
-        recipe_json.get("requirements", {}).pop("build")
-        recipe_json_str = json.dumps(recipe_json)
-    with open(recipe_cache_path, "w") as fh:
-        fh.write(recipe_json_str)
-    return recipe_json
-
-
-def _cache_run_exports(tmpdir, run_exports_cache_path):
-    run_exports = {}
-    try:
-        with open(os.path.join(tmpdir, "info", "run_exports.json")) as f:
-            run_exports = json.load(f)
-    except (OSError, FileNotFoundError):
-        try:
-            with open(os.path.join(tmpdir, "info", "run_exports.yaml")) as f:
-                run_exports = yaml.safe_load(f)
-        except (OSError, FileNotFoundError):
-            log.debug("%s has no run_exports file (this is OK)" % tmpdir)
-    with open(run_exports_cache_path, "w") as fh:
-        json.dump(run_exports, fh)
-
-
-def _cache_icon(tmpdir, recipe_json, icon_cache_path):
-    # If a conda package contains an icon, also extract and cache that in an .icon/
-    # directory.  The icon file name is the name of the package, plus the extension
-    # of the icon file as indicated by the meta.yaml `app/icon` key.
-    # apparently right now conda-build renames all icons to 'icon.png'
-    # What happens if it's an ico file, or a svg file, instead of a png? Not sure!
-    app_icon_path = recipe_json.get("app", {}).get("icon")
-    if app_icon_path:
-        icon_path = os.path.join(tmpdir, "info", "recipe", app_icon_path)
-        if not os.path.lexists(icon_path):
-            icon_path = os.path.join(tmpdir, "info", "icon.png")
-        if os.path.lexists(icon_path):
-            icon_cache_path += splitext(app_icon_path)[-1]
-            utils.move_with_fallback(icon_path, icon_cache_path)
-
-
 def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
@@ -668,20 +560,6 @@ def _get_source_repo_git_info(path):
     return commits
 
 
-def _cache_info_file(tmpdir, info_fn, cache_path):
-    info_path = os.path.join(tmpdir, "info", info_fn)
-    if os.path.lexists(info_path):
-        utils.move_with_fallback(info_path, cache_path)
-
-
-def _alternate_file_extension(fn):
-    cache_fn = fn
-    for ext in CONDA_PACKAGE_EXTENSIONS:
-        cache_fn = cache_fn.replace(ext, "")
-    other_ext = set(CONDA_PACKAGE_EXTENSIONS) - {fn.replace(cache_fn, "")}
-    return cache_fn + next(iter(other_ext))
-
-
 def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
     packages = {}
     conda_packages = {}
@@ -714,21 +592,6 @@ def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
     index = {prec: prec for prec in precs or sd._package_records}
     r = Resolve(index, channels=(channel,))
     return r
-
-
-def _get_newest_versions(r, pins={}):
-    groups = {}
-    for g_name, g_recs in r.groups.items():
-        if g_name in pins:
-            matches = []
-            for pin in pins[g_name]:
-                version = r.find_matches(MatchSpec(f"{g_name}={pin}"))[0].version
-                matches.extend(r.find_matches(MatchSpec(f"{g_name}={version}")))
-        else:
-            version = r.groups[g_name][0].version
-            matches = r.find_matches(MatchSpec(f"{g_name}={version}"))
-        groups[g_name] = matches
-    return [pkg for group in groups.values() for pkg in group]
 
 
 def _add_missing_deps(new_r, original_r):
@@ -1226,17 +1089,6 @@ class ChannelIndex:
                 cache.save_stat_cache(stat_cache)
         return new_repodata
 
-    @staticmethod
-    def _load_index_from_cache(channel_root, subdir, fn, stat_cache):
-        index_cache_path = join(channel_root, subdir, ".cache", "index", fn + ".json")
-        try:
-            with open(index_cache_path) as fh:
-                index_json = json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            index_json = fn
-
-        return fn, index_json
-
     def _write_repodata(self, subdir, repodata, json_filename):
         repodata_json_path = join(self.channel_root, subdir, json_filename)
         new_repodata_binary = json.dumps(
@@ -1495,9 +1347,7 @@ class ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True).replace(
-            "':'", "': '"
-        )
+        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )

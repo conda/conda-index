@@ -4,6 +4,6 @@ Non-debugging `python -m conda_index` entry point (compare with
 point.
 """
 
-import conda_build.cli.main_index
+import conda_index.cli.main_index
 
-conda_build.cli.main_index.main()
+conda_index.cli.main_index.main()
