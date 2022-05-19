@@ -1,21 +1,19 @@
 import json
-from logging import getLogger
 import os
-from os.path import dirname, isdir, join, isfile
 import shutil
 import tarfile
+from logging import getLogger
+from os.path import dirname, isdir, isfile, join
 
-import pytest
 import conda_package_handling.api
+import pytest
+from conda_build.conda_interface import conda_47, context, subdir
+from conda_build.utils import copy_into, rm_rf
 
-from conda_build.conda_interface import context
 import conda_index.api
 import conda_index.index
-from conda_build.utils import copy_into, rm_rf
-from conda_build.conda_interface import subdir
-from conda_build.conda_interface import conda_47
-from .utils import archive_dir
 
+from .utils import archive_dir
 
 log = getLogger(__name__)
 

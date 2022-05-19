@@ -4,8 +4,7 @@ import sys
 from conda_build.conda_interface import ArgumentParser
 
 from .. import api
-from ..index import logutil
-from ..index import MAX_THREADS_DEFAULT
+from ..index import MAX_THREADS_DEFAULT, logutil
 from ..utils import DEFAULT_SUBDIRS
 
 

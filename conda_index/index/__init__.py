@@ -1,68 +1,64 @@
 # Copyright (C) 2018 Anaconda, Inc
 
 import bz2
-from collections import OrderedDict
 import copy
-from datetime import datetime
+import fnmatch
 import functools
 import json
+import logging
+import os
+import subprocess
+import sys
+import time
+from collections import OrderedDict
+from concurrent.futures import Executor, ProcessPoolExecutor
+from datetime import datetime
 from itertools import chain
 from numbers import Number
-import os
 from os.path import (
     abspath,
     basename,
+    dirname,
     getmtime,
     getsize,
     isfile,
     join,
     splitext,
-    dirname,
 )
-import subprocess
-import sys
-import time
 from uuid import uuid4
+
+import conda_package_handling.api
+import pytz
+import yaml
 
 # Lots of conda internals here.  Should refactor to use exports.
 from conda.common.compat import ensure_binary
 
-import pytz
-from jinja2 import Environment, PackageLoader
-from tqdm import tqdm
-import yaml
-from yaml.constructor import ConstructorError
-from yaml.parser import ParserError
-from yaml.scanner import ScannerError
-from yaml.reader import ReaderError
-
-import fnmatch
-import logging
-import conda_package_handling.api
-
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures import Executor
-
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
+from conda.exports import (
+    CondaHTTPError,
+    MatchSpec,
+    VersionOrder,
+    get_index,
+    human_bytes,
+    url_path,
+)
 from conda.models.channel import Channel
+from conda_build.conda_interface import Resolve, TemporaryDirectory, context
+from jinja2 import Environment, PackageLoader
+from tqdm import tqdm
+from yaml.constructor import ConstructorError
+from yaml.parser import ParserError
+from yaml.reader import ReaderError
+from yaml.scanner import ScannerError
 
-from conda.exports import MatchSpec, VersionOrder, human_bytes
-
-from conda_build.conda_interface import context
-
-from conda.exports import CondaHTTPError, get_index, url_path
-
-from conda_build.conda_interface import TemporaryDirectory
-from conda_build.conda_interface import Resolve
+from .. import utils
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-
-from .. import utils
-
 from . import sqlitecache
 
 log = logging.getLogger(__name__)
@@ -77,7 +73,7 @@ class DummyExecutor(Executor):
 
 
 try:
-    from conda.base.constants import NAMESPACES_MAP, NAMESPACE_PACKAGE_NAMES
+    from conda.base.constants import NAMESPACE_PACKAGE_NAMES, NAMESPACES_MAP
 except ImportError:
     NAMESPACES_MAP = {  # base package name, namespace
         "python": "python",
@@ -1467,7 +1463,7 @@ class ChannelIndex:
 
             # https://stackoverflow.com/a/41595552/2127762
             try:
-                from importlib.util import spec_from_file_location, module_from_spec
+                from importlib.util import module_from_spec, spec_from_file_location
 
                 spec = spec_from_file_location("a_b", gen_patch_path)
                 mod = module_from_spec(spec)

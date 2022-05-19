@@ -2,30 +2,25 @@
 cache conda indexing metadata in sqlite.
 """
 
-from functools import cached_property
+import fnmatch
+import json
 import logging
 import os
 import os.path
-import json
-import fnmatch
 import sqlite3
-
-import yaml
-from yaml.constructor import ConstructorError
-from yaml.parser import ParserError
-from yaml.scanner import ScannerError
-from yaml.reader import ReaderError
-
+from functools import cached_property
+from os.path import join
 from zipfile import BadZipFile
 
-from os.path import join
-
-from . import convert_cache
-from .common import connect
-from . import package_streaming
-
+import yaml
 from conda_package_handling.utils import checksums
+from yaml.constructor import ConstructorError
+from yaml.parser import ParserError
+from yaml.reader import ReaderError
+from yaml.scanner import ScannerError
 
+from . import convert_cache, package_streaming
+from .common import connect
 
 log = logging.getLogger(__name__)
 

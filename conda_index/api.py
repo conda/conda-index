@@ -22,8 +22,9 @@ def update_index(
     index_file=None,
     **kwargs
 ):
-    import yaml
     import os
+
+    import yaml
 
     from conda_index.index import update_index
     from conda_index.utils import ensure_list

@@ -1,11 +1,9 @@
 import contextlib
 import os
-import sys
 import shlex
-
+import sys
 
 import pytest
-
 from conda_build.conda_interface import PY3
 from conda_build.metadata import MetaData
 from conda_build.utils import on_win

@@ -1,26 +1,24 @@
-from collections import defaultdict
 import os
 import sys
+from collections import defaultdict
 
 import pytest
-
 from conda_build.config import (
     Config,
-    filename_hashing_default,
     _src_cache_root_default,
-    error_overlinking_default,
-    error_overdepending_default,
-    noarch_python_build_age_default,
-    enable_static_default,
-    no_rewrite_stdout_env_default,
-    ignore_verify_codes_default,
-    exit_on_verify_error_default,
     conda_pkg_format_default,
+    enable_static_default,
+    error_overdepending_default,
+    error_overlinking_default,
+    exit_on_verify_error_default,
+    filename_hashing_default,
+    ignore_verify_codes_default,
+    no_rewrite_stdout_env_default,
+    noarch_python_build_age_default,
 )
-
-from conda_build.variants import get_default_variant
 from conda_build.metadata import MetaData
-from conda_build.utils import check_call_env, prepend_bin_path, copy_into
+from conda_build.utils import check_call_env, copy_into, prepend_bin_path
+from conda_build.variants import get_default_variant
 
 
 @pytest.fixture(scope="function")

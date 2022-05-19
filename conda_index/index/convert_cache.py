@@ -7,16 +7,16 @@ Intended to be used as a transition between the older format and a newer version
 of `conda-build index`, or as the foundation of a package database.
 """
 
-import tarfile
+import json
+import logging
 import os
 import os.path
 import re
-import json
 import sqlite3
-import logging
+import tarfile
+from contextlib import closing
 
 from more_itertools import ichunked
-from contextlib import closing
 
 from . import common
 
