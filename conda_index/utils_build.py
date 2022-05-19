@@ -9,6 +9,8 @@ import os
 import shutil
 import subprocess
 import time
+from os import stat
+from os.path import isdir, isfile, islink
 
 import filelock
 from conda.exports import root_dir
@@ -149,6 +151,19 @@ def get_lock(folder, timeout=900):
             "or user location ({}).  Aborting.".format(*_lock_folders)
         )
     return fl
+
+
+def _equivalent(base_value, value, path):
+    equivalent = value == base_value
+    if isinstance(value, string_types) and isinstance(base_value, string_types):
+        if not os.path.isabs(base_value):
+            base_value = os.path.abspath(
+                os.path.normpath(os.path.join(path, base_value))
+            )
+        if not os.path.isabs(value):
+            value = os.path.abspath(os.path.normpath(os.path.join(path, value)))
+        equivalent |= base_value == value
+    return equivalent
 
 
 def merge_or_update_dict(
