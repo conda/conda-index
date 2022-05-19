@@ -211,7 +211,7 @@ class CondaIndexCache:
         mtime = stat_result.st_mtime
         retval = fn, mtime, size, None
 
-        log.info("sql hashing, extracting, and caching %s" % fn)
+        log.info("Extract %s to cache" % fn)
 
         try:
             # we no longer re-use the .conda cache for .tar.bz2

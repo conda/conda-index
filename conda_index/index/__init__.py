@@ -14,24 +14,11 @@ from concurrent.futures import Executor, ProcessPoolExecutor
 from datetime import datetime
 from itertools import chain
 from numbers import Number
-from os.path import (
-    abspath,
-    basename,
-    dirname,
-    getmtime,
-    getsize,
-    isfile,
-    join,
-    splitext,
-)
+from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
 from uuid import uuid4
 
 import conda_package_handling.api
 import pytz
-import yaml
-
-# Lots of conda internals here.  Should refactor to use exports.
-from conda.common.compat import ensure_binary
 
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
@@ -47,10 +34,6 @@ from conda.models.channel import Channel
 from conda_build.conda_interface import Resolve, TemporaryDirectory, context
 from jinja2 import Environment, PackageLoader
 from tqdm import tqdm
-from yaml.constructor import ConstructorError
-from yaml.parser import ParserError
-from yaml.reader import ReaderError
-from yaml.scanner import ScannerError
 
 from .. import utils
 from ..utils import (
@@ -61,6 +44,22 @@ from ..utils import (
 from . import sqlitecache
 
 log = logging.getLogger(__name__)
+
+
+def logging_config():
+    """For subprocess."""
+    import conda_index.index.logutil
+
+    conda_index.index.logutil.configure()
+
+
+def ensure_binary(value):
+    try:
+        return value.encode("utf-8")
+    except AttributeError:  # pragma: no cover
+        # AttributeError: '<>' object has no attribute 'encode'
+        # In this case assume already binary type and do nothing
+        return value
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
@@ -292,23 +291,16 @@ def update_index(
     information will be updated.
 
     """
-    base_path, dirname = os.path.split(dir_path)
+    _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
         if warn:
             log.warn(
                 "The update_index function has changed to index all subdirs at once.  You're pointing it at a single subdir.  "
-                "Please update your code to point it at the channel root, rather than a subdir."
+                "Please update your code to point it at the channel root, rather than a subdir. "
+                "Use -s=<subdir> to update a single subdir."
             )
-        return update_index(
-            base_path,
-            check_md5=check_md5,
-            channel_name=channel_name,
-            threads=threads,
-            verbose=verbose,
-            progress=progress,
-            hotfix_source_repo=hotfix_source_repo,
-            current_index_versions=current_index_versions,
-        )
+        raise SystemExit()
+
     return ChannelIndex(
         dir_path,
         channel_name,
@@ -469,49 +461,6 @@ def _maybe_write(path, content, write_newline_end=False, content_is_binary=False
     # log.info("writing %s", path)
     utils.move_with_fallback(temp_path, path)
     return True
-
-
-def _make_build_string(build, build_number):
-    build_number_as_string = str(build_number)
-    if build.endswith(build_number_as_string):
-        build = build[: -len(build_number_as_string)]
-        build = build.rstrip("_")
-    build_string = build
-    return build_string
-
-
-def _warn_on_missing_dependencies(missing_dependencies, patched_repodata):
-    """
-    The following dependencies do not exist in the channel and are not declared
-    as external dependencies:
-
-    dependency1:
-        - subdir/fn1.tar.bz2
-        - subdir/fn2.tar.bz2
-    dependency2:
-        - subdir/fn3.tar.bz2
-        - subdir/fn4.tar.bz2
-
-    The associated packages are being removed from the index.
-    """
-
-    if missing_dependencies:
-        builder = [
-            "WARNING: The following dependencies do not exist in the channel",
-            "    and are not declared as external dependencies:",
-        ]
-        for dep_name in sorted(missing_dependencies):
-            builder.append("  %s" % dep_name)
-            for subdir_fn in sorted(missing_dependencies[dep_name]):
-                builder.append("    - %s" % subdir_fn)
-                subdir, fn = subdir_fn.split("/")
-                popped = patched_repodata["packages"].pop(fn, None)
-                if popped:
-                    patched_repodata["removed"].append(fn)
-
-        builder.append("The associated packages are being removed from the index.")
-        builder.append("")
-        log.warn("\n".join(builder))
 
 
 def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
@@ -721,7 +670,7 @@ class ChannelIndex:
         self.thread_executor = (
             DummyExecutor()
             if (debug or sys.version_info.major == 2 or threads == 1)
-            else ProcessPoolExecutor(threads)
+            else ProcessPoolExecutor(threads, initializer=logging_config)
         )
         self.debug = debug
         self.deep_integrity_check = deep_integrity_check
@@ -765,78 +714,72 @@ class ChannelIndex:
                     with open(channeldata_file) as f:
                         channel_data = json.load(f)
                 # Step 2. Collect repodata from packages, save to pkg_repodata.json file
-                with tqdm(
-                    total=len(subdirs), disable=(verbose or not progress), leave=False
-                ) as t:
-                    for subdir in subdirs:
-                        t.set_description("Subdir: %s" % subdir)
-                        t.update()
-                        with tqdm(
-                            total=8, disable=(verbose or not progress), leave=False
-                        ) as t2:
-                            t2.set_description("Gathering repodata")
-                            t2.update()
-                            log.debug("gather repodata")
-                            _ensure_valid_channel(self.channel_root, subdir)
-                            repodata_from_packages = self.index_subdir(
-                                subdir, verbose=verbose, progress=progress
-                            )
+                t = tqdm(subdirs, disable=(verbose or not progress), leave=False)
+                for subdir in t:
+                    t.set_description("Subdir: %s" % subdir)
+                    t.update()
+                    with tqdm(
+                        total=8, disable=(verbose or not progress), leave=False
+                    ) as t2:
+                        t2.set_description("Gathering repodata")
+                        t2.update()
+                        log.debug("gather repodata")
+                        _ensure_valid_channel(self.channel_root, subdir)
+                        repodata_from_packages = self.index_subdir(
+                            subdir, verbose=verbose, progress=progress
+                        )
 
-                            t2.set_description("Writing pre-patch repodata")
-                            t2.update()
-                            log.debug("write repodata")
-                            self._write_repodata(
-                                subdir,
-                                repodata_from_packages,
-                                REPODATA_FROM_PKGS_JSON_FN,
-                            )
+                        t2.set_description("Writing pre-patch repodata")
+                        t2.update()
+                        log.debug("write repodata")
+                        self._write_repodata(
+                            subdir,
+                            repodata_from_packages,
+                            REPODATA_FROM_PKGS_JSON_FN,
+                        )
 
-                            # Step 3. Apply patch instructions.
-                            t2.set_description("Applying patch instructions")
-                            t2.update()
-                            log.debug("apply patch instructions")
-                            patched_repodata, _ = self._patch_repodata(
-                                subdir, repodata_from_packages, patch_generator
-                            )
+                        # Step 3. Apply patch instructions.
+                        t2.set_description("Applying patch instructions")
+                        t2.update()
+                        log.debug("apply patch instructions")
+                        patched_repodata, _ = self._patch_repodata(
+                            subdir, repodata_from_packages, patch_generator
+                        )
 
-                            # Step 4. Save patched and augmented repodata.
-                            # If the contents of repodata have changed, write a new repodata.json file.
-                            # Also create associated index.html.
+                        # Step 4. Save patched and augmented repodata.
+                        # If the contents of repodata have changed, write a new repodata.json file.
+                        # Also create associated index.html.
 
-                            t2.set_description("Writing patched repodata")
-                            t2.update()
-                            log.debug("write patched repodata")
-                            self._write_repodata(
-                                subdir, patched_repodata, REPODATA_JSON_FN
-                            )
-                            t2.set_description("Building current_repodata subset")
-                            t2.update()
-                            log.debug("build current_repodata")
-                            current_repodata = _build_current_repodata(
-                                subdir, patched_repodata, pins=current_index_versions
-                            )
-                            t2.set_description("Writing current_repodata subset")
-                            t2.update()
-                            log.debug("write current_repodata")
-                            self._write_repodata(
-                                subdir,
-                                current_repodata,
-                                json_filename="current_repodata.json",
-                            )
+                        t2.set_description("Writing patched repodata")
+                        t2.update()
+                        log.debug("write patched repodata")
+                        self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
+                        t2.set_description("Building current_repodata subset")
+                        t2.update()
+                        log.debug("build current_repodata")
+                        current_repodata = _build_current_repodata(
+                            subdir, patched_repodata, pins=current_index_versions
+                        )
+                        t2.set_description("Writing current_repodata subset")
+                        t2.update()
+                        log.debug("write current_repodata")
+                        self._write_repodata(
+                            subdir,
+                            current_repodata,
+                            json_filename="current_repodata.json",
+                        )
 
-                            t2.set_description("Writing subdir index HTML")
-                            t2.update()
-                            log.debug("write subdir index.html")
-                            self._write_subdir_index_html(subdir, patched_repodata)
+                        t2.set_description("Writing subdir index HTML")
+                        t2.update()
+                        log.debug("write subdir index.html")
+                        self._write_subdir_index_html(subdir, patched_repodata)
 
-                            t2.set_description("Updating channeldata")
-                            t2.update()
-                            log.debug("update channeldata")
-                            self._update_channeldata(
-                                channel_data, patched_repodata, subdir
-                            )
+                        t2.set_description("Updating channeldata")
+                        t2.update()
+                        log.debug("update channeldata")
+                        self._update_channeldata(channel_data, patched_repodata, subdir)
 
-                            log.debug("finish %s", subdir)
+                        log.debug("finish %s", subdir)
 
                 # Step 7. Create and write channeldata.
                 self._write_channeldata_index_html(channel_data)
@@ -1090,6 +1033,9 @@ class ChannelIndex:
         return new_repodata
 
     def _write_repodata(self, subdir, repodata, json_filename):
+        """
+        Write repodata to :json_filename, but only if changed.
+        """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
         new_repodata_binary = json.dumps(
             repodata,
@@ -1100,7 +1046,7 @@ class ChannelIndex:
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
-            # XXX do this quickly or not at all
+            # XXX write bz2 quickly or not at all, delete old one
             repodata_bz2_path = repodata_json_path + ".bz2"
             bz2_content = bz2.compress(new_repodata_binary)
             _maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
