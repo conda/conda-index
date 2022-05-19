@@ -5,11 +5,8 @@ collections of conda packages.
 ## Summary of changes from the previous `conda-build index` version
 
 * Approximately 2.2x faster conda package extraction, by extracting just the
-  metadata to streams instead of extracting packages to a temporary directory.
-
-* Uses new code to get metadata from packages without using temporary files;
-  closes the package early if all metadata has been found. This is about twice
-  as fast.
+  metadata to streams instead of extracting packages to a temporary directory; 
+  closes the package early if all metadata has been found.
 
 * Uses a sqlite metadata cache that is orders of magnitude faster than the old
   many-tiny-files cache.
