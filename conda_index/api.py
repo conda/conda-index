@@ -7,20 +7,14 @@
 
 def update_index(
     dir_paths,
-    config=None,
-    force=False,
     check_md5=False,
-    remove=False,
     channel_name=None,
     subdir=None,
     threads=None,
     patch_generator=None,
     verbose=False,
     progress=False,
-    hotfix_source_repo=None,
     current_index_versions=None,
-    index_file=None,
-    **kwargs
 ):
     import os
 
@@ -44,7 +38,6 @@ def update_index(
             threads=threads,
             verbose=verbose,
             progress=progress,
-            hotfix_source_repo=hotfix_source_repo,
             subdirs=ensure_list(subdir),
             current_index_versions=current_index_versions,
         )
