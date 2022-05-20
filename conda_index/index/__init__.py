@@ -771,7 +771,7 @@ class ChannelIndex:
         # output repodata
         self.save_fs_state(cache, subdir_path)
 
-        log.debug("extraction")
+        log.debug("find packages to extract")
 
         # list so tqdm can show progress
         extract = [
@@ -783,16 +783,16 @@ class ChannelIndex:
             for row in self.changed_packages(cache)
         ]
 
+        log.debug("extract %d packages", len(extract))
+
         # now updates own stat cache
         extract_func = functools.partial(
             cache.extract_to_cache_2, self.channel_root, subdir
         )
 
         for fn, mtime, _size, index_json in tqdm(
-            self.thread_executor.map(
-                extract_func,
-                extract,
-            ),
+            # multiprocessing likes to hang
+            self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
             desc="hash & extract packages for %s" % subdir,
             disable=(verbose or not progress),
             leave=False,

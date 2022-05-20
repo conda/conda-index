@@ -181,11 +181,7 @@ class CondaIndexCache:
         )
 
     def extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        # XXX original skips this on warm cache
-        with self.db:  # transaction
-            return self._extract_to_cache(
-                channel_root, subdir, fn, stat_result=stat_result
-            )
+        return self._extract_to_cache(channel_root, subdir, fn, stat_result=stat_result)
 
     @property
     def database_prefix(self):
@@ -244,17 +240,39 @@ class CondaIndexCache:
                 log.debug("Found %s in cache" % fn)
                 index_json = json.loads(cached_row[0])
 
+                # XXX now would be a great time to check hashes
+
+                # calculate extra stuff to add to index.json cache, size, md5, sha256
+
+                # conda_package_handling wastes a stat call to give us this information
+                # let's see how slow this is
+                # md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
+
+                # if the hashes don't match, would be a great time to invalidate the index_json cache
+                # assert index_json["sha256"] == sha256
+                # assert index_json["md5"] == md5
+
+                with self.db:
+                    # have to update stat or we will be asked to look up cached_row again
+                    # XXX DRY this query
+                    self.db.execute(
+                        """INSERT OR REPLACE INTO stat
+                        (stage, path, mtime, size, sha256, md5)
+                        VALUES ('indexed', ?, ?, ?, ?, ?)""",
+                        (
+                            database_path,
+                            mtime,
+                            size,
+                            index_json["sha256"],
+                            index_json["md5"],
+                        ),
+                    )
+
             else:
                 log.debug("Extract %s to cache" % fn)
                 index_json = self.extract_to_cache_unconditional(
                     fn, abs_fn, size, mtime
                 )
-
-            # have to update stat or we will be asked to look up cached_row again
-            self.db.execute(
-                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5) VALUES ('indexed', ?, ?, ?, ?, ?)""",
-                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
-            )
 
             retval = fn, mtime, size, index_json
 
@@ -334,63 +352,70 @@ class CondaIndexCache:
             paths_str = ""
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
 
-        for have_path in have:
-            table = PATH_TO_TABLE[have_path]
-            if table in TABLE_NO_CACHE or table == "index_json":
-                continue  # not cached, or for index_json cached at end
-
-            parameters = {"path": database_path, "data": have.get(have_path)}
-            if have_path == ICON_PATH:
-                query = """
-                            INSERT OR REPLACE into icon (path, icon_png)
-                            VALUES (:path, :data)
-                            """
-            elif parameters["data"] is not None:
-                query = f"""
-                            INSERT OR REPLACE INTO {table} (path, {table})
-                            VALUES (:path, json(:data))
-                            """
-            else:
-                query = f"""DELETE FROM {table} WHERE path = :path"""
-            try:
-                self.db.execute(query, parameters)
-            except sqlite3.OperationalError:  # e.g. malformed json.
-                log.exception("table=%s parameters=%s", table, parameters)
-                # XXX delete from cache
-                raise
-
-        # decide what fields to filter out, like has_prefix
-        filter_fields = {
-            "arch",
-            "has_prefix",
-            "mtime",
-            "platform",
-            "ucs",
-            "requires_features",
-            "binstar",
-            "target-triplet",
-            "machine",
-            "operatingsystem",
-        }
-        for field_name in filter_fields & set(index_json):
-            del index_json[field_name]
-
         # calculate extra stuff to add to index.json cache, size, md5, sha256
 
         # conda_package_handling wastes a stat call to give us this information
         md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
 
-        new_info = {"md5": md5, "sha256": sha256, "size": size}
+        with self.db:
+            for have_path in have:
+                table = PATH_TO_TABLE[have_path]
+                if table in TABLE_NO_CACHE or table == "index_json":
+                    continue  # not cached, or for index_json cached at end
 
-        index_json.update(new_info)
+                parameters = {"path": database_path, "data": have.get(have_path)}
+                if have_path == ICON_PATH:
+                    query = """
+                                INSERT OR REPLACE into icon (path, icon_png)
+                                VALUES (:path, :data)
+                                """
+                elif parameters["data"] is not None:
+                    query = f"""
+                                INSERT OR REPLACE INTO {table} (path, {table})
+                                VALUES (:path, json(:data))
+                                """
+                else:
+                    query = f"""DELETE FROM {table} WHERE path = :path"""
+                try:
+                    self.db.execute(query, parameters)
+                except sqlite3.OperationalError:  # e.g. malformed json.
+                    log.exception("table=%s parameters=%s", table, parameters)
+                    # XXX delete from cache
+                    raise
 
-        # sqlite json() function removes whitespace
-        self.db.execute(
-            "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
-            {"path": database_path, "index_json": json.dumps(index_json)},
-        )
+            # decide what fields to filter out, like has_prefix
+            filter_fields = {
+                "arch",
+                "has_prefix",
+                "mtime",
+                "platform",
+                "ucs",
+                "requires_features",
+                "binstar",
+                "target-triplet",
+                "machine",
+                "operatingsystem",
+            }
+            for field_name in filter_fields & set(index_json):
+                del index_json[field_name]
 
-        return index_json
+            new_info = {"md5": md5, "sha256": sha256, "size": size}
+
+            index_json.update(new_info)
+
+            # sqlite json() function removes whitespace
+            self.db.execute(
+                "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
+                {"path": database_path, "index_json": json.dumps(index_json)},
+            )
+
+            self.db.execute(
+                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
+                VALUES ('indexed', ?, ?, ?, ?, ?)""",
+                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
+            )
+
+        return index_json  # we don't need this return value; it will be queried back out to generate repodata
 
     def load_all_from_cache(self, fn):
         subdir_path = self.subdir_path
