@@ -522,9 +522,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
         fh.write("noarch/flask-0.11.1-py_0.tar.bz2\n")
         fh.write("osx/fly-2.5.2-0.tar.bz2\n")
 
-    conda_index.index.update_index(
-        testing_workdir, channel_name="test-channel", index_file=p
-    )
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     updated_packages = expected_repodata_json.get("packages")
     updated_packages["flask-0.11.1-py_0.tar.bz2"] = {

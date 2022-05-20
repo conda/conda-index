@@ -12,14 +12,12 @@ def parse_args(args):
     p = ArgumentParser(
         description="Update package index metadata files in given directories."
     )
-
     p.add_argument(
         "dir",
         help="Directory that contains an index to be updated.",
         nargs="*",
         default=[os.getcwd()],
     )
-
     p.add_argument(
         "-c",
         "--check-md5",

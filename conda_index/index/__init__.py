@@ -11,7 +11,6 @@ import time
 from collections import OrderedDict
 from concurrent.futures import Executor, ProcessPoolExecutor
 from datetime import datetime
-from itertools import chain
 from numbers import Number
 from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
 from typing import NamedTuple
@@ -69,31 +68,6 @@ class DummyExecutor(Executor):
             for thing in iterable:
                 yield func(thing)
 
-
-try:
-    from conda.base.constants import NAMESPACE_PACKAGE_NAMES, NAMESPACES_MAP
-except ImportError:
-    NAMESPACES_MAP = {  # base package name, namespace
-        "python": "python",
-        "r": "r",
-        "r-base": "r",
-        "mro-base": "r",
-        "mro-base_impl": "r",
-        "erlang": "erlang",
-        "java": "java",
-        "openjdk": "java",
-        "julia": "julia",
-        "latex": "latex",
-        "lua": "lua",
-        "nodejs": "js",
-        "perl": "perl",
-        "php": "php",
-        "ruby": "ruby",
-        "m2-base": "m2",
-        "msys2-conda-epoch": "m2w64",
-    }
-    NAMESPACE_PACKAGE_NAMES = frozenset(NAMESPACES_MAP)
-    NAMESPACES = frozenset(NAMESPACES_MAP.values())
 
 local_index_timestamp = 0
 cached_index = None
@@ -284,12 +258,10 @@ def update_index(
     threads=MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
-    hotfix_source_repo=None,
     subdirs=None,
     warn=True,
     current_index_versions=None,
     debug=False,
-    index_file=None,
 ):
     """
     If dir_path contains a directory named 'noarch', the path tree therein is treated
@@ -915,7 +887,7 @@ class ChannelIndex:
         _add_extra_path(
             extra_paths, join(subdir_path, REPODATA_FROM_PKGS_JSON_FN + ".bz2")
         )
-        # _add_extra_path(extra_paths, join(subdir_path, "repodata2.json"))
+
         _add_extra_path(extra_paths, join(subdir_path, "patch_instructions.json"))
         rendered_html = _make_subdir_index_html(
             self.channel_name, subdir, repodata_packages, extra_paths
@@ -929,8 +901,6 @@ class ChannelIndex:
         _maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
-        # XXX pass stat_cache into _update_channeldata or otherwise save results of
-        # recent stat calls
 
         cache = sqlitecache.CondaIndexCache(
             channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
@@ -1007,8 +977,7 @@ class ChannelIndex:
 
         load_func = cache.load_all_from_cache
         for fn_dict, data in zip(fn_dicts, self.thread_executor.map(load_func, fns)):
-            # like repodata (index_subdir), we do not reach this code when the
-            # older channeldata.json matches
+            # not reached when older channeldata.json matches
             if data:
                 data.update(fn_dict)
                 name = data["name"]

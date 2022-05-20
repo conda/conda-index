@@ -392,14 +392,24 @@ class CondaIndexCache:
 
         return index_json
 
-    def load_all_from_cache(self, fn, mtime=None):
+    def load_all_from_cache(self, fn):
         subdir_path = self.subdir_path
+
         try:
-            mtime = mtime or os.stat(join(subdir_path, fn)).st_mtime
-        except FileNotFoundError:
-            # XXX don't call if it won't be found
-            log.warn("%s not found in load_all_from_cache", fn)
-            return {}
+            # recent stat information must exist here...
+            stat = self.db.execute(
+                "SELECT mtime FROM stat WHERE stage='fs' AND path=:path",
+                {"path": self.database_path(fn)},
+            ).fetchone()
+            mtime = stat["mtime"]
+        except (KeyError, IndexError):
+            log.debug("%s mtime not found in cache", fn)
+            try:
+                mtime = mtime or os.stat(join(subdir_path, fn)).st_mtime
+            except FileNotFoundError:
+                # XXX don't call if it won't be found
+                log.warn("%s not found in load_all_from_cache", fn)
+                return {}
 
         # In contrast to self._load_index_from_cache(), this method reads up pretty much
         # all of the cached metadata, except for paths. It all gets dumped into a single map.
