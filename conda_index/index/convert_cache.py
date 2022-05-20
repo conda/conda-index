@@ -301,7 +301,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
         if not os.path.exists(cache_db):
             continue
         channel_prefix = f"{channel_name}/{subdir}/"
-        print(f"{cache_db}")
+        print(f"merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}")
         combined_db.execute("ATTACH DATABASE ? AS subdir", (cache_db,))
 
         for table in TABLE_NAMES:
@@ -322,7 +322,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
                 print(e)
                 print(query)
 
-            combined_db.execute("DETACH DATABASE subdir")
+        combined_db.execute("DETACH DATABASE subdir")
 
 
 def test_from_archive(archive_path):
