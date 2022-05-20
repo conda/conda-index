@@ -764,7 +764,9 @@ class ChannelIndex:
                 self._write_channeldata(channel_data)
 
     def index_subdir(self, subdir, verbose=False, progress=False):
-        return self.index_subdir_sql(subdir, verbose=verbose, progress=progress)
+        return self.index_subdir_unidirectional(
+            subdir, verbose=verbose, progress=progress
+        )
 
     def index_subdir_sql(self, subdir, verbose=False, progress=False):
         subdir_path = join(self.channel_root, subdir)
@@ -1007,6 +1009,105 @@ class ChannelIndex:
         finally:
             if stat_cache != stat_cache_original:
                 cache.save_stat_cache(stat_cache)
+        return new_repodata
+
+    def save_fs_state(self, cache: sqlitecache.CondaIndexCache, subdir_path):
+        """
+        stat all files in subdir_path to compare against cached repodata.
+        """
+        path_like = cache.database_path_like
+
+        # gather conda package filenames in subdir
+        log.debug("listdir")
+        fns_in_subdir = {
+            fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
+        }
+
+        # put filesystem 'ground truth' into stat table
+        # will we eventually stat everything on fs, or can we shortcut for new?
+        def listdir_stat():
+            for fn in fns_in_subdir:
+                abs_fn = os.path.join(subdir_path, fn)
+                stat = os.stat(abs_fn)
+                yield {
+                    "path": cache.database_path(fn),
+                    "mtime": int(stat.st_mtime),
+                    "size": stat.st_size,
+                }
+
+        log.debug("save fs state")
+        with cache.db:
+            cache.db.execute(
+                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
+                {"path_like": path_like},
+            )
+            cache.db.executemany(
+                """
+            INSERT INTO STAT (stage, path, mtime, size)
+            VALUES ('fs', :path, :mtime, :size)
+            """,
+                listdir_stat(),
+            )
+
+    def index_subdir_unidirectional(self, subdir, verbose=False, progress=False):
+        """
+        Without reading old repodata.
+        """
+        subdir_path = join(self.channel_root, subdir)
+
+        cache = sqlitecache.CondaIndexCache(
+            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
+        )
+        if cache.cache_is_brand_new:
+            # guaranteed to be only thread doing this?
+            cache.convert()
+
+        path_like = cache.database_path_like
+
+        log.info("Building repodata for %s" % subdir_path)
+
+        # exactly these packages (unless they are un-indexable) will be in the
+        # output repodata
+        self.save_fs_state(cache, subdir_path)
+
+        new_repodata_packages = {}
+        new_repodata_conda_packages = {}
+
+        # XXX reload files found in save_fs_state but not in cache
+
+        # XXX delete files in cache but not in save_fs_state / or modified files
+        # - before or after reload files step
+
+        # load cached packages we just saw on the filesystem
+        # (cache might also contain
+        for row in cache.db.execute(
+            """
+            SELECT path, index_json FROM stat JOIN index_json USING (path)
+            WHERE stat.stage = ?
+            ORDER BY path
+        """,
+            ("fs",),
+        ):
+            path, index_json = row
+            # (convert path to base filename)
+            index_json = json.loads(index_json)
+            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
+                new_repodata_packages[path] = index_json
+            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
+                new_repodata_conda_packages[path] = index_json
+            else:
+                log.warn("%s doesn't look like a conda package", path)
+
+        new_repodata = {
+            "packages": new_repodata_packages,
+            "packages.conda": new_repodata_conda_packages,
+            "info": {
+                "subdir": subdir,
+            },
+            "repodata_version": REPODATA_VERSION,
+            "removed": [],  # XXX sorted(list(ignore_set)),
+        }
+
         return new_repodata
 
     def _write_repodata(self, subdir, repodata, json_filename):
