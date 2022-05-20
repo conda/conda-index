@@ -1095,7 +1095,8 @@ class ChannelIndex:
             # guaranteed to be only thread doing this?
             cache.convert()
 
-        log.info("Building repodata for %s" % subdir_path)
+        if verbose:
+            log.info("Building repodata for %s" % subdir_path)
 
         # exactly these packages (unless they are un-indexable) will be in the
         # output repodata

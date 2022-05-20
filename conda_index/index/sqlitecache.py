@@ -240,11 +240,12 @@ class CondaIndexCache:
             ).fetchone()
 
             if cached_row and not second_try:
-                log.info("Found %s in cache" % fn)
+                # log in caller?
+                log.debug("Found %s in cache" % fn)
                 index_json = json.loads(cached_row[0])
 
             else:
-                log.info("Extract %s to cache" % fn)
+                log.debug("Extract %s to cache" % fn)
                 index_json = self.extract_to_cache_unconditional(
                     fn, abs_fn, size, mtime
                 )
