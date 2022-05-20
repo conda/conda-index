@@ -14,6 +14,7 @@ from datetime import datetime
 from itertools import chain
 from numbers import Number
 from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
+from typing import NamedTuple
 from uuid import uuid4
 
 import conda_package_handling.api
@@ -263,6 +264,16 @@ def _ensure_valid_channel(local_folder, subdir):
         path = os.path.join(local_folder, folder)
         if not os.path.isdir(path):
             os.makedirs(path)
+
+
+class FileInfo(NamedTuple):
+    """
+    Filename and a bit of stat information.
+    """
+
+    fn: str
+    st_mtime: Number
+    st_size: Number
 
 
 def update_index(
@@ -858,7 +869,7 @@ class ChannelIndex:
         # remove_set = old_repodata_fns - fns_in_subdir
         log.debug("calculate remove set")
         remove_set = {
-            row["path"].rpartition("/")[-1]
+            cache.plain_path(row["path"])
             for row in cache.db.execute(
                 """SELECT path FROM stat WHERE path LIKE :path_like AND stage = 'repodata'
             AND path NOT IN (SELECT path FROM stat WHERE stage = 'fs')""",
@@ -1049,6 +1060,28 @@ class ChannelIndex:
                 listdir_stat(),
             )
 
+    def changed_packages(self, cache: sqlitecache.CondaIndexCache):
+        """
+        Compare 'fs' to 'indexed' state.
+
+        Return packages in 'fs' that are changed or missing compared to 'indexed'.
+        """
+        return cache.db.execute(
+            """
+            WITH
+            fs AS
+                ( SELECT path, mtime, size FROM stat WHERE stage = 'fs' ),
+            cached AS
+                ( SELECT path, mtime FROM stat WHERE stage = 'indexed' )
+
+            SELECT fs.path, fs.mtime, fs.size from fs LEFT JOIN cached USING (path)
+
+            WHERE fs.path LIKE :path_like AND
+                (fs.mtime != cached.mtime OR cached.path IS NULL)
+        """,
+            {"path_like": cache.database_path_like},
+        )  # XXX compare checksums if available, and prefer to mtimes
+
     def index_subdir_unidirectional(self, subdir, verbose=False, progress=False):
         """
         Without reading old repodata.
@@ -1062,24 +1095,57 @@ class ChannelIndex:
             # guaranteed to be only thread doing this?
             cache.convert()
 
-        path_like = cache.database_path_like
-
         log.info("Building repodata for %s" % subdir_path)
 
         # exactly these packages (unless they are un-indexable) will be in the
         # output repodata
         self.save_fs_state(cache, subdir_path)
 
+        log.debug("extraction")
+
+        # list so tqdm can show progress
+        extract = [
+            FileInfo(
+                fn=cache.plain_path(row["path"]),
+                st_mtime=row["mtime"],
+                st_size=row["size"],
+            )
+            for row in self.changed_packages(cache)
+        ]
+
+        # now updates own stat cache
+        extract_func = functools.partial(
+            cache.extract_to_cache_2, self.channel_root, subdir
+        )
+
+        for fn, mtime, _size, index_json in tqdm(
+            self.thread_executor.map(
+                extract_func,
+                extract,
+            ),
+            desc="hash & extract packages for %s" % subdir,
+            disable=(verbose or not progress),
+            leave=False,
+        ):
+            # fn can be None if the file was corrupt or no longer there
+            if fn and mtime:
+                if index_json:
+                    pass  # correctly indexed a package! will fetch below
+                else:
+                    log.error(
+                        "Package at %s did not contain valid index.json data.  Please"
+                        " check the file and remove/redownload if necessary to obtain "
+                        "a valid package." % os.path.join(subdir_path, fn)
+                    )
+
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
-
-        # XXX reload files found in save_fs_state but not in cache
 
         # XXX delete files in cache but not in save_fs_state / or modified files
         # - before or after reload files step
 
         # load cached packages we just saw on the filesystem
-        # (cache might also contain
+        # (cache may also contain files that are no longer on the filesystem)
         for row in cache.db.execute(
             """
             SELECT path, index_json FROM stat JOIN index_json USING (path)
@@ -1105,7 +1171,7 @@ class ChannelIndex:
                 "subdir": subdir,
             },
             "repodata_version": REPODATA_VERSION,
-            "removed": [],  # XXX sorted(list(ignore_set)),
+            "removed": [],  # can be added by patch/hotfix process
         }
 
         return new_repodata

@@ -172,10 +172,20 @@ class CondaIndexCache:
         else:
             return fn  # odd legacy error handling
 
-    def extract_to_cache(self, channel_root, subdir, fn):
+    def extract_to_cache_2(self, channel_root, subdir, fn_info):
+        """
+        fn_info: object with .fn, .st_size, and .st_msize properties
+        """
+        return self.extract_to_cache(
+            channel_root, subdir, fn_info.fn, stat_result=fn_info
+        )
+
+    def extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
         # XXX original skips this on warm cache
         with self.db:  # transaction
-            return self._extract_to_cache(channel_root, subdir, fn)
+            return self._extract_to_cache(
+                channel_root, subdir, fn, stat_result=stat_result
+            )
 
     @property
     def database_prefix(self):
@@ -193,6 +203,12 @@ class CondaIndexCache:
 
     def database_path(self, fn):
         return f"{self.database_prefix}{fn}"
+
+    def plain_path(self, path):
+        """
+        path with any database-specfic prefix stripped off.
+        """
+        return path.rsplit("/", 1)[-1]
 
     def _extract_to_cache(
         self, channel_root, subdir, fn, second_try=False, stat_result=None
@@ -229,7 +245,15 @@ class CondaIndexCache:
 
             else:
                 log.info("Extract %s to cache" % fn)
-                index_json = self.extract_to_cache_unconditional(fn, abs_fn, size)
+                index_json = self.extract_to_cache_unconditional(
+                    fn, abs_fn, size, mtime
+                )
+
+            # have to update stat or we will be asked to look up cached_row again
+            self.db.execute(
+                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5) VALUES ('indexed', ?, ?, ?, ?, ?)""",
+                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
+            )
 
             retval = fn, mtime, size, index_json
 
@@ -240,14 +264,21 @@ class CondaIndexCache:
             BadZipFile,  # stdlib zipfile
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
+            log.exception("Error extracting %s", fn)
             if not second_try:
                 # recursion XXX measure whether this ever succeeds on the second
                 # try. could wait until next index run.
-                return self._extract_to_cache(channel_root, subdir, fn, second_try=True)
+                return self._extract_to_cache(
+                    channel_root,
+                    subdir,
+                    fn,
+                    stat_result=stat_result,
+                    second_try=True,
+                )
 
         return retval
 
-    def extract_to_cache_unconditional(self, fn, abs_fn, size):
+    def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
@@ -283,9 +314,8 @@ class CondaIndexCache:
                     wanted = wanted - recipe_want_one
 
             if not wanted:  # we got what we wanted
-                # XXX debug: how many files / bytes did we avoid reading
                 package_stream.close()
-                log.debug(f"{fn} early exit")
+                log.debug(f"%s early close", fn)
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
@@ -364,7 +394,6 @@ class CondaIndexCache:
     def load_all_from_cache(self, fn, mtime=None):
         subdir_path = self.subdir_path
         try:
-            # XXX save recent stat calls for a significant speedup
             mtime = mtime or os.stat(join(subdir_path, fn)).st_mtime
         except FileNotFoundError:
             # XXX don't call if it won't be found
