@@ -4,7 +4,7 @@ collections of conda packages.
 
 ## Getting started
 
-```bash
+```sh
 conda create -n conda-index python=3.10 conda
 # in a parent directory
 pip install -e git+https://git@github.com/conda/conda-build.git#egg=conda-build
@@ -14,11 +14,25 @@ pip install -e conda-index[test] # pip >=22
 pytest
 ```
 
+## Run normally
+
+```sh
+python -m conda_index <path to channel directory>
+```
+
+## Run with extra logs
+
+```sh
+python -m conda_index.index --verbose --no-progress --threads=1 <path to channel directory>
+```
+
 ## Summary of changes from the previous `conda-build index` version
 
 * Approximately 2.2x faster conda package extraction, by extracting just the
   metadata to streams instead of extracting packages to a temporary directory;
   closes the package early if all metadata has been found.
+
+* No longer read existing `repodata.json`. Always load from cache.
 
 * Uses a sqlite metadata cache that is orders of magnitude faster than the old
   many-tiny-files cache.
