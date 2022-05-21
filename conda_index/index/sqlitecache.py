@@ -490,6 +490,66 @@ class CondaIndexCache:
 
         return data
 
+    def save_fs_state(self, subdir_path):
+        """
+        stat all files in subdir_path to compare against cached repodata.
+        """
+        path_like = self.database_path_like
+
+        # gather conda package filenames in subdir
+        log.debug("listdir")
+        fns_in_subdir = {
+            fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
+        }
+
+        # put filesystem 'ground truth' into stat table
+        # will we eventually stat everything on fs, or can we shortcut for new?
+        def listdir_stat():
+            for fn in fns_in_subdir:
+                abs_fn = os.path.join(subdir_path, fn)
+                stat = os.stat(abs_fn)
+                yield {
+                    "path": self.database_path(fn),
+                    "mtime": int(stat.st_mtime),
+                    "size": stat.st_size,
+                }
+
+        log.debug("save fs state")
+        with self.db:
+            self.db.execute(
+                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
+                {"path_like": path_like},
+            )
+            self.db.executemany(
+                """
+            INSERT INTO STAT (stage, path, mtime, size)
+            VALUES ('fs', :path, :mtime, :size)
+            """,
+                listdir_stat(),
+            )
+
+    def changed_packages(self):
+        """
+        Compare 'fs' to 'indexed' state.
+
+        Return packages in 'fs' that are changed or missing compared to 'indexed'.
+        """
+        return self.db.execute(
+            """
+            WITH
+            fs AS
+                ( SELECT path, mtime, size FROM stat WHERE stage = 'fs' ),
+            cached AS
+                ( SELECT path, mtime FROM stat WHERE stage = 'indexed' )
+
+            SELECT fs.path, fs.mtime, fs.size from fs LEFT JOIN cached USING (path)
+
+            WHERE fs.path LIKE :path_like AND
+                (fs.mtime != cached.mtime OR cached.path IS NULL)
+        """,
+            {"path_like": self.database_path_like},
+        )  # XXX compare checksums if available, and prefer to mtimes
+
 
 def _cache_post_install_details(paths_json_str):
     post_install_details_json = {
