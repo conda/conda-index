@@ -13,6 +13,7 @@ import os
 import os.path
 import re
 import sqlite3
+import sys
 import tarfile
 from contextlib import closing
 
@@ -282,6 +283,49 @@ def convert_cache(conn, cache_generator, override_channel=None):
 
                 else:
                     log.warn("Unhandled", match.groupdict())
+
+
+def merge_index_cache(channel_root, output_db="merged.db"):
+    """
+    Combine {channel_root}/*/.cache/cache.db databases into a single database.
+    Useful for queries. Not used by any part of the indexing process.
+    """
+    from conda_index.utils import DEFAULT_SUBDIRS
+
+    channel_name = os.path.basename(channel_root)
+    log.info(f"Merge caches for channel {channel_name}")
+    combined_db = common.connect(output_db)
+    with combined_db:
+        create(combined_db)  # skip 'remove prefix' migration
+    for subdir in DEFAULT_SUBDIRS:
+        cache_db = os.path.join(channel_root, subdir, ".cache", "cache.db")
+        if not os.path.exists(cache_db):
+            continue
+        channel_prefix = f"{channel_name}/{subdir}/"
+        log.info(
+            f"Merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}"
+        )
+        combined_db.execute("ATTACH DATABASE ? AS subdir", (cache_db,))
+
+        for table in TABLE_NAMES:
+            # does sqlite do less work explicity avoiding "replace when row
+            # would not have changed"
+            column = {"icon": "icon_png"}.get(table, table)
+            if table == "icon":  # very rare
+                continue
+            query = f"""INSERT INTO main.{table} (path, {column})
+            SELECT ? || path, {column} FROM subdir.{table} WHERE true -- avoid syntax ambiguity
+            ON CONFLICT (path) DO UPDATE SET {column} = excluded.{column}
+            WHERE {column} != excluded.{column} -- does this avoid work
+            """
+            try:
+                with combined_db:
+                    combined_db.execute(query, (channel_prefix,))
+            except sqlite3.OperationalError as e:
+                log.error("OperationalError on %s", query)
+                raise
+
+        combined_db.execute("DETACH DATABASE subdir")
 
 
 def test_from_archive(archive_path):
