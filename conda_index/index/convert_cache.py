@@ -148,6 +148,8 @@ def remove_prefix(conn: sqlite3.Connection):
     Call inside a transaction.
     """
 
+    log.info("Migrate database")
+
     def basename(path):
         if not isinstance(path, str):
             return path

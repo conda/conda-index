@@ -19,6 +19,10 @@ def parse_args(args):
         default=[os.getcwd()],
     )
     p.add_argument(
+        "--output",
+        help="Directory to generate index. Default [dir]. Cannot be used with multiple [dir].",
+    )
+    p.add_argument(
         "-c",
         "--check-md5",
         action="store_true",
@@ -80,8 +84,13 @@ def parse_args(args):
 def execute(args):
     _, args = parse_args(args)
 
+    if len(args.dir) != 1 and args.output:
+        print("Must specify exactly one input dir when using --output", file=sys.stderr)
+        sys.exit(1)
+
     api.update_index(
         args.dir,
+        output_dir=args.output,
         check_md5=args.check_md5,
         channel_name=args.channel_name,
         threads=args.threads,

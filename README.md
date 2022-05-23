@@ -59,3 +59,8 @@ python -m conda_index.index --verbose --no-progress --threads=1 <path to channel
 * Mercilessly cull less-used features.
 
 * Format with `black`
+
+## Parallelism
+
+This version of conda-index continues indexing packages from other subdirs while
+the main thread is writing a repodata.json.

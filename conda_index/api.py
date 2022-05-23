@@ -7,6 +7,7 @@
 
 def update_index(
     dir_paths,
+    output_dir=None,
     check_md5=False,
     channel_name=None,
     subdir=None,
@@ -25,6 +26,10 @@ def update_index(
 
     dir_paths = [os.path.abspath(path) for path in ensure_list(dir_paths)]
 
+    assert (
+        output_dir is None or len(dir_paths) == 1
+    ), "Cannot combine output_dir with multiple paths"
+
     if isinstance(current_index_versions, str):
         with open(current_index_versions) as f:
             current_index_versions = yaml.safe_load(f)
@@ -32,6 +37,7 @@ def update_index(
     for path in dir_paths:
         update_index(
             path,
+            output_dir=output_dir,
             check_md5=check_md5,
             channel_name=channel_name,
             patch_generator=patch_generator,

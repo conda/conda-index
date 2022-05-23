@@ -9,7 +9,8 @@ import os
 import sys
 import time
 from collections import OrderedDict
-from concurrent.futures import Executor, ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import closing
 from datetime import datetime
 from numbers import Number
 from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
@@ -252,6 +253,7 @@ class FileInfo(NamedTuple):
 
 def update_index(
     dir_path,
+    output_dir=None,
     check_md5=False,
     channel_name=None,
     patch_generator=None,
@@ -290,6 +292,7 @@ def update_index(
         threads=threads,
         deep_integrity_check=check_md5,
         debug=debug,
+        output_root=output_dir,
     ).index(
         patch_generator=patch_generator,
         verbose=verbose,
@@ -422,27 +425,6 @@ def _get_jinja2_environment():
     environment.lstrip_blocks = True
 
     return environment
-
-
-def _maybe_write(path, content, write_newline_end=False, content_is_binary=False):
-    # Create the temp file next "path" so that we can use an atomic move, see
-    # https://github.com/conda/conda-build/issues/3833
-    temp_path = f"{path}.{uuid4()}"
-
-    if not content_is_binary:
-        content = ensure_binary(content)
-    with open(temp_path, "wb") as fh:
-        fh.write(content)
-        if write_newline_end:
-            fh.write(b"\n")
-    if isfile(path):
-        if utils.file_contents_match(temp_path, path):
-            # No need to change mtimes. The contents already match.
-            os.unlink(temp_path)
-            return False
-    # log.info("writing %s", path)
-    utils.move_with_fallback(temp_path, path)
-    return True
 
 
 def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
@@ -623,8 +605,12 @@ class ChannelIndex:
         threads=MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
+        output_root=None,  # write repodata.json etc. to separate folder?
+        cache_class=sqlitecache.CondaIndexCache,
     ):
+        self.cache_class = cache_class
         self.channel_root = abspath(channel_root)
+        self.output_root = abspath(output_root) if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
         self._subdirs = subdirs
         self.thread_executor = (
@@ -659,22 +645,45 @@ class ChannelIndex:
                 log.debug("found subdirs %s" % detected_subdirs)
                 self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
             else:
-                self.subdirs = subdirs = sorted(
-                    set(self._subdirs)
-                )  # XXX noarch removed for testing | {"noarch"})
+                self.subdirs = subdirs = sorted(set(self._subdirs))
+                log.warn("Indexing %s does not include 'noarch'", subdirs)
 
             # Step 1. Lock local channel.
             with utils.try_acquire_locks(
                 [utils.get_lock(self.channel_root)], timeout=900
             ):
+                # begin non-stop "extract packages into cache";
+                # extract_subdir_to_cache manages subprocesses. Keeps cores busy
+                # during write/patch/update channeldata steps.
+                def extract_subdirs_to_cache():
+                    executor = ThreadPoolExecutor(max_workers=1)
+
+                    def extract_args():
+                        for subdir in self.subdirs:
+                            cache = self.cache_for_subdir(subdir)
+                            subdir_path = join(self.channel_root, subdir)
+                            yield (subdir, verbose, progress, subdir_path, cache)
+
+                    def extract_wrapper(args):
+                        cache = args[-1]
+                        with closing(cache.db):
+                            return self.extract_subdir_to_cache(*args)
+
+                    return executor.map(extract_wrapper, extract_args())
+
                 # keeep channeldata in memory, update with each subdir
                 channel_data = {}
-                channeldata_file = os.path.join(self.channel_root, "channeldata.json")
+                channeldata_file = self.channeldata_path()
                 if os.path.isfile(channeldata_file):
                     with open(channeldata_file) as f:
                         channel_data = json.load(f)
                 # Step 2. Collect repodata from packages, save to pkg_repodata.json file
-                t = tqdm(subdirs, disable=(verbose or not progress), leave=False)
+                t = tqdm(
+                    extract_subdirs_to_cache(),
+                    total=len(subdirs),
+                    disable=(verbose or not progress),
+                    leave=False,
+                )
                 for subdir in t:
                     t.set_description("Subdir: %s" % subdir)
                     t.update()
@@ -684,7 +693,7 @@ class ChannelIndex:
                         t2.set_description("Gathering repodata")
                         t2.update()
                         log.debug("gather repodata")
-                        _ensure_valid_channel(self.channel_root, subdir)
+                        _ensure_valid_channel(self.output_root, subdir)
                         repodata_from_packages = self.index_subdir(
                             subdir, verbose=verbose, progress=progress
                         )
@@ -712,17 +721,17 @@ class ChannelIndex:
 
                         t2.set_description("Writing patched repodata")
                         t2.update()
-                        log.debug("write patched repodata")
+                        log.debug("%s write patched repodata", subdir)
                         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
                         t2.set_description("Building current_repodata subset")
                         t2.update()
-                        log.debug("build current_repodata")
+                        log.debug("%s build current_repodata", subdir)
                         current_repodata = _build_current_repodata(
                             subdir, patched_repodata, pins=current_index_versions
                         )
                         t2.set_description("Writing current_repodata subset")
                         t2.update()
-                        log.debug("write current_repodata")
+                        log.debug("%s write current_repodata", subdir)
                         self._write_repodata(
                             subdir,
                             current_repodata,
@@ -731,20 +740,24 @@ class ChannelIndex:
 
                         t2.set_description("Writing subdir index HTML")
                         t2.update()
-                        log.debug("write subdir index.html")
+                        log.debug("%s write index.html", subdir)
                         self._write_subdir_index_html(subdir, patched_repodata)
 
                         t2.set_description("Updating channeldata")
                         t2.update()
-                        log.debug("update channeldata")
+                        log.debug("%s update channeldata", subdir)
                         self._update_channeldata(channel_data, patched_repodata, subdir)
 
-                        log.debug("finish %s", subdir)
+                        log.debug("%s finish", subdir)
 
                 # Step 7. Create and write channeldata.
                 self._write_channeldata_index_html(channel_data)
                 log.debug("write channeldata")
                 self._write_channeldata(channel_data)
+
+    def channeldata_path(self):
+        channeldata_file = os.path.join(self.output_root, "channeldata.json")
+        return channeldata_file
 
     def index_subdir(self, subdir, verbose=False, progress=False):
         return self.index_subdir_unidirectional(
@@ -753,60 +766,16 @@ class ChannelIndex:
 
     def index_subdir_unidirectional(self, subdir, verbose=False, progress=False):
         """
-        Without reading old repodata.
+        Return repodata from the cache without reading old repodata.json
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
         """
         subdir_path = join(self.channel_root, subdir)
 
-        cache = sqlitecache.CondaIndexCache(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
-        )
-        if cache.cache_is_brand_new:
-            # guaranteed to be only thread doing this?
-            cache.convert()
+        cache = self.cache_for_subdir(subdir)
 
         if verbose:
             log.info("Building repodata for %s" % subdir_path)
-
-        # exactly these packages (unless they are un-indexable) will be in the
-        # output repodata
-        self.save_fs_state(cache, subdir_path)
-
-        log.debug("extraction")
-
-        # list so tqdm can show progress
-        extract = [
-            FileInfo(
-                fn=cache.plain_path(row["path"]),
-                st_mtime=row["mtime"],
-                st_size=row["size"],
-            )
-            for row in self.changed_packages(cache)
-        ]
-
-        # now updates own stat cache
-        extract_func = functools.partial(
-            cache.extract_to_cache_2, self.channel_root, subdir
-        )
-
-        for fn, mtime, _size, index_json in tqdm(
-            self.thread_executor.map(
-                extract_func,
-                extract,
-            ),
-            desc="hash & extract packages for %s" % subdir,
-            disable=(verbose or not progress),
-            leave=False,
-        ):
-            # fn can be None if the file was corrupt or no longer there
-            if fn and mtime:
-                if index_json:
-                    pass  # correctly indexed a package! will fetch below
-                else:
-                    log.error(
-                        "Package at %s did not contain valid index.json data.  Please"
-                        " check the file and remove/redownload if necessary to obtain "
-                        "a valid package." % os.path.join(subdir_path, fn)
-                    )
 
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
@@ -822,7 +791,7 @@ class ChannelIndex:
             WHERE stat.stage = ?
             ORDER BY path
         """,
-            ("fs",),
+            (cache.upstream_stage,),
         ):
             path, index_json = row
             # (convert path to base filename)
@@ -846,6 +815,80 @@ class ChannelIndex:
 
         return new_repodata
 
+    def cache_for_subdir(self, subdir):
+        cache = self.cache_class(
+            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
+        )
+        if cache.cache_is_brand_new:
+            # guaranteed to be only thread doing this?
+            cache.convert()
+        return cache
+
+    def extract_subdir_to_cache(
+        self, subdir, verbose, progress, subdir_path, cache: sqlitecache.CondaIndexCache
+    ):
+        """
+        Extract all changed packages into the subdir cache.
+
+        Return name of subdir.
+        """
+        # exactly these packages (unless they are un-indexable) will be in the
+        # output repodata
+        cache.save_fs_state(subdir_path)
+
+        log.debug("%s find packages to extract", subdir)
+
+        # list so tqdm can show progress
+        extract = [
+            FileInfo(
+                fn=cache.plain_path(row["path"]),
+                st_mtime=row["mtime"],
+                st_size=row["size"],
+            )
+            for row in cache.changed_packages()
+        ]
+
+        log.debug("%s extract %d packages", subdir, len(extract))
+
+        # now updates own stat cache
+        extract_func = functools.partial(
+            cache.extract_to_cache_2, self.channel_root, subdir
+        )
+
+        start_time = time.time()
+        size_processed = 0
+        for fn, mtime, size, index_json in tqdm(
+            self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
+            desc="hash & extract packages for %s" % subdir,
+            disable=(verbose or not progress),
+            leave=False,
+        ):
+            size_processed += size  # even if processed incorrectly
+            # fn can be None if the file was corrupt or no longer there
+            if fn and mtime:
+                if index_json:
+                    pass  # correctly indexed a package! will fetch below
+                else:
+                    log.error(
+                        "Package at %s did not contain valid index.json data.  Please"
+                        " check the file and remove/redownload if necessary to obtain "
+                        "a valid package." % os.path.join(subdir_path, fn)
+                    )
+        end_time = time.time()
+        try:
+            bytes_sec = size_processed / (end_time - start_time)
+        except ZeroDivisionError:
+            bytes_sec = 0
+        log.info(
+            "%s cached %s from %s packages at %s/second",
+            subdir,
+            human_bytes(size_processed),
+            len(extract),
+            human_bytes(bytes_sec),
+        )
+
+        return subdir
+
     def _write_repodata(self, subdir, repodata, json_filename):
         """
         Write repodata to :json_filename, but only if changed.
@@ -856,14 +899,14 @@ class ChannelIndex:
             indent=2,
             sort_keys=True,
         ).encode("utf-8")
-        write_result = _maybe_write(
+        write_result = self._maybe_write(
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
             # XXX write bz2 quickly or not at all, delete old one
             repodata_bz2_path = repodata_json_path + ".bz2"
             bz2_content = bz2.compress(new_repodata_binary)
-            _maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
+            self._maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
         return write_result
 
     def _write_subdir_index_html(self, subdir, repodata):
@@ -893,16 +936,16 @@ class ChannelIndex:
             self.channel_name, subdir, repodata_packages, extra_paths
         )
         index_path = join(subdir_path, "index.html")
-        return _maybe_write(index_path, rendered_html)
+        return self._maybe_write(index_path, rendered_html)
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
         index_path = join(self.channel_root, "index.html")
-        _maybe_write(index_path, rendered_html)
+        self._maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
-        cache = sqlitecache.CondaIndexCache(
+        cache = self.cache_class(
             channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
         )
 
@@ -1049,66 +1092,6 @@ class ChannelIndex:
             }
         )
 
-    def save_fs_state(self, cache: sqlitecache.CondaIndexCache, subdir_path):
-        """
-        stat all files in subdir_path to compare against cached repodata.
-        """
-        path_like = cache.database_path_like
-
-        # gather conda package filenames in subdir
-        log.debug("listdir")
-        fns_in_subdir = {
-            fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
-        }
-
-        # put filesystem 'ground truth' into stat table
-        # will we eventually stat everything on fs, or can we shortcut for new?
-        def listdir_stat():
-            for fn in fns_in_subdir:
-                abs_fn = os.path.join(subdir_path, fn)
-                stat = os.stat(abs_fn)
-                yield {
-                    "path": cache.database_path(fn),
-                    "mtime": int(stat.st_mtime),
-                    "size": stat.st_size,
-                }
-
-        log.debug("save fs state")
-        with cache.db:
-            cache.db.execute(
-                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": path_like},
-            )
-            cache.db.executemany(
-                """
-            INSERT INTO STAT (stage, path, mtime, size)
-            VALUES ('fs', :path, :mtime, :size)
-            """,
-                listdir_stat(),
-            )
-
-    def changed_packages(self, cache: sqlitecache.CondaIndexCache):
-        """
-        Compare 'fs' to 'indexed' state.
-
-        Return packages in 'fs' that are changed or missing compared to 'indexed'.
-        """
-        return cache.db.execute(
-            """
-            WITH
-            fs AS
-                ( SELECT path, mtime, size FROM stat WHERE stage = 'fs' ),
-            cached AS
-                ( SELECT path, mtime FROM stat WHERE stage = 'indexed' )
-
-            SELECT fs.path, fs.mtime, fs.size from fs LEFT JOIN cached USING (path)
-
-            WHERE fs.path LIKE :path_like AND
-                (fs.mtime != cached.mtime OR cached.path IS NULL)
-        """,
-            {"path_like": cache.database_path_like},
-        )  # XXX compare checksums if available, and prefer to mtimes
-
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
         for _pkg, pkg_dict in channeldata.get("packages", {}).items():
@@ -1116,7 +1099,7 @@ class ChannelIndex:
                 del pkg_dict["commits"]
         channeldata_path = join(self.channel_root, "channeldata.json")
         content = json.dumps(channeldata, indent=2, sort_keys=True)
-        _maybe_write(channeldata_path, content, True)
+        self._maybe_write(channeldata_path, content, True)
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
@@ -1168,7 +1151,7 @@ class ChannelIndex:
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )
-        _maybe_write(patch_instructions_path, new_patch, True)
+        self._maybe_write(patch_instructions_path, new_patch, True)
 
     def _load_instructions(self, subdir):
         patch_instructions_path = join(
@@ -1202,3 +1185,34 @@ class ChannelIndex:
             raise RuntimeError("Incompatible patch instructions version")
 
         return _apply_instructions(subdir, repodata, instructions), instructions
+
+    def _maybe_write(
+        self, path, content, write_newline_end=False, content_is_binary=False
+    ):
+        # Create the temp file next "path" so that we can use an atomic move, see
+        # https://github.com/conda/conda-build/issues/3833
+        temp_path = f"{path}.{uuid4()}"
+
+        # intercept to support separate output_directory
+        new_path = os.path.join(
+            self.output_root, (os.path.relpath(path, self.channel_root))
+        )
+        log.debug(f"_maybe_write {path} to {new_path}")
+        path = new_path
+
+        # XXX save 'maybe written' and 'actually written' paths
+
+        if not content_is_binary:
+            content = ensure_binary(content)
+        with open(temp_path, "wb") as fh:
+            fh.write(content)
+            if write_newline_end:
+                fh.write(b"\n")
+        if isfile(path):
+            if utils.file_contents_match(temp_path, path):
+                # No need to change mtimes. The contents already match.
+                os.unlink(temp_path)
+                return False
+        # log.info("writing %s", path)
+        utils.move_with_fallback(temp_path, path)
+        return True

@@ -67,6 +67,8 @@ COMPUTED = {"info/post_install.json"}
 
 
 class CondaIndexCache:
+    upstream_stage = "fs"
+
     def __init__(self, channel_root, channel, subdir):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -125,53 +127,6 @@ class CondaIndexCache:
             with self.db:
                 convert_cache.remove_prefix(self.db)
 
-    def stat_cache(self) -> dict:
-        """
-        Load path: mtime, size mapping
-        """
-        # XXX no long-term need to emulate old stat.json
-        return {
-            # XXX work correctly with windows \ separator
-            os.path.basename(row["path"]): {"mtime": row["mtime"], "size": row["size"]}
-            for row in self.db.execute(
-                "SELECT path, mtime, size FROM stat WHERE stage='indexed'"
-            )
-        }
-
-    def save_stat_cache(self, stat_cache: dict):
-        with self.db:
-            # XXX 'cached'?
-            self.db.execute("DELETE FROM stat WHERE stage='indexed'")
-
-            self.db.executemany(
-                "INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, 'indexed')",
-                (
-                    (
-                        self.database_path(fn),
-                        value["mtime"],
-                        value["size"],
-                    )
-                    for (fn, value) in stat_cache.items()
-                ),
-            )
-
-    def load_index_from_cache(self, fn):
-        # XXX prefer bulk load; can't pass list as :param though, and many small
-        # queries are efficient in sqlite.
-        # sqlite cache may be fast enough to forget reusing repodata.json
-        # often when you think this function would be called, it actually calls extract_to_cache
-        cached_row = self.db.execute(
-            "SELECT index_json FROM index_json WHERE path = :path",
-            {"path": self.database_path(fn)},
-        ).fetchone()
-
-        if cached_row:
-            # XXX load cached cached index.json from sql in bulk
-            # sqlite has very low latency but we can do better
-            return json.loads(cached_row[0])
-        else:
-            return fn  # odd legacy error handling
-
     def extract_to_cache_2(self, channel_root, subdir, fn_info):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
@@ -181,11 +136,7 @@ class CondaIndexCache:
         )
 
     def extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        # XXX original skips this on warm cache
-        with self.db:  # transaction
-            return self._extract_to_cache(
-                channel_root, subdir, fn, stat_result=stat_result
-            )
+        return self._extract_to_cache(channel_root, subdir, fn, stat_result=stat_result)
 
     @property
     def database_prefix(self):
@@ -244,17 +195,39 @@ class CondaIndexCache:
                 log.debug("Found %s in cache" % fn)
                 index_json = json.loads(cached_row[0])
 
+                # XXX now would be a great time to check hashes
+
+                # calculate extra stuff to add to index.json cache, size, md5, sha256
+
+                # conda_package_handling wastes a stat call to give us this information
+                # let's see how slow this is
+                # md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
+
+                # if the hashes don't match, would be a great time to invalidate the index_json cache
+                # assert index_json["sha256"] == sha256
+                # assert index_json["md5"] == md5
+
+                with self.db:
+                    # have to update stat or we will be asked to look up cached_row again
+                    # XXX DRY this query
+                    self.db.execute(
+                        """INSERT OR REPLACE INTO stat
+                        (stage, path, mtime, size, sha256, md5)
+                        VALUES ('indexed', ?, ?, ?, ?, ?)""",
+                        (
+                            database_path,
+                            mtime,
+                            size,
+                            index_json["sha256"],
+                            index_json["md5"],
+                        ),
+                    )
+
             else:
                 log.debug("Extract %s to cache" % fn)
                 index_json = self.extract_to_cache_unconditional(
                     fn, abs_fn, size, mtime
                 )
-
-            # have to update stat or we will be asked to look up cached_row again
-            self.db.execute(
-                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5) VALUES ('indexed', ?, ?, ?, ?, ?)""",
-                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
-            )
 
             retval = fn, mtime, size, index_json
 
@@ -334,63 +307,70 @@ class CondaIndexCache:
             paths_str = ""
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
 
-        for have_path in have:
-            table = PATH_TO_TABLE[have_path]
-            if table in TABLE_NO_CACHE or table == "index_json":
-                continue  # not cached, or for index_json cached at end
-
-            parameters = {"path": database_path, "data": have.get(have_path)}
-            if have_path == ICON_PATH:
-                query = """
-                            INSERT OR REPLACE into icon (path, icon_png)
-                            VALUES (:path, :data)
-                            """
-            elif parameters["data"] is not None:
-                query = f"""
-                            INSERT OR REPLACE INTO {table} (path, {table})
-                            VALUES (:path, json(:data))
-                            """
-            else:
-                query = f"""DELETE FROM {table} WHERE path = :path"""
-            try:
-                self.db.execute(query, parameters)
-            except sqlite3.OperationalError:  # e.g. malformed json.
-                log.exception("table=%s parameters=%s", table, parameters)
-                # XXX delete from cache
-                raise
-
-        # decide what fields to filter out, like has_prefix
-        filter_fields = {
-            "arch",
-            "has_prefix",
-            "mtime",
-            "platform",
-            "ucs",
-            "requires_features",
-            "binstar",
-            "target-triplet",
-            "machine",
-            "operatingsystem",
-        }
-        for field_name in filter_fields & set(index_json):
-            del index_json[field_name]
-
         # calculate extra stuff to add to index.json cache, size, md5, sha256
 
         # conda_package_handling wastes a stat call to give us this information
         md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
 
-        new_info = {"md5": md5, "sha256": sha256, "size": size}
+        with self.db:
+            for have_path in have:
+                table = PATH_TO_TABLE[have_path]
+                if table in TABLE_NO_CACHE or table == "index_json":
+                    continue  # not cached, or for index_json cached at end
 
-        index_json.update(new_info)
+                parameters = {"path": database_path, "data": have.get(have_path)}
+                if have_path == ICON_PATH:
+                    query = """
+                                INSERT OR REPLACE into icon (path, icon_png)
+                                VALUES (:path, :data)
+                                """
+                elif parameters["data"] is not None:
+                    query = f"""
+                                INSERT OR REPLACE INTO {table} (path, {table})
+                                VALUES (:path, json(:data))
+                                """
+                else:
+                    query = f"""DELETE FROM {table} WHERE path = :path"""
+                try:
+                    self.db.execute(query, parameters)
+                except sqlite3.OperationalError:  # e.g. malformed json.
+                    log.exception("table=%s parameters=%s", table, parameters)
+                    # XXX delete from cache
+                    raise
 
-        # sqlite json() function removes whitespace
-        self.db.execute(
-            "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
-            {"path": database_path, "index_json": json.dumps(index_json)},
-        )
+            # decide what fields to filter out, like has_prefix
+            filter_fields = {
+                "arch",
+                "has_prefix",
+                "mtime",
+                "platform",
+                "ucs",
+                "requires_features",
+                "binstar",
+                "target-triplet",
+                "machine",
+                "operatingsystem",
+            }
+            for field_name in filter_fields & set(index_json):
+                del index_json[field_name]
 
-        return index_json
+            new_info = {"md5": md5, "sha256": sha256, "size": size}
+
+            index_json.update(new_info)
+
+            # sqlite json() function removes whitespace
+            self.db.execute(
+                "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
+                {"path": database_path, "index_json": json.dumps(index_json)},
+            )
+
+            self.db.execute(
+                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
+                VALUES ('indexed', ?, ?, ?, ?, ?)""",
+                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
+            )
+
+        return index_json  # we don't need this return value; it will be queried back out to generate repodata
 
     def load_all_from_cache(self, fn):
         subdir_path = self.subdir_path
@@ -398,8 +378,8 @@ class CondaIndexCache:
         try:
             # recent stat information must exist here...
             stat = self.db.execute(
-                "SELECT mtime FROM stat WHERE stage='fs' AND path=:path",
-                {"path": self.database_path(fn)},
+                "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
+                {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
             ).fetchone()
             mtime = stat["mtime"]
         except (KeyError, IndexError):
@@ -411,8 +391,8 @@ class CondaIndexCache:
                 log.warn("%s not found in load_all_from_cache", fn)
                 return {}
 
-        # In contrast to self._load_index_from_cache(), this method reads up pretty much
-        # all of the cached metadata, except for paths. It all gets dumped into a single map.
+        # This method reads up pretty much all of the cached metadata, except
+        # for paths. It all gets dumped into a single map.
 
         UNHOLY_UNION = """
         SELECT
@@ -448,7 +428,6 @@ class CondaIndexCache:
             if row[column]:  # is not null or empty
                 data.update(json.loads(row[column]))
 
-        # have to stat again, because we don't have access to the stat cache here
         data["mtime"] = mtime
 
         source = data.get("source", {})
@@ -464,6 +443,66 @@ class CondaIndexCache:
         data["run_exports"] = json.loads(row["run_exports"] or "{}")
 
         return data
+
+    def save_fs_state(self, subdir_path):
+        """
+        stat all files in subdir_path to compare against cached repodata.
+        """
+        path_like = self.database_path_like
+
+        # gather conda package filenames in subdir
+        log.debug("%s listdir", self.subdir)
+        fns_in_subdir = {
+            fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
+        }
+
+        # put filesystem 'ground truth' into stat table
+        # will we eventually stat everything on fs, or can we shortcut for new?
+        def listdir_stat():
+            for fn in fns_in_subdir:
+                abs_fn = os.path.join(subdir_path, fn)
+                stat = os.stat(abs_fn)
+                yield {
+                    "path": self.database_path(fn),
+                    "mtime": int(stat.st_mtime),
+                    "size": stat.st_size,
+                }
+
+        log.debug("%s save fs state", self.subdir)
+        with self.db:
+            self.db.execute(
+                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
+                {"path_like": path_like},
+            )
+            self.db.executemany(
+                """
+            INSERT INTO STAT (stage, path, mtime, size)
+            VALUES ('fs', :path, :mtime, :size)
+            """,
+                listdir_stat(),
+            )
+
+    def changed_packages(self):
+        """
+        Compare 'fs' to 'indexed' state.
+
+        Return packages in 'fs' that are changed or missing compared to 'indexed'.
+        """
+        return self.db.execute(
+            """
+            WITH
+            fs AS
+                ( SELECT path, mtime, size FROM stat WHERE stage = 'fs' ),
+            cached AS
+                ( SELECT path, mtime FROM stat WHERE stage = 'indexed' )
+
+            SELECT fs.path, fs.mtime, fs.size from fs LEFT JOIN cached USING (path)
+
+            WHERE fs.path LIKE :path_like AND
+                (fs.mtime != cached.mtime OR cached.path IS NULL)
+        """,
+            {"path_like": self.database_path_like},
+        )  # XXX compare checksums if available, and prefer to mtimes
 
 
 def _cache_post_install_details(paths_json_str):
