@@ -125,53 +125,6 @@ class CondaIndexCache:
             with self.db:
                 convert_cache.remove_prefix(self.db)
 
-    def stat_cache(self) -> dict:
-        """
-        Load path: mtime, size mapping
-        """
-        # XXX no long-term need to emulate old stat.json
-        return {
-            # XXX work correctly with windows \ separator
-            os.path.basename(row["path"]): {"mtime": row["mtime"], "size": row["size"]}
-            for row in self.db.execute(
-                "SELECT path, mtime, size FROM stat WHERE stage='indexed'"
-            )
-        }
-
-    def save_stat_cache(self, stat_cache: dict):
-        with self.db:
-            # XXX 'cached'?
-            self.db.execute("DELETE FROM stat WHERE stage='indexed'")
-
-            self.db.executemany(
-                "INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, 'indexed')",
-                (
-                    (
-                        self.database_path(fn),
-                        value["mtime"],
-                        value["size"],
-                    )
-                    for (fn, value) in stat_cache.items()
-                ),
-            )
-
-    def load_index_from_cache(self, fn):
-        # XXX prefer bulk load; can't pass list as :param though, and many small
-        # queries are efficient in sqlite.
-        # sqlite cache may be fast enough to forget reusing repodata.json
-        # often when you think this function would be called, it actually calls extract_to_cache
-        cached_row = self.db.execute(
-            "SELECT index_json FROM index_json WHERE path = :path",
-            {"path": self.database_path(fn)},
-        ).fetchone()
-
-        if cached_row:
-            # XXX load cached cached index.json from sql in bulk
-            # sqlite has very low latency but we can do better
-            return json.loads(cached_row[0])
-        else:
-            return fn  # odd legacy error handling
-
     def extract_to_cache_2(self, channel_root, subdir, fn_info):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
@@ -436,8 +389,8 @@ class CondaIndexCache:
                 log.warn("%s not found in load_all_from_cache", fn)
                 return {}
 
-        # In contrast to self._load_index_from_cache(), this method reads up pretty much
-        # all of the cached metadata, except for paths. It all gets dumped into a single map.
+        # This method reads up pretty much all of the cached metadata, except
+        # for paths. It all gets dumped into a single map.
 
         UNHOLY_UNION = """
         SELECT
