@@ -791,7 +791,7 @@ class ChannelIndex:
             WHERE stat.stage = ?
             ORDER BY path
         """,
-            ("fs",),
+            (cache.upstream_stage,),
         ):
             path, index_json = row
             # (convert path to base filename)

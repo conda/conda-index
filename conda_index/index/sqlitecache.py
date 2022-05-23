@@ -67,6 +67,8 @@ COMPUTED = {"info/post_install.json"}
 
 
 class CondaIndexCache:
+    upstream_stage = "fs"
+
     def __init__(self, channel_root, channel, subdir):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -376,8 +378,8 @@ class CondaIndexCache:
         try:
             # recent stat information must exist here...
             stat = self.db.execute(
-                "SELECT mtime FROM stat WHERE stage='fs' AND path=:path",
-                {"path": self.database_path(fn)},
+                "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
+                {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
             ).fetchone()
             mtime = stat["mtime"]
         except (KeyError, IndexError):
