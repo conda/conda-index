@@ -778,13 +778,15 @@ class ChannelIndex:
             cache.extract_to_cache_2, self.channel_root, subdir
         )
 
-        for fn, mtime, _size, index_json in tqdm(
-            # multiprocessing likes to hang
+        start_time = time.time()
+        size_processed = 0
+        for fn, mtime, size, index_json in tqdm(
             self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
             desc="hash & extract packages for %s" % subdir,
             disable=(verbose or not progress),
             leave=False,
         ):
+            size_processed += size  # even if processed incorrectly
             # fn can be None if the file was corrupt or no longer there
             if fn and mtime:
                 if index_json:
@@ -795,6 +797,18 @@ class ChannelIndex:
                         " check the file and remove/redownload if necessary to obtain "
                         "a valid package." % os.path.join(subdir_path, fn)
                     )
+        end_time = time.time()
+        try:
+            bytes_sec = size_processed / (end_time - start_time)
+        except ZeroDivisionError:
+            bytes_sec = 0
+        log.info(
+            "%s cached %s from %s packages at %s/second",
+            subdir,
+            human_bytes(size_processed),
+            len(extract),
+            human_bytes(bytes_sec),
+        )
 
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
