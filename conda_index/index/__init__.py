@@ -9,7 +9,7 @@ import os
 import sys
 import time
 from collections import OrderedDict
-from concurrent.futures import Executor, ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime
 from numbers import Number
 from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
@@ -645,12 +645,31 @@ class ChannelIndex:
             else:
                 self.subdirs = subdirs = sorted(
                     set(self._subdirs)
-                )  # XXX noarch removed for testing | {"noarch"})
+                )
+                log.warn("Indexing %s does not include 'noarch'", subdirs)
+
 
             # Step 1. Lock local channel.
             with utils.try_acquire_locks(
                 [utils.get_lock(self.channel_root)], timeout=900
             ):
+                # begin non-stop "extract packages into cache";
+                # extract_subdir_to_cache manages subprocesses. Keeps cores busy
+                # during write/patch/update channeldata steps.
+                def extract_subdirs_to_cache():
+                    executor = ThreadPoolExecutor(max_workers=1)
+
+                    def extract_args():
+                        for subdir in self.subdirs:
+                            cache = self.cache_for_subdir(subdir)
+                            subdir_path = join(self.channel_root, subdir)
+                            yield (subdir, verbose, progress, subdir_path, cache)
+
+                    def extract_wrapper(args):
+                        return self.extract_subdir_to_cache(*args)
+
+                    return executor.map(extract_wrapper, extract_args())
+
                 # keeep channeldata in memory, update with each subdir
                 channel_data = {}
                 channeldata_file = self.channeldata_path()
@@ -658,7 +677,12 @@ class ChannelIndex:
                     with open(channeldata_file) as f:
                         channel_data = json.load(f)
                 # Step 2. Collect repodata from packages, save to pkg_repodata.json file
-                t = tqdm(subdirs, disable=(verbose or not progress), leave=False)
+                t = tqdm(
+                    extract_subdirs_to_cache(),
+                    total=len(subdirs),
+                    disable=(verbose or not progress),
+                    leave=False,
+                )
                 for subdir in t:
                     t.set_description("Subdir: %s" % subdir)
                     t.update()
@@ -696,17 +720,17 @@ class ChannelIndex:
 
                         t2.set_description("Writing patched repodata")
                         t2.update()
-                        log.debug("write patched repodata")
+                        log.debug("%s write patched repodata", subdir)
                         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
                         t2.set_description("Building current_repodata subset")
                         t2.update()
-                        log.debug("build current_repodata")
+                        log.debug("%s build current_repodata", subdir)
                         current_repodata = _build_current_repodata(
                             subdir, patched_repodata, pins=current_index_versions
                         )
                         t2.set_description("Writing current_repodata subset")
                         t2.update()
-                        log.debug("write current_repodata")
+                        log.debug("%s write current_repodata", subdir)
                         self._write_repodata(
                             subdir,
                             current_repodata,
@@ -715,15 +739,15 @@ class ChannelIndex:
 
                         t2.set_description("Writing subdir index HTML")
                         t2.update()
-                        log.debug("write subdir index.html")
+                        log.debug("%s write index.html", subdir)
                         self._write_subdir_index_html(subdir, patched_repodata)
 
                         t2.set_description("Updating channeldata")
                         t2.update()
-                        log.debug("update channeldata")
+                        log.debug("%s update channeldata", subdir)
                         self._update_channeldata(channel_data, patched_repodata, subdir)
 
-                        log.debug("finish %s", subdir)
+                        log.debug("%s finish", subdir)
 
                 # Step 7. Create and write channeldata.
                 self._write_channeldata_index_html(channel_data)
@@ -745,70 +769,10 @@ class ChannelIndex:
         """
         subdir_path = join(self.channel_root, subdir)
 
-        cache = self.cache_class(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
-        )
-        if cache.cache_is_brand_new:
-            # guaranteed to be only thread doing this?
-            cache.convert()
+        cache = self.cache_for_subdir(subdir)
 
         if verbose:
             log.info("Building repodata for %s" % subdir_path)
-
-        # exactly these packages (unless they are un-indexable) will be in the
-        # output repodata
-        cache.save_fs_state(subdir_path)
-
-        log.debug("find packages to extract")
-
-        # list so tqdm can show progress
-        extract = [
-            FileInfo(
-                fn=cache.plain_path(row["path"]),
-                st_mtime=row["mtime"],
-                st_size=row["size"],
-            )
-            for row in self.changed_packages(cache)
-        ]
-
-        log.debug("extract %d packages", len(extract))
-
-        # now updates own stat cache
-        extract_func = functools.partial(
-            cache.extract_to_cache_2, self.channel_root, subdir
-        )
-
-        start_time = time.time()
-        size_processed = 0
-        for fn, mtime, size, index_json in tqdm(
-            self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
-            desc="hash & extract packages for %s" % subdir,
-            disable=(verbose or not progress),
-            leave=False,
-        ):
-            size_processed += size  # even if processed incorrectly
-            # fn can be None if the file was corrupt or no longer there
-            if fn and mtime:
-                if index_json:
-                    pass  # correctly indexed a package! will fetch below
-                else:
-                    log.error(
-                        "Package at %s did not contain valid index.json data.  Please"
-                        " check the file and remove/redownload if necessary to obtain "
-                        "a valid package." % os.path.join(subdir_path, fn)
-                    )
-        end_time = time.time()
-        try:
-            bytes_sec = size_processed / (end_time - start_time)
-        except ZeroDivisionError:
-            bytes_sec = 0
-        log.info(
-            "%s cached %s from %s packages at %s/second",
-            subdir,
-            human_bytes(size_processed),
-            len(extract),
-            human_bytes(bytes_sec),
-        )
 
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
@@ -847,6 +811,78 @@ class ChannelIndex:
         }
 
         return new_repodata
+
+    def cache_for_subdir(self, subdir):
+        cache = self.cache_class(
+            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
+        )
+        if cache.cache_is_brand_new:
+            # guaranteed to be only thread doing this?
+            cache.convert()
+        return cache
+
+    def extract_subdir_to_cache(self, subdir, verbose, progress, subdir_path, cache):
+        """
+        Extract all changed packages into the subdir cache.
+
+        Return name of subdir.
+        """
+        # exactly these packages (unless they are un-indexable) will be in the
+        # output repodata
+        cache.save_fs_state(subdir_path)
+
+        log.debug("%s find packages to extract", subdir)
+
+        # list so tqdm can show progress
+        extract = [
+            FileInfo(
+                fn=cache.plain_path(row["path"]),
+                st_mtime=row["mtime"],
+                st_size=row["size"],
+            )
+            for row in self.changed_packages(cache)
+        ]
+
+        log.debug("%s extract %d packages", subdir, len(extract))
+
+        # now updates own stat cache
+        extract_func = functools.partial(
+            cache.extract_to_cache_2, self.channel_root, subdir
+        )
+
+        start_time = time.time()
+        size_processed = 0
+        for fn, mtime, size, index_json in tqdm(
+            self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
+            desc="hash & extract packages for %s" % subdir,
+            disable=(verbose or not progress),
+            leave=False,
+        ):
+            size_processed += size  # even if processed incorrectly
+            # fn can be None if the file was corrupt or no longer there
+            if fn and mtime:
+                if index_json:
+                    pass  # correctly indexed a package! will fetch below
+                else:
+                    log.error(
+                        "Package at %s did not contain valid index.json data.  Please"
+                        " check the file and remove/redownload if necessary to obtain "
+                        "a valid package." % os.path.join(subdir_path, fn)
+                    )
+        end_time = time.time()
+        try:
+            bytes_sec = size_processed / (end_time - start_time)
+        except ZeroDivisionError:
+            bytes_sec = 0
+        log.info(
+            "%s cached %s from %s packages at %s/second",
+            subdir,
+            human_bytes(size_processed),
+            len(extract),
+            human_bytes(bytes_sec),
+        )
+
+        return subdir
 
     def _write_repodata(self, subdir, repodata, json_filename):
         """

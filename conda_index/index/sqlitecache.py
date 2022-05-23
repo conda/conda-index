@@ -497,7 +497,7 @@ class CondaIndexCache:
         path_like = self.database_path_like
 
         # gather conda package filenames in subdir
-        log.debug("listdir")
+        log.debug("%s listdir", self.subdir)
         fns_in_subdir = {
             fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
         }
@@ -514,7 +514,7 @@ class CondaIndexCache:
                     "size": stat.st_size,
                 }
 
-        log.debug("save fs state")
+        log.debug("%s save fs state", self.subdir)
         with self.db:
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
