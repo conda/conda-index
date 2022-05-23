@@ -10,6 +10,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import closing
 from datetime import datetime
 from numbers import Number
 from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
@@ -252,6 +253,7 @@ class FileInfo(NamedTuple):
 
 def update_index(
     dir_path,
+    output_dir=None,
     check_md5=False,
     channel_name=None,
     patch_generator=None,
@@ -290,7 +292,7 @@ def update_index(
         threads=threads,
         deep_integrity_check=check_md5,
         debug=debug,
-        output_root="/tmp/conda-forge-output",
+        output_root=output_dir,
     ).index(
         patch_generator=patch_generator,
         verbose=verbose,
@@ -643,11 +645,8 @@ class ChannelIndex:
                 log.debug("found subdirs %s" % detected_subdirs)
                 self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
             else:
-                self.subdirs = subdirs = sorted(
-                    set(self._subdirs)
-                )
+                self.subdirs = subdirs = sorted(set(self._subdirs))
                 log.warn("Indexing %s does not include 'noarch'", subdirs)
-
 
             # Step 1. Lock local channel.
             with utils.try_acquire_locks(
@@ -666,7 +665,9 @@ class ChannelIndex:
                             yield (subdir, verbose, progress, subdir_path, cache)
 
                     def extract_wrapper(args):
-                        return self.extract_subdir_to_cache(*args)
+                        cache = args[-1]
+                        with closing(cache.db):
+                            return self.extract_subdir_to_cache(*args)
 
                     return executor.map(extract_wrapper, extract_args())
 
@@ -821,7 +822,9 @@ class ChannelIndex:
             cache.convert()
         return cache
 
-    def extract_subdir_to_cache(self, subdir, verbose, progress, subdir_path, cache):
+    def extract_subdir_to_cache(
+        self, subdir, verbose, progress, subdir_path, cache: sqlitecache.CondaIndexCache
+    ):
         """
         Extract all changed packages into the subdir cache.
 
