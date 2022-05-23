@@ -473,7 +473,6 @@ class CondaIndexCache:
             if row[column]:  # is not null or empty
                 data.update(json.loads(row[column]))
 
-        # have to stat again, because we don't have access to the stat cache here
         data["mtime"] = mtime
 
         source = data.get("source", {})

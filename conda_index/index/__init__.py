@@ -766,7 +766,9 @@ class ChannelIndex:
 
     def index_subdir_unidirectional(self, subdir, verbose=False, progress=False):
         """
-        Without reading old repodata.
+        Return repodata from the cache without reading old repodata.json
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
         """
         subdir_path = join(self.channel_root, subdir)
 
@@ -843,7 +845,7 @@ class ChannelIndex:
                 st_mtime=row["mtime"],
                 st_size=row["size"],
             )
-            for row in self.changed_packages(cache)
+            for row in cache.changed_packages()
         ]
 
         log.debug("%s extract %d packages", subdir, len(extract))
@@ -1090,14 +1092,6 @@ class ChannelIndex:
             }
         )
 
-    def changed_packages(self, cache: sqlitecache.CondaIndexCache):
-        """
-        Compare 'fs' to 'indexed' state.
-
-        Return packages in 'fs' that are changed or missing compared to 'indexed'.
-        """
-        return cache.changed_packages()
-
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
         for _pkg, pkg_dict in channeldata.get("packages", {}).items():
@@ -1203,8 +1197,10 @@ class ChannelIndex:
         new_path = os.path.join(
             self.output_root, (os.path.relpath(path, self.channel_root))
         )
-        print(f"self._maybe_write {path} to {new_path}")
+        log.debug(f"_maybe_write {path} to {new_path}")
         path = new_path
+
+        # XXX save 'maybe written' and 'actually written' paths
 
         if not content_is_binary:
             content = ensure_binary(content)
