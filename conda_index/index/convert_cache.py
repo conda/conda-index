@@ -13,6 +13,7 @@ import os
 import os.path
 import re
 import sqlite3
+import sys
 import tarfile
 from contextlib import closing
 
@@ -292,7 +293,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
     from conda_index.utils import DEFAULT_SUBDIRS
 
     channel_name = os.path.basename(channel_root)
-    print(f"merge caches for channel {channel_name}")
+    log.info(f"Merge caches for channel {channel_name}")
     combined_db = common.connect(output_db)
     with combined_db:
         create(combined_db)  # skip 'remove prefix' migration
@@ -301,7 +302,9 @@ def merge_index_cache(channel_root, output_db="merged.db"):
         if not os.path.exists(cache_db):
             continue
         channel_prefix = f"{channel_name}/{subdir}/"
-        print(f"merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}")
+        log.info(
+            f"Merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}"
+        )
         combined_db.execute("ATTACH DATABASE ? AS subdir", (cache_db,))
 
         for table in TABLE_NAMES:
@@ -319,8 +322,8 @@ def merge_index_cache(channel_root, output_db="merged.db"):
                 with combined_db:
                     combined_db.execute(query, (channel_prefix,))
             except sqlite3.OperationalError as e:
-                print(e)
-                print(query)
+                log.error("OperationalError on %s", query)
+                raise
 
         combined_db.execute("DETACH DATABASE subdir")
 
