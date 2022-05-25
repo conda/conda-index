@@ -285,7 +285,7 @@ def update_index(
             )
         raise SystemExit()
 
-    return ChannelIndex(
+    channel_index = ChannelIndex(
         dir_path,
         channel_name,
         subdirs=subdirs,
@@ -293,12 +293,16 @@ def update_index(
         deep_integrity_check=check_md5,
         debug=debug,
         output_root=output_dir,
-    ).index(
+    )
+
+    channel_index.index(
         patch_generator=patch_generator,
         verbose=verbose,
         progress=progress,
         current_index_versions=current_index_versions,
     )
+
+    channel_index.update_channeldata(verbose=verbose)
 
 
 def _make_seconds(timestamp):
@@ -671,13 +675,7 @@ class ChannelIndex:
 
                     return executor.map(extract_wrapper, extract_args())
 
-                # keeep channeldata in memory, update with each subdir
-                channel_data = {}
-                channeldata_file = self.channeldata_path()
-                if os.path.isfile(channeldata_file):
-                    with open(channeldata_file) as f:
-                        channel_data = json.load(f)
-                # Step 2. Collect repodata from packages, save to pkg_repodata.json file
+                # Step 2. Collect repodata from packages, save to REPODATA_FROM_PKGS_JSON_FN file
                 t = tqdm(
                     extract_subdirs_to_cache(),
                     total=len(subdirs),
@@ -743,17 +741,53 @@ class ChannelIndex:
                         log.debug("%s write index.html", subdir)
                         self._write_subdir_index_html(subdir, patched_repodata)
 
-                        t2.set_description("Updating channeldata")
-                        t2.update()
-                        log.debug("%s update channeldata", subdir)
-                        self._update_channeldata(channel_data, patched_repodata, subdir)
-
                         log.debug("%s finish", subdir)
 
-                # Step 7. Create and write channeldata.
-                self._write_channeldata_index_html(channel_data)
-                log.debug("write channeldata")
-                self._write_channeldata(channel_data)
+    def update_channeldata(self, verbose=False):
+        """
+        Update channeldata based on re-reading output `repodata.json` and existing
+        `channeldata.json`. Call after index() if channeldata is needed.
+        """
+        if verbose:
+            level = logging.DEBUG
+        else:
+            level = logging.ERROR
+
+        if not self._subdirs:
+            detected_subdirs = {
+                subdir.name
+                for subdir in os.scandir(self.channel_root)
+                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
+            }
+            log.debug("found subdirs %s" % detected_subdirs)
+            self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
+        else:
+            self.subdirs = subdirs = sorted(set(self._subdirs))
+            log.warn("Indexing %s does not include 'noarch'", subdirs)
+
+        # Step 1. Lock local channel.
+        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
+            # keeep channeldata in memory, update with each subdir
+            channel_data = {}
+            channeldata_file = self.channeldata_path()
+            if os.path.isfile(channeldata_file):
+                with open(channeldata_file) as f:
+                    channel_data = json.load(f)
+
+            for subdir in subdirs:
+                log.info("Channeldata subdir: %s" % subdir)
+                log.debug("%s read repodata")
+                with open(os.path.join(self.output_root, REPODATA_JSON_FN)) as repodata:
+                    patched_repodata = json.load(repodata)
+
+                self._update_channeldata(channel_data, patched_repodata, subdir)
+
+                log.debug("%s channeldata finished", subdir)
+
+            # Step 7. Create and write channeldata.
+            self._write_channeldata_index_html(channel_data)
+            log.debug("write channeldata")
+            self._write_channeldata(channel_data)
 
     def channeldata_path(self):
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
