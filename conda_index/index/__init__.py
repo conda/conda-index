@@ -302,7 +302,7 @@ def update_index(
         current_index_versions=current_index_versions,
     )
 
-    channel_index.update_channeldata(verbose=verbose)
+    channel_index.update_channeldata()
 
 
 def _make_seconds(timestamp):
@@ -743,16 +743,11 @@ class ChannelIndex:
 
                         log.debug("%s finish", subdir)
 
-    def update_channeldata(self, verbose=False):
+    def update_channeldata(self):
         """
         Update channeldata based on re-reading output `repodata.json` and existing
         `channeldata.json`. Call after index() if channeldata is needed.
         """
-        if verbose:
-            level = logging.DEBUG
-        else:
-            level = logging.ERROR
-
         if not self._subdirs:
             detected_subdirs = {
                 subdir.name
