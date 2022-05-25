@@ -8,11 +8,12 @@ import os.path
 import tarfile
 import zipfile
 from contextlib import closing
+from typing import Iterator
 
 import zstandard  # or another zstandard binding that supports streams
 
 
-def tar_generator(fileobj):
+def tar_generator(fileobj) -> Iterator[tuple[tarfile.TarFile, tarfile.TarInfo]]:
     """
     Yield (tar, member) from fileobj.
     """
@@ -21,9 +22,31 @@ def tar_generator(fileobj):
             yield tar, member
 
 
-def stream_conda_info(filename, fileobj=None):
+def stream_conda_info(
+    filename, fileobj=None
+) -> Iterator[tuple[tarfile.TarFile, tarfile.TarInfo]]:
     """
     Yield members from conda's embedded info/ tarball.
+
+    For .tar.bz2 packages, yield all members.
+
+    Yields (tar, member) tuples. You must only use the current member to
+    prevent tar seeks and scans.
+
+    To extract to disk, it's possible to call `tar.extractall(path)` on the
+    first result and then ignore the rest of this generator. `extractall` takes
+    care of some directory permissions/mtime issues, compared to `extract` or
+    writing out the file objects yourself.
+    """
+    component = "info"
+    return stream_conda_component(filename, fileobj, component)
+
+
+def stream_conda_component(
+    filename, fileobj=None, component="info"
+) -> Iterator[tuple[tarfile.TarFile, tarfile.TarInfo]]:
+    """
+    Yield members from .conda's embedded {component}- tarball. "info" or "pkg".
 
     For .tar.bz2 packages, yield all members.
 
@@ -38,7 +61,7 @@ def stream_conda_info(filename, fileobj=None):
     if filename.endswith(".conda"):
         zf = zipfile.ZipFile(fileobj or filename)
         file_id, _, _ = os.path.basename(filename).rpartition(".")
-        component_name = f"info-{file_id}"
+        component_name = f"{component}-{file_id}"
         component_filename = [
             info for info in zf.infolist() if info.filename.startswith(component_name)
         ]
