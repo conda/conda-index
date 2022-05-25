@@ -640,17 +640,7 @@ class ChannelIndex:
         logging_context = utils.LoggingContext(level, loggers=[__name__])
 
         with logging_context:
-            if not self._subdirs:
-                detected_subdirs = {
-                    subdir.name
-                    for subdir in os.scandir(self.channel_root)
-                    if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
-                }
-                log.debug("found subdirs %s" % detected_subdirs)
-                self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
-            else:
-                self.subdirs = subdirs = sorted(set(self._subdirs))
-                log.warn("Indexing %s does not include 'noarch'", subdirs)
+            subdirs = self.detect_subdirs()
 
             # Step 1. Lock local channel.
             with utils.try_acquire_locks(
@@ -748,17 +738,7 @@ class ChannelIndex:
         Update channeldata based on re-reading output `repodata.json` and existing
         `channeldata.json`. Call after index() if channeldata is needed.
         """
-        if not self._subdirs:
-            detected_subdirs = {
-                subdir.name
-                for subdir in os.scandir(self.channel_root)
-                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
-            }
-            log.debug("found subdirs %s" % detected_subdirs)
-            self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
-        else:
-            self.subdirs = subdirs = sorted(set(self._subdirs))
-            log.warn("Indexing %s does not include 'noarch'", subdirs)
+        subdirs = self.detect_subdirs()
 
         # Step 1. Lock local channel.
         with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
@@ -785,6 +765,20 @@ class ChannelIndex:
             self._write_channeldata_index_html(channel_data)
             log.debug("write channeldata")
             self._write_channeldata(channel_data)
+
+    def detect_subdirs(self):
+        if not self._subdirs:
+            detected_subdirs = {
+                subdir.name
+                for subdir in os.scandir(self.channel_root)
+                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
+            }
+            log.debug("found subdirs %s" % detected_subdirs)
+            self.subdirs = sorted(detected_subdirs | {"noarch"})
+        else:
+            self.subdirs = sorted(set(self._subdirs))
+            log.warn("Indexing %s does not include 'noarch'", self.subdirs)
+        return self.subdirs
 
     def channeldata_path(self):
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
