@@ -777,7 +777,9 @@ class ChannelIndex:
             for subdir in subdirs:
                 log.info("Channeldata subdir: %s" % subdir)
                 log.debug("%s read repodata")
-                with open(os.path.join(self.output_root, REPODATA_JSON_FN)) as repodata:
+                with open(
+                    os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
+                ) as repodata:
                     patched_repodata = json.load(repodata)
 
                 self._update_channeldata(channel_data, patched_repodata, subdir)
