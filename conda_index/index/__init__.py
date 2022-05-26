@@ -642,7 +642,7 @@ class ChannelIndex:
         with logging_context:
             subdirs = self.detect_subdirs()
 
-            # Step 1. Lock local channel.
+            # Lock local channel.
             with utils.try_acquire_locks(
                 [utils.get_lock(self.channel_root)], timeout=900
             ):
@@ -665,7 +665,8 @@ class ChannelIndex:
 
                     return executor.map(extract_wrapper, extract_args())
 
-                # Step 2. Collect repodata from packages, save to REPODATA_FROM_PKGS_JSON_FN file
+                # Collect repodata from packages, save to
+                # REPODATA_FROM_PKGS_JSON_FN file
                 t = tqdm(
                     extract_subdirs_to_cache(),
                     total=len(subdirs),
@@ -695,7 +696,7 @@ class ChannelIndex:
                             REPODATA_FROM_PKGS_JSON_FN,
                         )
 
-                        # Step 3. Apply patch instructions.
+                        # Apply patch instructions.
                         t2.set_description("Applying patch instructions")
                         t2.update()
                         log.debug("apply patch instructions")
@@ -703,9 +704,9 @@ class ChannelIndex:
                             subdir, repodata_from_packages, patch_generator
                         )
 
-                        # Step 4. Save patched and augmented repodata.
-                        # If the contents of repodata have changed, write a new repodata.json file.
-                        # Also create associated index.html.
+                        # Save patched and augmented repodata. If the contents
+                        # of repodata have changed, write a new repodata.json.
+                        # Create associated index.html.
 
                         t2.set_description("Writing patched repodata")
                         t2.update()
@@ -740,31 +741,31 @@ class ChannelIndex:
         """
         subdirs = self.detect_subdirs()
 
-        # Step 1. Lock local channel.
-        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
-            # keeep channeldata in memory, update with each subdir
-            channel_data = {}
-            channeldata_file = self.channeldata_path()
-            if os.path.isfile(channeldata_file):
-                with open(channeldata_file) as f:
-                    channel_data = json.load(f)
+        # Skip locking; only writes the channeldata.
 
-            for subdir in subdirs:
-                log.info("Channeldata subdir: %s" % subdir)
-                log.debug("%s read repodata")
-                with open(
-                    os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
-                ) as repodata:
-                    patched_repodata = json.load(repodata)
+        # Keep channeldata in memory, update with each subdir.
+        channel_data = {}
+        channeldata_file = self.channeldata_path()
+        if os.path.isfile(channeldata_file):
+            with open(channeldata_file) as f:
+                channel_data = json.load(f)
 
-                self._update_channeldata(channel_data, patched_repodata, subdir)
+        for subdir in subdirs:
+            log.info("Channeldata subdir: %s" % subdir)
+            log.debug("%s read repodata")
+            with open(
+                os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
+            ) as repodata:
+                patched_repodata = json.load(repodata)
 
-                log.debug("%s channeldata finished", subdir)
+            self._update_channeldata(channel_data, patched_repodata, subdir)
 
-            # Step 7. Create and write channeldata.
-            self._write_channeldata_index_html(channel_data)
-            log.debug("write channeldata")
-            self._write_channeldata(channel_data)
+            log.debug("%s channeldata finished", subdir)
+
+        # Create and write channeldata.
+        self._write_channeldata_index_html(channel_data)
+        log.debug("write channeldata")
+        self._write_channeldata(channel_data)
 
     def detect_subdirs(self):
         if not self._subdirs:
