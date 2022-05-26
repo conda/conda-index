@@ -86,9 +86,9 @@ class CondaIndexCache:
         self.db_filename = os.path.join(self.cache_dir, "cache.db")
         self.cache_is_brand_new = not os.path.exists(self.db_filename)
 
-        # the subdir should already exist
+        # the subdir should already exist but we'll make it here anyway
         if not os.path.exists(self.cache_dir):
-            os.mkdir(self.cache_dir)
+            os.makedirs(self.cache_dir, exist_ok=True)
 
         log.debug(f"{self.db_filename=} {self.cache_is_brand_new=}")
 
@@ -514,23 +514,27 @@ class CondaIndexCache:
             FROM fs LEFT JOIN cached USING (path)
 
             WHERE fs.path LIKE :path_like AND
-                (cached.path IS NULL OR
-                    (fs.sha256 AND fs.sha256 != cached.sha256)
-                    OR
-                    (fs.md5 AND fs.md5 != cached.md5)
-                    OR
-                    -- incorrect way to check (hash is NULL or '')
-                    (NOT fs.sha256 AND NOT fs.md5 AND (fs.mtime != cached.mtime))
-                    -- original mtime check - could be fs.mtime <= cached.mtime
-                    OR (fs.mtime != cached.mtime OR cached.path IS NULL)
-                )
-        """,
+                (fs.mtime != cached.mtime OR cached.path IS NULL)
+            """,
             {
                 "path_like": self.database_path_like,
                 "upstream_stage": self.upstream_stage,
             },
         )
         # XXX further Python filtering?
+
+        # more complex, broken filter:
+        # WHERE fs.path LIKE :path_like AND
+        # (cached.path IS NULL OR
+        # (fs.sha256 AND fs.sha256 != cached.sha256)
+        # OR
+        # (fs.md5 AND fs.md5 != cached.md5)
+        # OR
+        # -- incorrect way to check (hash is NULL or '')
+        # (NOT fs.sha256 AND NOT fs.md5 AND (fs.mtime != cached.mtime))
+        # -- original mtime check - could be fs.mtime <= cached.mtime
+        # OR (fs.mtime != cached.mtime OR cached.path IS NULL)
+
         return query
 
 
