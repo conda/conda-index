@@ -654,6 +654,8 @@ class ChannelIndex:
 
                     def extract_args():
                         for subdir in self.subdirs:
+                            # .cache is currently in channel_root not output_root
+                            _ensure_valid_channel(self.channel_root, subdir)
                             cache = self.cache_for_subdir(subdir)
                             subdir_path = join(self.channel_root, subdir)
                             yield (subdir, verbose, progress, subdir_path, cache)
@@ -682,7 +684,7 @@ class ChannelIndex:
                         t2.set_description("Gathering repodata")
                         t2.update()
                         log.debug("gather repodata")
-                        _ensure_valid_channel(self.output_root, subdir)
+
                         repodata_from_packages = self.index_subdir(
                             subdir, verbose=verbose, progress=progress
                         )
@@ -842,7 +844,7 @@ class ChannelIndex:
         return new_repodata
 
     def cache_for_subdir(self, subdir):
-        cache = self.cache_class(
+        cache: sqlitecache.CondaIndexCache = self.cache_class(
             channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
         )
         if cache.cache_is_brand_new:

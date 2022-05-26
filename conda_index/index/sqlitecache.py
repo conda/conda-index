@@ -112,6 +112,14 @@ class CondaIndexCache:
             convert_cache.migrate(conn)
         return conn
 
+    def close(self):
+        """
+        Remove and close @cached_property self.db
+        """
+        db = self.__dict__.pop("db", None)
+        if db:
+            db.close()
+
     def convert(self, force=False):
         """
         Load filesystem cache into sqlite.
@@ -126,6 +134,9 @@ class CondaIndexCache:
 
             with self.db:
                 convert_cache.remove_prefix(self.db)
+
+            # prepare to be sent to other thread
+            self.close()
 
     def extract_to_cache_2(self, channel_root, subdir, fn_info):
         """
