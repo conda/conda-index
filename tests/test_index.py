@@ -7,7 +7,7 @@ from os.path import dirname, isdir, isfile, join
 
 import conda_package_handling.api
 import pytest
-from conda_build.conda_interface import conda_47, context, subdir
+from conda_build.conda_interface import conda_47, context
 from conda_build.utils import copy_into, rm_rf
 
 import conda_index.api
@@ -20,6 +20,9 @@ log = getLogger(__name__)
 here = os.path.dirname(__file__)
 
 # NOTE: The recipes for test packages used in this module are at https://github.com/kalefranz/conda-test-packages
+
+# match ./index_hotfix_pkgs/<subdir>
+TEST_SUBDIR = "osx-64"
 
 
 def download(url, local_path):
@@ -653,7 +656,7 @@ def _build_test_index(workdir):
     # workdir may be the same during a single test run?
     shutil.copytree(join(here, "index_hotfix_pkgs"), workdir, dirs_exist_ok=True)
 
-    with open(os.path.join(workdir, subdir, "repodata.json")) as f:
+    with open(os.path.join(workdir, TEST_SUBDIR, "repodata.json")) as f:
         original_metadata = json.load(f)
 
     pkg_list = original_metadata["packages"]
@@ -730,9 +733,11 @@ def _patch_repodata(repodata, subdir):
     # indexing a second time with the same patchset should keep the removals
     for i in (1, 2):
         conda_index.index.update_index(
-            testing_workdir, patch_generator=patch_file, verbose=True
+            testing_workdir,
+            patch_generator=patch_file,
+            verbose=True,
         )
-        with open(os.path.join(testing_workdir, subdir, "repodata.json")) as f:
+        with open(os.path.join(testing_workdir, TEST_SUBDIR, "repodata.json")) as f:
             patched_metadata = json.load(f)
 
         pkg_list = patched_metadata["packages"]
@@ -761,7 +766,7 @@ def _patch_repodata(repodata, subdir):
         print("pass %s remove ok" % i)
 
         with open(
-            os.path.join(testing_workdir, subdir, "repodata_from_packages.json")
+            os.path.join(testing_workdir, TEST_SUBDIR, "repodata_from_packages.json")
         ) as f:
             pkg_metadata = json.load(f)
 
@@ -803,13 +808,13 @@ def test_channel_patch_instructions_json(testing_workdir):
     }
 
     with open(
-        os.path.join(testing_workdir, subdir, "patch_instructions.json"), "w"
+        os.path.join(testing_workdir, TEST_SUBDIR, "patch_instructions.json"), "w"
     ) as f:
         json.dump(patch, f)
 
     conda_index.index.update_index(testing_workdir)
 
-    with open(os.path.join(testing_workdir, subdir, "repodata.json")) as f:
+    with open(os.path.join(testing_workdir, TEST_SUBDIR, "repodata.json")) as f:
         patched_metadata = json.load(f)
 
     formats = (("packages", ".tar.bz2"), ("packages.conda", ".conda"))
@@ -833,7 +838,7 @@ def test_channel_patch_instructions_json(testing_workdir):
         assert "remove_test-1.0-0" + ext not in pkg_list
 
         with open(
-            os.path.join(testing_workdir, subdir, "repodata_from_packages.json")
+            os.path.join(testing_workdir, TEST_SUBDIR, "repodata_from_packages.json")
         ) as f:
             pkg_repodata = json.load(f)
 
@@ -881,13 +886,15 @@ def test_patch_from_tarball(testing_workdir):
         json.dump(patch, f)
 
     with tarfile.open("patch_archive.tar.bz2", "w:bz2") as archive:
-        archive.add("patch_instructions.json", "%s/patch_instructions.json" % subdir)
+        archive.add(
+            "patch_instructions.json", "%s/patch_instructions.json" % TEST_SUBDIR
+        )
 
     conda_index.index.update_index(
         testing_workdir, patch_generator="patch_archive.tar.bz2"
     )
 
-    with open(os.path.join(testing_workdir, subdir, "repodata.json")) as f:
+    with open(os.path.join(testing_workdir, TEST_SUBDIR, "repodata.json")) as f:
         patched_metadata = json.load(f)
 
     pkg_list = patched_metadata["packages"]
@@ -908,7 +915,7 @@ def test_patch_from_tarball(testing_workdir):
     assert "remove_test-1.0-0.tar.bz2" not in pkg_list
 
     with open(
-        os.path.join(testing_workdir, subdir, "repodata_from_packages.json")
+        os.path.join(testing_workdir, TEST_SUBDIR, "repodata_from_packages.json")
     ) as f:
         pkg_repodata = json.load(f)
 
@@ -934,7 +941,7 @@ def test_index_of_removed_pkg(testing_metadata):
 
     archive_name = "test_index_of_removed_pkg-1.0-1.tar.bz2"
     archive_destination = os.path.join(
-        testing_metadata.config.croot, subdir, archive_name
+        testing_metadata.config.croot, TEST_SUBDIR, archive_name
     )
 
     # conda_build.api.build() calls update_index as a side effect.
@@ -943,14 +950,14 @@ def test_index_of_removed_pkg(testing_metadata):
     # out_files = conda_build.api.build(testing_metadata)
 
     # instead, copy the package
-    os.makedirs(os.path.join(testing_metadata.config.croot, subdir))
+    os.makedirs(os.path.join(testing_metadata.config.croot, TEST_SUBDIR))
     shutil.copy(os.path.join(here, "archives", archive_name), archive_destination)
 
     conda_index.api.update_index(testing_metadata.config.croot)
 
     # repodata.json should exist here
     with open(
-        os.path.join(testing_metadata.config.croot, subdir, "repodata.json")
+        os.path.join(testing_metadata.config.croot, TEST_SUBDIR, "repodata.json")
     ) as f:
         repodata = json.load(f)
     assert repodata["packages"]
@@ -961,13 +968,13 @@ def test_index_of_removed_pkg(testing_metadata):
     # repodata.json should be empty here
     conda_index.api.update_index(testing_metadata.config.croot)
     with open(
-        os.path.join(testing_metadata.config.croot, subdir, "repodata.json")
+        os.path.join(testing_metadata.config.croot, TEST_SUBDIR, "repodata.json")
     ) as f:
         repodata = json.load(f)
     assert not repodata["packages"]
     with open(
         os.path.join(
-            testing_metadata.config.croot, subdir, "repodata_from_packages.json"
+            testing_metadata.config.croot, TEST_SUBDIR, "repodata_from_packages.json"
         )
     ) as f:
         repodata = json.load(f)
@@ -1244,3 +1251,41 @@ def test_index_invalid_packages():
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)
     assert len(repodata["packages"]) == 0
+
+
+def test_index_clears_changed_packages(testing_workdir):
+    test_package_path = join(
+        testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    )
+    test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    download(test_package_url, test_package_path)
+
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+
+    index_cache = conda_index.index.sqlitecache.CondaIndexCache(
+        channel_root=testing_workdir, channel="test-channel", subdir="osx-64"
+    )
+    assert list(index_cache.changed_packages()) == []
+
+    # should update mtime
+    import time
+
+    time.sleep(1)  # ensure mtime is at least 1 second greater
+    download(test_package_url, test_package_path)
+
+    with index_cache.db:  # force transaction
+        # this function should also commit a transaction, even without `with
+        # index_cache.db`
+        index_cache.save_fs_state(join(testing_workdir, "osx-64"))
+
+    assert len(list(index_cache.changed_packages())) == 1
+
+    index_cache.close()
+
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+
+    # indepentent database connection
+    index_cache = conda_index.index.sqlitecache.CondaIndexCache(
+        channel_root=testing_workdir, channel="test-channel", subdir="osx-64"
+    )
+    assert list(index_cache.changed_packages()) == []

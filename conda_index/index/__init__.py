@@ -285,7 +285,7 @@ def update_index(
             )
         raise SystemExit()
 
-    return ChannelIndex(
+    channel_index = ChannelIndex(
         dir_path,
         channel_name,
         subdirs=subdirs,
@@ -293,12 +293,16 @@ def update_index(
         deep_integrity_check=check_md5,
         debug=debug,
         output_root=output_dir,
-    ).index(
+    )
+
+    channel_index.index(
         patch_generator=patch_generator,
         verbose=verbose,
         progress=progress,
         current_index_versions=current_index_versions,
     )
+
+    channel_index.update_channeldata()
 
 
 def _make_seconds(timestamp):
@@ -636,19 +640,9 @@ class ChannelIndex:
         logging_context = utils.LoggingContext(level, loggers=[__name__])
 
         with logging_context:
-            if not self._subdirs:
-                detected_subdirs = {
-                    subdir.name
-                    for subdir in os.scandir(self.channel_root)
-                    if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
-                }
-                log.debug("found subdirs %s" % detected_subdirs)
-                self.subdirs = subdirs = sorted(detected_subdirs | {"noarch"})
-            else:
-                self.subdirs = subdirs = sorted(set(self._subdirs))
-                log.warn("Indexing %s does not include 'noarch'", subdirs)
+            subdirs = self.detect_subdirs()
 
-            # Step 1. Lock local channel.
+            # Lock local channel.
             with utils.try_acquire_locks(
                 [utils.get_lock(self.channel_root)], timeout=900
             ):
@@ -660,24 +654,21 @@ class ChannelIndex:
 
                     def extract_args():
                         for subdir in self.subdirs:
-                            cache = self.cache_for_subdir(subdir)
+                            # .cache is currently in channel_root not output_root
+                            _ensure_valid_channel(self.channel_root, subdir)
                             subdir_path = join(self.channel_root, subdir)
-                            yield (subdir, verbose, progress, subdir_path, cache)
+                            yield (subdir, verbose, progress, subdir_path)
 
                     def extract_wrapper(args):
-                        cache = args[-1]
-                        with closing(cache.db):
-                            return self.extract_subdir_to_cache(*args)
+                        # runs in thread
+                        subdir = args[0]
+                        cache = self.cache_for_subdir(subdir)
+                        return self.extract_subdir_to_cache(*args, cache)
 
                     return executor.map(extract_wrapper, extract_args())
 
-                # keeep channeldata in memory, update with each subdir
-                channel_data = {}
-                channeldata_file = self.channeldata_path()
-                if os.path.isfile(channeldata_file):
-                    with open(channeldata_file) as f:
-                        channel_data = json.load(f)
-                # Step 2. Collect repodata from packages, save to pkg_repodata.json file
+                # Collect repodata from packages, save to
+                # REPODATA_FROM_PKGS_JSON_FN file
                 t = tqdm(
                     extract_subdirs_to_cache(),
                     total=len(subdirs),
@@ -693,7 +684,7 @@ class ChannelIndex:
                         t2.set_description("Gathering repodata")
                         t2.update()
                         log.debug("gather repodata")
-                        _ensure_valid_channel(self.output_root, subdir)
+
                         repodata_from_packages = self.index_subdir(
                             subdir, verbose=verbose, progress=progress
                         )
@@ -707,7 +698,7 @@ class ChannelIndex:
                             REPODATA_FROM_PKGS_JSON_FN,
                         )
 
-                        # Step 3. Apply patch instructions.
+                        # Apply patch instructions.
                         t2.set_description("Applying patch instructions")
                         t2.update()
                         log.debug("apply patch instructions")
@@ -715,9 +706,9 @@ class ChannelIndex:
                             subdir, repodata_from_packages, patch_generator
                         )
 
-                        # Step 4. Save patched and augmented repodata.
-                        # If the contents of repodata have changed, write a new repodata.json file.
-                        # Also create associated index.html.
+                        # Save patched and augmented repodata. If the contents
+                        # of repodata have changed, write a new repodata.json.
+                        # Create associated index.html.
 
                         t2.set_description("Writing patched repodata")
                         t2.update()
@@ -743,17 +734,55 @@ class ChannelIndex:
                         log.debug("%s write index.html", subdir)
                         self._write_subdir_index_html(subdir, patched_repodata)
 
-                        t2.set_description("Updating channeldata")
-                        t2.update()
-                        log.debug("%s update channeldata", subdir)
-                        self._update_channeldata(channel_data, patched_repodata, subdir)
-
                         log.debug("%s finish", subdir)
 
-                # Step 7. Create and write channeldata.
-                self._write_channeldata_index_html(channel_data)
-                log.debug("write channeldata")
-                self._write_channeldata(channel_data)
+    def update_channeldata(self):
+        """
+        Update channeldata based on re-reading output `repodata.json` and existing
+        `channeldata.json`. Call after index() if channeldata is needed.
+        """
+        subdirs = self.detect_subdirs()
+
+        # Skip locking; only writes the channeldata.
+
+        # Keep channeldata in memory, update with each subdir.
+        channel_data = {}
+        channeldata_file = self.channeldata_path()
+        if os.path.isfile(channeldata_file):
+            with open(channeldata_file) as f:
+                channel_data = json.load(f)
+
+        for subdir in subdirs:
+            log.info("Channeldata subdir: %s" % subdir)
+            log.debug("%s read repodata", subdir)
+            with open(
+                os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
+            ) as repodata:
+                patched_repodata = json.load(repodata)
+
+            self._update_channeldata(channel_data, patched_repodata, subdir)
+
+            log.debug("%s channeldata finished", subdir)
+
+        # Create and write channeldata.
+        self._write_channeldata_index_html(channel_data)
+        log.debug("write channeldata")
+        self._write_channeldata(channel_data)
+
+    def detect_subdirs(self):
+        if not self._subdirs:
+            detected_subdirs = {
+                subdir.name
+                for subdir in os.scandir(self.channel_root)
+                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
+            }
+            log.debug("found subdirs %s" % detected_subdirs)
+            self.subdirs = sorted(detected_subdirs | {"noarch"})
+        else:
+            self.subdirs = sorted(set(self._subdirs))
+            if not "noarch" in self.subdirs:
+                log.warn("Indexing %s does not include 'noarch'", self.subdirs)
+        return self.subdirs
 
     def channeldata_path(self):
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
@@ -816,7 +845,7 @@ class ChannelIndex:
         return new_repodata
 
     def cache_for_subdir(self, subdir):
-        cache = self.cache_class(
+        cache: sqlitecache.CondaIndexCache = self.cache_class(
             channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
         )
         if cache.cache_is_brand_new:

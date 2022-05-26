@@ -13,7 +13,6 @@ import os
 import os.path
 import re
 import sqlite3
-import sys
 import tarfile
 from contextlib import closing
 
