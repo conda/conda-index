@@ -470,6 +470,7 @@ class CondaIndexCache:
 
         log.debug("%s save fs state", self.subdir)
         with self.db:
+            # always stage='fs', not custom upstream_stage
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
                 {"path_like": path_like},
@@ -484,25 +485,42 @@ class CondaIndexCache:
 
     def changed_packages(self):
         """
-        Compare 'fs' to 'indexed' state.
+        Compare upstream to 'indexed' state.
 
-        Return packages in 'fs' that are changed or missing compared to 'indexed'.
+        Return packages in upstream that are changed or missing compared to 'indexed'.
         """
-        return self.db.execute(
+        query = self.db.execute(
             """
             WITH
             fs AS
-                ( SELECT path, mtime, size FROM stat WHERE stage = 'fs' ),
+                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = :upstream_stage ),
             cached AS
-                ( SELECT path, mtime FROM stat WHERE stage = 'indexed' )
+                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = 'indexed' )
 
-            SELECT fs.path, fs.mtime, fs.size from fs LEFT JOIN cached USING (path)
+            SELECT fs.path, fs.mtime, fs.size, fs.sha256, fs.md5,
+                cached.mtime as cached_mtime, cached.size as cached_size, cached.sha256 as cached_sha256, cached.md5 as cached_md5
+
+            FROM fs LEFT JOIN cached USING (path)
 
             WHERE fs.path LIKE :path_like AND
-                (fs.mtime != cached.mtime OR cached.path IS NULL)
+                (cached.path IS NULL OR
+                    (fs.sha256 AND fs.sha256 != cached.sha256)
+                    OR
+                    (fs.md5 AND fs.md5 != cached.md5)
+                    OR
+                    -- incorrect way to check (hash is NULL or '')
+                    (NOT fs.sha256 AND NOT fs.md5 AND (fs.mtime != cached.mtime))
+                    -- original mtime check - could be fs.mtime <= cached.mtime
+                    OR (fs.mtime != cached.mtime OR cached.path IS NULL)
+                )
         """,
-            {"path_like": self.database_path_like},
-        )  # XXX compare checksums if available, and prefer to mtimes
+            {
+                "path_like": self.database_path_like,
+                "upstream_stage": self.upstream_stage,
+            },
+        )
+        # XXX further Python filtering?
+        return query
 
 
 def _cache_post_install_details(paths_json_str):
