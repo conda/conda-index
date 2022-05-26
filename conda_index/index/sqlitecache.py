@@ -101,6 +101,8 @@ class CondaIndexCache:
     def __setstate__(self, d):
         self.__dict__ = d
 
+    # cached_property adds a global lock when no lock would be more appropriate;
+    # this can deadlock. keeping for now.
     @cached_property
     def db(self):
         """
