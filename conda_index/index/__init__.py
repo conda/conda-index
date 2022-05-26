@@ -656,14 +656,14 @@ class ChannelIndex:
                         for subdir in self.subdirs:
                             # .cache is currently in channel_root not output_root
                             _ensure_valid_channel(self.channel_root, subdir)
-                            cache = self.cache_for_subdir(subdir)
                             subdir_path = join(self.channel_root, subdir)
-                            yield (subdir, verbose, progress, subdir_path, cache)
+                            yield (subdir, verbose, progress, subdir_path)
 
                     def extract_wrapper(args):
-                        cache = args[-1]
-                        with closing(cache.db):
-                            return self.extract_subdir_to_cache(*args)
+                        # runs in thread
+                        subdir = args[0]
+                        cache = self.cache_for_subdir(subdir)
+                        return self.extract_subdir_to_cache(*args, cache)
 
                     return executor.map(extract_wrapper, extract_args())
 
@@ -754,7 +754,7 @@ class ChannelIndex:
 
         for subdir in subdirs:
             log.info("Channeldata subdir: %s" % subdir)
-            log.debug("%s read repodata")
+            log.debug("%s read repodata", subdir)
             with open(
                 os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
             ) as repodata:
@@ -780,7 +780,8 @@ class ChannelIndex:
             self.subdirs = sorted(detected_subdirs | {"noarch"})
         else:
             self.subdirs = sorted(set(self._subdirs))
-            log.warn("Indexing %s does not include 'noarch'", self.subdirs)
+            if not "noarch" in self.subdirs:
+                log.warn("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
 
     def channeldata_path(self):
