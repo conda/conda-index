@@ -1195,10 +1195,8 @@ class ChannelIndex:
                 return instructions
         return {}
 
-    def _patch_repodata(self, subdir, repodata, patch_generator=None):
-        if patch_generator and any(
-            patch_generator.endswith(ext) for ext in CONDA_PACKAGE_EXTENSIONS
-        ):
+    def _patch_repodata(self, subdir, repodata, patch_generator: str | None = None):
+        if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
             instructions = self._load_patch_instructions_tarball(
                 subdir, patch_generator
             )
