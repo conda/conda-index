@@ -1244,3 +1244,39 @@ def test_index_invalid_packages():
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)
     assert len(repodata["packages"]) == 0
+
+
+def test_index_clears_changed_packages(testing_workdir):
+    subdir = "osx-64"
+    test_package_path = join(
+        testing_workdir, subdir, "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    )
+    test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    download(test_package_url, test_package_path)
+
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+
+    index_cache = conda_index.index.sqlitecache.CondaIndexCache(
+        channel_root=testing_workdir, channel="test-channel", subdir=subdir
+    )
+    assert list(index_cache.changed_packages()) == []
+
+    # should update mtime
+    download(test_package_url, test_package_path)
+
+    with index_cache.db:  # force transaction
+        # this function should also commit a transaction, even without `with
+        # index_cache.db`
+        index_cache.save_fs_state(join(testing_workdir, subdir))
+
+    assert len(list(index_cache.changed_packages())) == 1
+
+    index_cache.close()
+
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+
+    # indepentent database connection
+    index_cache = conda_index.index.sqlitecache.CondaIndexCache(
+        channel_root=testing_workdir, channel="test-channel", subdir="osx-64"
+    )
+    assert list(index_cache.changed_packages()) == []
