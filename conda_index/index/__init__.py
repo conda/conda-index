@@ -99,139 +99,7 @@ except ImportError:  # pragma: no cover
 
 # XXX conda-build calls its version of get_build_index. Appears to combine
 # remote and local packages, updating the local index based on mtime. Standalone
-# conda-index does not yet use this function.
-def get_build_index(
-    subdir,
-    bldpkgs_dir,
-    output_folder=None,
-    clear_cache=False,
-    omit_defaults=False,
-    channel_urls=None,
-    debug=False,
-    verbose=True,
-    **kwargs,
-):
-    global local_index_timestamp
-    global local_subdir
-    global local_output_folder
-    global cached_index
-    global cached_channels
-    global channel_data
-    mtime = 0
-
-    channel_urls = list(utils.ensure_list(channel_urls))
-
-    if not output_folder:
-        output_folder = dirname(bldpkgs_dir)
-
-    # check file modification time - this is the age of our local index.
-    index_file = os.path.join(output_folder, subdir, "repodata.json")
-    if os.path.isfile(index_file):
-        mtime = os.path.getmtime(index_file)
-
-    if (
-        clear_cache
-        or not os.path.isfile(index_file)
-        or local_subdir != subdir
-        or local_output_folder != output_folder
-        or mtime > local_index_timestamp
-        or cached_channels != channel_urls
-    ):
-
-        # priority: (local as either croot or output_folder IF NOT EXPLICITLY IN CHANNEL ARGS),
-        #     then channels passed as args (if local in this, it remains in same order),
-        #     then channels from condarc.
-        urls = list(channel_urls)
-
-        logging_context = utils.LoggingContext()
-
-        with logging_context():
-            # this is where we add the "local" channel.  It's a little smarter than conda, because
-            #     conda does not know about our output_folder when it is not the default setting.
-            if os.path.isdir(output_folder):
-                local_path = url_path(output_folder)
-                # replace local with the appropriate real channel.  Order is maintained.
-                urls = [url if url != "local" else local_path for url in urls]
-                if local_path not in urls:
-                    urls.insert(0, local_path)
-            _ensure_valid_channel(output_folder, subdir)
-            update_index(output_folder, verbose=debug)
-
-            # replace noarch with native subdir - this ends up building an index with both the
-            #      native content and the noarch content.
-
-            if subdir == "noarch":
-                subdir = context.subdir
-            try:
-                cached_index = get_index(
-                    channel_urls=urls,
-                    prepend=not omit_defaults,
-                    use_local=False,
-                    use_cache=context.offline,
-                    platform=subdir,
-                )
-            # HACK: defaults does not have the many subfolders we support.  Omit it and
-            #          try again.
-            except CondaHTTPError:
-                if "defaults" in urls:
-                    urls.remove("defaults")
-                cached_index = get_index(
-                    channel_urls=urls,
-                    prepend=omit_defaults,
-                    use_local=False,
-                    use_cache=context.offline,
-                    platform=subdir,
-                )
-
-            expanded_channels = {rec.channel for rec in cached_index.values()}
-
-            superchannel = {}
-            # we need channeldata.json too, as it is a more reliable source of run_exports data
-            for channel in expanded_channels:
-                if channel.scheme == "file":
-                    location = channel.location
-                    if utils.on_win:
-                        location = location.lstrip("/")
-                    elif not os.path.isabs(channel.location) and os.path.exists(
-                        os.path.join(os.path.sep, channel.location)
-                    ):
-                        location = os.path.join(os.path.sep, channel.location)
-                    channeldata_file = os.path.join(
-                        location, channel.name, "channeldata.json"
-                    )
-                    retry = 0
-                    max_retries = 1
-                    if os.path.isfile(channeldata_file):
-                        while retry < max_retries:
-                            try:
-                                with open(channeldata_file, "r+") as f:
-                                    channel_data[channel.name] = json.load(f)
-                                break
-                            except (OSError, json.JSONDecodeError):
-                                time.sleep(0.2)
-                                retry += 1
-                else:
-                    # download channeldata.json for url
-                    if not context.offline:
-                        try:
-                            channel_data[channel.name] = utils.download_channeldata(
-                                channel.base_url + "/channeldata.json"
-                            )
-                        except CondaHTTPError:
-                            continue
-                # collapse defaults metachannel back into one superchannel, merging channeldata
-                if channel.base_url in context.default_channels and channel_data.get(
-                    channel.name
-                ):
-                    packages = superchannel.get("packages", {})
-                    packages.update(channel_data[channel.name])
-                    superchannel["packages"] = packages
-            channel_data["defaults"] = superchannel
-        local_index_timestamp = os.path.getmtime(index_file)
-        local_subdir = subdir
-        local_output_folder = output_folder
-        cached_channels = channel_urls
-    return cached_index, local_index_timestamp, channel_data
+# conda-index removes get_build_index() for now.
 
 
 def _ensure_valid_channel(local_folder, subdir):
@@ -264,6 +132,7 @@ def update_index(
     warn=True,
     current_index_versions=None,
     debug=False,
+    write_bz2=True,
 ):
     """
     If dir_path contains a directory named 'noarch', the path tree therein is treated
@@ -293,6 +162,7 @@ def update_index(
         deep_integrity_check=check_md5,
         debug=debug,
         output_root=output_dir,
+        write_bz2=write_bz2,
     )
 
     channel_index.index(
@@ -611,6 +481,7 @@ class ChannelIndex:
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
         cache_class=sqlitecache.CondaIndexCache,
+        write_bz2=False,
     ):
         self.cache_class = cache_class
         self.channel_root = abspath(channel_root)
@@ -624,6 +495,7 @@ class ChannelIndex:
         )
         self.debug = debug
         self.deep_integrity_check = deep_integrity_check
+        self.write_bz2 = write_bz2
 
     def index(
         self,
@@ -935,10 +807,14 @@ class ChannelIndex:
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
-            # XXX write bz2 quickly or not at all, delete old one
-            repodata_bz2_path = repodata_json_path + ".bz2"
-            bz2_content = bz2.compress(new_repodata_binary)
-            self._maybe_write(repodata_bz2_path, bz2_content, content_is_binary=True)
+            if self.write_bz2:
+                repodata_bz2_path = repodata_json_path + ".bz2"
+                bz2_content = bz2.compress(new_repodata_binary)
+                self._maybe_write(
+                    repodata_bz2_path, bz2_content, content_is_binary=True
+                )
+            else:
+                pass  # XXX delete old bz2 under output path
         return write_result
 
     def _write_subdir_index_html(self, subdir, repodata):
@@ -957,11 +833,13 @@ class ChannelIndex:
 
         extra_paths = OrderedDict()
         _add_extra_path(extra_paths, join(subdir_path, REPODATA_JSON_FN))
-        _add_extra_path(extra_paths, join(subdir_path, REPODATA_JSON_FN + ".bz2"))
+        if self.write_bz2:
+            _add_extra_path(extra_paths, join(subdir_path, REPODATA_JSON_FN + ".bz2"))
         _add_extra_path(extra_paths, join(subdir_path, REPODATA_FROM_PKGS_JSON_FN))
-        _add_extra_path(
-            extra_paths, join(subdir_path, REPODATA_FROM_PKGS_JSON_FN + ".bz2")
-        )
+        if self.write_bz2:
+            _add_extra_path(
+                extra_paths, join(subdir_path, REPODATA_FROM_PKGS_JSON_FN + ".bz2")
+            )
 
         _add_extra_path(extra_paths, join(subdir_path, "patch_instructions.json"))
         rendered_html = _make_subdir_index_html(
@@ -1224,25 +1102,41 @@ class ChannelIndex:
         temp_path = f"{path}.{uuid4()}"
 
         # intercept to support separate output_directory
-        new_path = os.path.join(
+        output_path = os.path.join(
             self.output_root, (os.path.relpath(path, self.channel_root))
         )
-        log.debug(f"_maybe_write {path} to {new_path}")
-        path = new_path
 
-        # XXX save 'maybe written' and 'actually written' paths
+        output_temp_path = os.path.join(
+            self.output_root, (os.path.relpath(temp_path, self.channel_root))
+        )
+
+        os.makedirs(os.path.dirname(output_temp_path), exist_ok=True)
+
+        log.debug(f"_maybe_write {path} to {output_path}")
 
         if not content_is_binary:
             content = ensure_binary(content)
-        with open(temp_path, "wb") as fh:
+
+        return self._maybe_write_output_paths(
+            content, output_path, output_temp_path, write_newline_end
+        )
+
+    def _maybe_write_output_paths(
+        self, content, output_path, output_temp_path, write_newline_end
+    ):
+        """
+        Internal to _maybe_write.
+        """
+
+        with open(output_temp_path, "wb") as fh:
             fh.write(content)
             if write_newline_end:
                 fh.write(b"\n")
-        if isfile(path):
-            if utils.file_contents_match(temp_path, path):
+        if isfile(output_path):
+            if utils.file_contents_match(output_temp_path, output_path):
                 # No need to change mtimes. The contents already match.
-                os.unlink(temp_path)
+                os.unlink(output_temp_path)
                 return False
-        # log.info("writing %s", path)
-        utils.move_with_fallback(temp_path, path)
+
+        utils.move_with_fallback(output_temp_path, output_path)
         return True
