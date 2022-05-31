@@ -140,7 +140,7 @@ class CondaIndexCache:
             # prepare to be sent to other thread
             self.close()
 
-    def extract_to_cache_2(self, channel_root, subdir, fn_info):
+    def extract_to_cache_info_object(self, channel_root, subdir, fn_info):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
         """
@@ -252,16 +252,6 @@ class CondaIndexCache:
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
             log.exception("Error extracting %s", fn)
-            if not second_try:
-                # recursion XXX measure whether this ever succeeds on the second
-                # try. could wait until next index run.
-                return self._extract_to_cache(
-                    channel_root,
-                    subdir,
-                    fn,
-                    stat_result=stat_result,
-                    second_try=True,
-                )
 
         return retval
 

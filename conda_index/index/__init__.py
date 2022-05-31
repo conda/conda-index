@@ -881,7 +881,7 @@ class ChannelIndex:
 
         # now updates own stat cache
         extract_func = functools.partial(
-            cache.extract_to_cache_2, self.channel_root, subdir
+            cache.extract_to_cache_info_object, self.channel_root, subdir
         )
 
         start_time = time.time()

@@ -1,6 +1,7 @@
 import hashlib
 from contextlib import contextmanager
 
+# includes linux-ppc64 and linux-ppc64le; incorrect?
 from conda.base.constants import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
