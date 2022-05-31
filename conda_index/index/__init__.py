@@ -653,7 +653,7 @@ class ChannelIndex:
                     executor = ThreadPoolExecutor(max_workers=1)
 
                     def extract_args():
-                        for subdir in self.subdirs:
+                        for subdir in subdirs:
                             # .cache is currently in channel_root not output_root
                             _ensure_valid_channel(self.channel_root, subdir)
                             subdir_path = join(self.channel_root, subdir)
@@ -665,6 +665,9 @@ class ChannelIndex:
                         cache = self.cache_for_subdir(subdir)
                         return self.extract_subdir_to_cache(*args, cache)
 
+                    # map() gives results in order passed, not in order of
+                    # completion. If using multiple threads, switch to
+                    # submit() / as_completed().
                     return executor.map(extract_wrapper, extract_args())
 
                 # Collect repodata from packages, save to

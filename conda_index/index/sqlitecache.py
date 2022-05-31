@@ -86,9 +86,8 @@ class CondaIndexCache:
         self.db_filename = os.path.join(self.cache_dir, "cache.db")
         self.cache_is_brand_new = not os.path.exists(self.db_filename)
 
-        # the subdir should already exist but we'll make it here anyway
         if not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir, exist_ok=True)
+            os.mkdir(self.cache_dir)
 
         log.debug(f"{self.db_filename=} {self.cache_is_brand_new=}")
 
