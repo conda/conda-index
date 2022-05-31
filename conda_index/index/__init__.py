@@ -1013,12 +1013,14 @@ class ChannelIndex:
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
-        with TemporaryDirectory() as tmpdir:
-            conda_package_handling.api.extract(patch_generator, dest_dir=tmpdir)
-            instructions_file = os.path.join(tmpdir, subdir, "patch_instructions.json")
-            if os.path.isfile(instructions_file):
-                with open(instructions_file) as f:
-                    instructions = json.load(f)
+        from . import package_streaming
+
+        target = "/".join((subdir, "patch_instructions.json"))
+        for tar, member in package_streaming.stream_conda_component(
+            patch_generator, component="pkg"
+        ):
+            if member.name == target:
+                instructions = json.load(tar.extractfile(member))
         return instructions
 
     def _create_patch_instructions(self, subdir, repodata, patch_generator=None):
