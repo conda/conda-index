@@ -236,7 +236,7 @@ class CondaIndexCache:
                     )
 
             else:
-                log.debug("Extract %s to cache" % fn)
+                log.debug("cache %s/%s", subdir, fn)
                 index_json = self.extract_to_cache_unconditional(
                     fn, abs_fn, size, mtime
                 )
