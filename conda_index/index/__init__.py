@@ -13,25 +13,17 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime
 from numbers import Number
-from os.path import abspath, basename, dirname, getmtime, getsize, isfile, join
+from os.path import abspath, basename, getmtime, getsize, isfile, join
 from typing import NamedTuple
 from uuid import uuid4
 
-import conda_package_handling.api
 import pytz
 
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
-from conda.exports import (
-    CondaHTTPError,
-    MatchSpec,
-    VersionOrder,
-    get_index,
-    human_bytes,
-    url_path,
-)
+from conda.exports import MatchSpec, VersionOrder, human_bytes
 from conda.models.channel import Channel
-from conda_build.conda_interface import Resolve, TemporaryDirectory, context
+from conda_build.conda_interface import Resolve, context
 from jinja2 import Environment, PackageLoader
 from tqdm import tqdm
 
