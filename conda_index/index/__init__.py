@@ -676,21 +676,16 @@ class ChannelIndex:
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
 
-        # XXX delete files in cache but not in save_fs_state / or modified files
-        # - before or after reload files step
-
-        # load cached packages we just saw on the filesystem
-        # (cache may also contain files that are no longer on the filesystem)
+        # load cached packages
         for row in cache.db.execute(
             """
             SELECT path, index_json FROM stat JOIN index_json USING (path)
             WHERE stat.stage = ?
             ORDER BY path
-        """,
+            """,
             (cache.upstream_stage,),
         ):
             path, index_json = row
-            # (convert path to base filename)
             index_json = json.loads(index_json)
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 new_repodata_packages[path] = index_json
@@ -754,7 +749,7 @@ class ChannelIndex:
         start_time = time.time()
         size_processed = 0
         for fn, mtime, size, index_json in tqdm(
-            self.thread_executor.map(extract_func, extract),  # XXX individual timeouts?
+            self.thread_executor.map(extract_func, extract),
             desc="hash & extract packages for %s" % subdir,
             disable=(verbose or not progress),
             leave=False,
@@ -763,7 +758,7 @@ class ChannelIndex:
             # fn can be None if the file was corrupt or no longer there
             if fn and mtime:
                 if index_json:
-                    pass  # correctly indexed a package! will fetch below
+                    pass  # correctly indexed a package! index_subdir will fetch.
                 else:
                     log.error(
                         "Package at %s did not contain valid index.json data.  Please"
@@ -799,14 +794,14 @@ class ChannelIndex:
             repodata_json_path, new_repodata_binary, write_newline_end=True
         )
         if write_result:
+            repodata_bz2_path = repodata_json_path + ".bz2"
             if self.write_bz2:
-                repodata_bz2_path = repodata_json_path + ".bz2"
                 bz2_content = bz2.compress(new_repodata_binary)
                 self._maybe_write(
                     repodata_bz2_path, bz2_content, content_is_binary=True
                 )
             else:
-                pass  # XXX delete old bz2 under output path
+                self._maybe_remove(repodata_bz2_path)
         return write_result
 
     def _write_subdir_index_html(self, subdir, repodata):
@@ -1134,3 +1129,18 @@ class ChannelIndex:
 
         utils.move_with_fallback(output_temp_path, output_path)
         return True
+
+    def _maybe_remove(self, path):
+        """
+        Remove path if it exists, rewriting to respect self.output_root.
+        """
+
+        # intercept to support separate output_directory
+        output_path = os.path.join(
+            self.output_root, (os.path.relpath(path, self.channel_root))
+        )
+
+        log.debug(f"_maybe_remove {path} from {output_path}")
+
+        if isfile(output_path):
+            os.unlink(output_path)

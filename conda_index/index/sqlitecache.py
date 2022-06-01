@@ -19,6 +19,7 @@ from yaml.parser import ParserError
 from yaml.reader import ReaderError
 from yaml.scanner import ScannerError
 
+from ..utils import CONDA_PACKAGE_EXTENSIONS
 from . import convert_cache, package_streaming
 from .common import connect
 
@@ -79,8 +80,6 @@ class CondaIndexCache:
         self.channel = channel
         self.subdir = subdir
 
-        log.debug(f"CondaIndexCache {channel=}, {subdir=}")
-
         self.subdir_path = os.path.join(channel_root, subdir)
         self.cache_dir = os.path.join(self.subdir_path, ".cache")
         self.db_filename = os.path.join(self.cache_dir, "cache.db")
@@ -89,7 +88,9 @@ class CondaIndexCache:
         if not os.path.exists(self.cache_dir):
             os.mkdir(self.cache_dir)
 
-        log.debug(f"{self.db_filename=} {self.cache_is_brand_new=}")
+        log.debug(
+            f"CondaIndexCache {channel=}, {subdir=} {self.db_filename=} {self.cache_is_brand_new=}"
+        )
 
     def __getstate__(self):
         """
@@ -121,35 +122,6 @@ class CondaIndexCache:
         if db:
             db.close()
 
-    def convert(self, force=False):
-        """
-        Load filesystem cache into sqlite.
-        """
-        # if this is interrupted, we may have to re-extract the missing files
-        if self.cache_is_brand_new or force:
-            convert_cache.convert_cache(
-                self.db,
-                convert_cache.extract_cache_filesystem(self.cache_dir),
-                override_channel=self.channel,
-            )
-
-            with self.db:
-                convert_cache.remove_prefix(self.db)
-
-            # prepare to be sent to other thread
-            self.close()
-
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info):
-        """
-        fn_info: object with .fn, .st_size, and .st_msize properties
-        """
-        return self.extract_to_cache(
-            channel_root, subdir, fn_info.fn, stat_result=fn_info
-        )
-
-    def extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        return self._extract_to_cache(channel_root, subdir, fn, stat_result=stat_result)
-
     @property
     def database_prefix(self):
         """
@@ -173,12 +145,34 @@ class CondaIndexCache:
         """
         return path.rsplit("/", 1)[-1]
 
-    def _extract_to_cache(
-        self, channel_root, subdir, fn, second_try=False, stat_result=None
-    ):
-        # This method WILL reread the tarball. Probably need another one to exit early if
-        # there are cases where it's fine not to reread.  Like if we just rebuild repodata
-        # from the cached files, but don't use the existing repodata.json as a starting point.
+    def convert(self, force=False):
+        """
+        Load filesystem cache into sqlite.
+        """
+        # if this is interrupted, we may have to re-extract the missing files
+        if self.cache_is_brand_new or force:
+            convert_cache.convert_cache(
+                self.db,
+                convert_cache.extract_cache_filesystem(self.cache_dir),
+                override_channel=self.channel,
+            )
+
+            with self.db:
+                convert_cache.remove_prefix(self.db)
+
+            # prepare to be sent to other thread
+            self.close()
+
+    def extract_to_cache_info_object(self, channel_root, subdir, fn_info):
+        """
+        fn_info: object with .fn, .st_size, and .st_msize properties
+        """
+        return self._extract_to_cache(
+            channel_root, subdir, fn_info.fn, stat_result=fn_info
+        )
+
+    def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
+
         subdir_path = join(channel_root, subdir)
 
         abs_fn = join(subdir_path, fn)
@@ -191,49 +185,24 @@ class CondaIndexCache:
         retval = fn, mtime, size, None
 
         try:
-            # we no longer re-use the .conda cache for .tar.bz2
-            # faster conda extraction should preserve enough performance
+            # we no longer re-use the .conda cache for .tar.bz2; faster conda
+            # extraction should preserve enough performance
             database_path = self.database_path(fn)
 
             # None, or a tuple containing the row
-            # don't bother skipping on second_try
             cached_row = self.db.execute(
                 "SELECT index_json FROM index_json WHERE path = :path",
                 {"path": database_path},
             ).fetchone()
 
-            if cached_row and not second_try:
+            if cached_row:
                 # log in caller?
                 log.debug("Found %s in cache" % fn)
                 index_json = json.loads(cached_row[0])
 
-                # XXX now would be a great time to check hashes
-
-                # calculate extra stuff to add to index.json cache, size, md5, sha256
-
-                # conda_package_handling wastes a stat call to give us this information
-                # let's see how slow this is
-                # md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
-
-                # if the hashes don't match, would be a great time to invalidate the index_json cache
-                # assert index_json["sha256"] == sha256
-                # assert index_json["md5"] == md5
-
                 with self.db:
                     # have to update stat or we will be asked to look up cached_row again
-                    # XXX DRY this query
-                    self.db.execute(
-                        """INSERT OR REPLACE INTO stat
-                        (stage, path, mtime, size, sha256, md5)
-                        VALUES ('indexed', ?, ?, ?, ?, ?)""",
-                        (
-                            database_path,
-                            mtime,
-                            size,
-                            index_json["sha256"],
-                            index_json["md5"],
-                        ),
-                    )
+                    self.store_index_json_stat(database_path, mtime, size, index_json)
 
             else:
                 log.debug("cache %s/%s", subdir, fn)
@@ -310,8 +279,6 @@ class CondaIndexCache:
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
 
         # calculate extra stuff to add to index.json cache, size, md5, sha256
-
-        # conda_package_handling wastes a stat call to give us this information
         md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
 
         with self.db:
@@ -353,24 +320,20 @@ class CondaIndexCache:
                 "machine",
                 "operatingsystem",
             }
-            for field_name in filter_fields & set(index_json):
-                del index_json[field_name]
+
+            index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
 
             new_info = {"md5": md5, "sha256": sha256, "size": size}
 
             index_json.update(new_info)
 
-            # sqlite json() function removes whitespace
+            # sqlite json() function removes whitespace and ensures valid json
             self.db.execute(
                 "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
                 {"path": database_path, "index_json": json.dumps(index_json)},
             )
 
-            self.db.execute(
-                """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
-                VALUES ('indexed', ?, ?, ?, ?, ?)""",
-                (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
-            )
+            self.store_index_json_stat(database_path, mtime, size, index_json)
 
         return index_json  # we don't need this return value; it will be queried back out to generate repodata
 
@@ -389,7 +352,7 @@ class CondaIndexCache:
             try:
                 mtime = mtime or os.stat(join(subdir_path, fn)).st_mtime
             except FileNotFoundError:
-                # XXX don't call if it won't be found
+                # don't call if it won't be found...
                 log.warn("%s not found in load_all_from_cache", fn)
                 return {}
 
@@ -455,7 +418,9 @@ class CondaIndexCache:
         # gather conda package filenames in subdir
         log.debug("%s listdir", self.subdir)
         fns_in_subdir = {
-            fn for fn in os.listdir(subdir_path) if fn.endswith((".conda", ".tar.bz2"))
+            fn
+            for fn in os.listdir(subdir_path)
+            if fn.endswith(CONDA_PACKAGE_EXTENSIONS)
         }
 
         # put filesystem 'ground truth' into stat table
@@ -512,21 +477,15 @@ class CondaIndexCache:
                 "upstream_stage": self.upstream_stage,
             },
         )
-        # XXX further Python filtering?
-
-        # more complex, broken filter:
-        # WHERE fs.path LIKE :path_like AND
-        # (cached.path IS NULL OR
-        # (fs.sha256 AND fs.sha256 != cached.sha256)
-        # OR
-        # (fs.md5 AND fs.md5 != cached.md5)
-        # OR
-        # -- incorrect way to check (hash is NULL or '')
-        # (NOT fs.sha256 AND NOT fs.md5 AND (fs.mtime != cached.mtime))
-        # -- original mtime check - could be fs.mtime <= cached.mtime
-        # OR (fs.mtime != cached.mtime OR cached.path IS NULL)
 
         return query
+
+    def store_index_json_stat(self, database_path, mtime, size, index_json):
+        self.db.execute(
+            """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
+                VALUES ('indexed', ?, ?, ?, ?, ?)""",
+            (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
+        )
 
 
 def _cache_post_install_details(paths_json_str):
@@ -576,7 +535,7 @@ def _cache_recipe(recipe_reader):
     try:
         recipe_json_str = json.dumps(recipe_json)
     except TypeError:
-        recipe_json.get("requirements", {}).pop("build")  # XXX weird
+        recipe_json.get("requirements", {}).pop("build")  # weird
         recipe_json_str = json.dumps(recipe_json)
 
     return recipe_json_str
