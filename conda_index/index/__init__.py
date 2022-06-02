@@ -69,9 +69,9 @@ local_output_folder = ""
 cached_channels = []
 channel_data = {}
 
-MAX_THREADS_DEFAULT = (
-    os.cpu_count() if (hasattr(os, "cpu_count") and os.cpu_count() > 1) else 1
-)
+# os.cpu_count() "Return the number of CPUs in the system. Returns None if
+# undetermined."
+MAX_THREADS_DEFAULT = os.cpu_count() or 1
 if (
     sys.platform == "win32"
 ):  # see https://github.com/python/cpython/commit/8ea0fd85bc67438f679491fae29dfe0a3961900a
@@ -266,10 +266,10 @@ def _apply_instructions(subdir, repodata, instructions):
 
 def _get_jinja2_environment():
     def _filter_strftime(dt, dt_format):
-        if isinstance(dt, Number):
+        if isinstance(dt, (int, float)):
             if dt > 253402300799:  # 9999-12-31
                 dt //= 1000  # convert milliseconds to seconds; see #1988
-            dt = datetime.utcfromtimestamp(dt).replace(tzinfo=pytz.timezone("UTC"))
+            dt = datetime.utcfromtimestamp(dt).replace(tzinfo=pytz.UTC)
         return dt.strftime(dt_format)
 
     def _filter_add_href(text, link, **kwargs):
@@ -523,11 +523,13 @@ class ChannelIndex:
                             subdir_path = join(self.channel_root, subdir)
                             yield (subdir, verbose, progress, subdir_path)
 
-                    def extract_wrapper(args):
+                    def extract_wrapper(args: tuple):
                         # runs in thread
-                        subdir = args[0]
+                        subdir, verbose, progress, subdir_path = args
                         cache = self.cache_for_subdir(subdir)
-                        return self.extract_subdir_to_cache(*args, cache)
+                        return self.extract_subdir_to_cache(
+                            subdir, verbose, progress, subdir_path, cache
+                        )
 
                     # map() gives results in order passed, not in order of
                     # completion. If using multiple threads, switch to
@@ -1007,7 +1009,9 @@ class ChannelIndex:
             patch_generator, component="pkg"
         ):
             if member.name == target:
-                instructions = json.load(tar.extractfile(member))
+                reader = tar.extractfile(member)
+                assert reader, "tar member was not a regular file"
+                instructions = json.load(reader)
         return instructions
 
     def _create_patch_instructions(self, subdir, repodata, patch_generator=None):
@@ -1020,9 +1024,11 @@ class ChannelIndex:
                 from importlib.util import module_from_spec, spec_from_file_location
 
                 spec = spec_from_file_location("a_b", gen_patch_path)
-                mod = module_from_spec(spec)
-
-                spec.loader.exec_module(mod)
+                if spec and spec.loader:
+                    mod = module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                else:
+                    raise ImportError()
             # older pythons
             except ImportError:
                 import imp

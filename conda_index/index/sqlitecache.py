@@ -245,7 +245,11 @@ class CondaIndexCache:
         for tar, member in package_stream:
             if member.name in wanted:
                 wanted.remove(member.name)
-                have[member.name] = tar.extractfile(member).read()
+                reader = tar.extractfile(member)
+                if reader is None:
+                    log.warn(f"{abs_fn}/{member.name} was not a regular file")
+                    continue
+                have[member.name] = reader.read()
 
                 # immediately parse index.json, decide whether we need icon
                 if member.name == INDEX_JSON_PATH:  # early exit when no icon
@@ -348,9 +352,9 @@ class CondaIndexCache:
             ).fetchone()
             mtime = stat["mtime"]
         except (KeyError, IndexError):
-            log.debug("%s mtime not found in cache", fn)
+            log.warn("%s mtime not found in cache", fn)
             try:
-                mtime = mtime or os.stat(join(subdir_path, fn)).st_mtime
+                mtime = os.stat(join(subdir_path, fn)).st_mtime
             except FileNotFoundError:
                 # don't call if it won't be found...
                 log.warn("%s not found in load_all_from_cache", fn)
@@ -383,15 +387,16 @@ class CondaIndexCache:
             UNHOLY_UNION, {"path": self.database_path(fn)}
         ).fetchall()
         assert len(rows) < 2
+
+        data = {}
         try:
             row = rows[0]
+            # this order matches the old implementation. clobber recipe, about fields with index_json.
+            for column in ("recipe", "about", "post_install", "index_json"):
+                if row[column]:  # is not null or empty
+                    data.update(json.loads(row[column]))
         except IndexError:
             row = None
-        data = {}
-        # this order matches the old implementation. clobber recipe, about fields with index_json.
-        for column in ("recipe", "about", "post_install", "index_json"):
-            if row[column]:  # is not null or empty
-                data.update(json.loads(row[column]))
 
         data["mtime"] = mtime
 
@@ -405,7 +410,7 @@ class CondaIndexCache:
         _clear_newline_chars(data, "summary")
 
         # if run_exports was NULL / empty string, 'loads' the empty object
-        data["run_exports"] = json.loads(row["run_exports"] or "{}")
+        data["run_exports"] = json.loads(row["run_exports"]) if row else {}
 
         return data
 
