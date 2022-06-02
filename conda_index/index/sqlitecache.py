@@ -8,8 +8,8 @@ import logging
 import os
 import os.path
 import sqlite3
-from functools import cached_property
 from os.path import join
+from typing import Any
 from zipfile import BadZipFile
 
 import yaml
@@ -20,8 +20,7 @@ from yaml.reader import ReaderError
 from yaml.scanner import ScannerError
 
 from ..utils import CONDA_PACKAGE_EXTENSIONS
-from . import convert_cache, package_streaming
-from .common import connect
+from . import common, convert_cache, package_streaming
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +66,19 @@ TABLE_NO_CACHE = {
 COMPUTED = {"info/post_install.json"}
 
 
+# lock-free replacement for @cached_property
+class cacher:
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __get__(self, inst, objtype=None) -> Any:
+        if inst:
+            value = self.wrapped(inst)
+            setattr(inst, self.wrapped.__name__, value)
+            return value
+        return self
+
+
 class CondaIndexCache:
     upstream_stage = "fs"
 
@@ -101,14 +113,12 @@ class CondaIndexCache:
     def __setstate__(self, d):
         self.__dict__ = d
 
-    # cached_property adds a global lock when no lock would be more appropriate;
-    # this can deadlock. keeping for now.
-    @cached_property
+    @cacher
     def db(self):
         """
-        Connection to our sqlite3 database.
+        Return a fresh database connection.
         """
-        conn = connect(self.db_filename)
+        conn = common.connect(self.db_filename)
         with conn:
             convert_cache.create(conn)
             convert_cache.migrate(conn)
@@ -410,7 +420,7 @@ class CondaIndexCache:
         _clear_newline_chars(data, "summary")
 
         # if run_exports was NULL / empty string, 'loads' the empty object
-        data["run_exports"] = json.loads(row["run_exports"]) if row else {}
+        data["run_exports"] = json.loads(row["run_exports"] or "{}") if row else {}
 
         return data
 
