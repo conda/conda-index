@@ -10,7 +10,6 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import closing
 from datetime import datetime
 from numbers import Number
 from os.path import abspath, basename, getmtime, getsize, isfile, join
