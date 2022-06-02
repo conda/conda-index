@@ -116,7 +116,7 @@ class CondaIndexCache:
     @cacher
     def db(self):
         """
-        Return a fresh database connection.
+        Connection to our sqlite3 database.
         """
         conn = common.connect(self.db_filename)
         with conn:
