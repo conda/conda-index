@@ -156,9 +156,9 @@ def remove_prefix(conn: sqlite3.Connection):
 
     conn.create_function("migrate_basename", narg=1, func=basename, deterministic=True)
 
-    for table in TABLE_NAMES:
+    for table in TABLE_NAMES + ["stat"]:
         conn.execute(
-            f"UPDATE {table} SET path=migrate_basename(path) WHERE INSTR(path, '/')"
+            f"UPDATE OR IGNORE {table} SET path=migrate_basename(path) WHERE INSTR(path, '/')"
         )
 
 
