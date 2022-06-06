@@ -298,7 +298,7 @@ def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths
     rendered_html = template.render(
         title="{}/{}".format(channel_name or "", subdir),
         packages=repodata_packages,
-        current_time=datetime.utcnow().replace(tzinfo=pytz.timezone("UTC")),
+        current_time=datetime.utcnow().replace(tzinfo=pytz.UTC),
         extra_paths=extra_paths,
     )
     return rendered_html
@@ -311,7 +311,7 @@ def _make_channeldata_index_html(channel_name, channeldata):
         title=channel_name,
         packages=channeldata["packages"],
         subdirs=channeldata["subdirs"],
-        current_time=datetime.utcnow().replace(tzinfo=pytz.timezone("UTC")),
+        current_time=datetime.utcnow().replace(tzinfo=pytz.UTC),
     )
     return rendered_html
 
@@ -467,7 +467,7 @@ class ChannelIndex:
         channel_root,
         channel_name,
         subdirs=None,
-        threads=MAX_THREADS_DEFAULT,
+        threads: int = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
@@ -582,12 +582,14 @@ class ChannelIndex:
                         t2.update()
                         log.debug("%s write patched repodata", subdir)
                         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
+
                         t2.set_description("Building current_repodata subset")
                         t2.update()
                         log.debug("%s build current_repodata", subdir)
                         current_repodata = _build_current_repodata(
                             subdir, patched_repodata, pins=current_index_versions
                         )
+
                         t2.set_description("Writing current_repodata subset")
                         t2.update()
                         log.debug("%s write current_repodata", subdir)
