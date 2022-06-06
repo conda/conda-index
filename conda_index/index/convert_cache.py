@@ -214,14 +214,13 @@ CHUNK_SIZE = 4096  # packages * cache folders = cache files
 
 def db_path(match, override_channel=None):
     """
-    A primary key that should be unique for all {subdir}/.cache
+    Convert match to a database primary key. Retain the option to implement
+    globally unique keys.
     """
-    return (
-        f"{override_channel or match['channel']}/{match['subdir']}/{match['basename']}"
-    )
+    return f"{match['basename']}"
 
 
-def convert_cache(conn, cache_generator, override_channel=None):
+def convert_cache(conn, cache_generator):
     """
     Convert old style `conda index` cache to sqlite cache.
 
@@ -240,9 +239,7 @@ def convert_cache(conn, cache_generator, override_channel=None):
                 if match["path"] == "stat.json":
                     conn.execute("DELETE FROM stat WHERE stage='indexed'")
                     for key, value in json.load(member).items():
-                        value[
-                            "path"
-                        ] = f"{override_channel or match['channel']}/{match['subdir']}/{key}"
+                        value["path"] = key
                         conn.execute(
                             "INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, 'indexed')",
                             value,
