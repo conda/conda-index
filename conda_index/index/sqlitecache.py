@@ -164,7 +164,6 @@ class CondaIndexCache:
             convert_cache.convert_cache(
                 self.db,
                 convert_cache.extract_cache_filesystem(self.cache_dir),
-                override_channel=self.channel,
             )
 
             with self.db:
