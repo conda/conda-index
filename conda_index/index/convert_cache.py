@@ -258,9 +258,7 @@ def convert_cache(conn, cache_generator):
                         VALUES (:path, json(:data))
                         """,
                             {
-                                "path": db_path(
-                                    match, override_channel=override_channel
-                                ),
+                                "path": db_path(match),
                                 "data": member.read(),
                             },
                         )
@@ -274,7 +272,7 @@ def convert_cache(conn, cache_generator):
                     VALUES (:path, :data)
                     """,
                         {
-                            "path": db_path(match, override_channel=override_channel),
+                            "path": db_path(match),
                             "data": member.read(),
                         },
                     )
