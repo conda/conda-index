@@ -82,14 +82,12 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, channel, subdir):
+    def __init__(self, channel_root, subdir):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
-        channel: name of channel, e.g. 'main', 'conda-forge'
         subdir: platform subdir, e.g. 'linux-64'
         """
         self.channel_root = channel_root
-        self.channel = channel
         self.subdir = subdir
 
         self.subdir_path = os.path.join(channel_root, subdir)
@@ -101,7 +99,7 @@ class CondaIndexCache:
             os.mkdir(self.cache_dir)
 
         log.debug(
-            f"CondaIndexCache {channel=}, {subdir=} {self.db_filename=} {self.cache_is_brand_new=}"
+            f"CondaIndexCache {channel_root=}, {subdir=} {self.db_filename=} {self.cache_is_brand_new=}"
         )
 
     def __getstate__(self):

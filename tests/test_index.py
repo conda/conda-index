@@ -527,7 +527,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
-    updated_packages = expected_repodata_json.get("packages")
+    updated_packages = expected_repodata_json.get("packages", {})
     updated_packages["flask-0.11.1-py_0.tar.bz2"] = {
         "build": "py_0",
         "build_number": 0,
@@ -1020,7 +1020,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
         )
     # mock the extract function, so that we can assert that it is not called
     #     with the .tar.bz2, because the .conda should be preferred
-    import conda_index.index.package_streaming
+    import conda_index.index, conda_index.index.package_streaming
 
     cph_extract = mocker.spy(conda_index.index.package_streaming, "stream_conda_info")
     conda_index.index.update_index(
@@ -1263,7 +1263,7 @@ def test_index_clears_changed_packages(testing_workdir):
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     index_cache = conda_index.index.sqlitecache.CondaIndexCache(
-        channel_root=testing_workdir, channel="test-channel", subdir="osx-64"
+        channel_root=testing_workdir, subdir="osx-64"
     )
     assert list(index_cache.changed_packages()) == []
 
@@ -1284,8 +1284,8 @@ def test_index_clears_changed_packages(testing_workdir):
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
-    # indepentent database connection
+    # force new database connection
     index_cache = conda_index.index.sqlitecache.CondaIndexCache(
-        channel_root=testing_workdir, channel="test-channel", subdir="osx-64"
+        channel_root=testing_workdir, subdir="osx-64"
     )
     assert list(index_cache.changed_packages()) == []

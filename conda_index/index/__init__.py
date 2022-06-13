@@ -341,7 +341,7 @@ def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
 
     channel = Channel("https://conda.anaconda.org/dummy-channel/%s" % subdir)
     sd = SubdirData(channel)
-    sd._process_raw_repodata_str(json.dumps(repodata))
+        sd._process_raw_repodata_str(json.dumps(repodata))
     sd._loaded = True
     SubdirData._cache_[channel.url(with_credentials=True)] = sd
 
@@ -711,7 +711,7 @@ class ChannelIndex:
 
     def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
+            channel_root=self.channel_root, subdir=subdir
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
@@ -845,9 +845,7 @@ class ChannelIndex:
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
-        cache = self.cache_class(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
-        )
+        cache = self.cache_for_subdir(subdir)
 
         legacy_packages = repodata["packages"]
         conda_packages = repodata["packages.conda"]
