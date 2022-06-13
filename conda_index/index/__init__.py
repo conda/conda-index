@@ -316,18 +316,9 @@ def _make_channeldata_index_html(channel_name, channeldata):
     return rendered_html
 
 
-def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
+def _get_resolve_object(subdir, precs=None, repodata=None):
     packages = {}
     conda_packages = {}
-    if file_path:
-        with open(file_path) as fi:
-            packages = json.load(fi)
-            recs = json.load(fi)
-            for k, v in recs.items():
-                if k.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                    packages[k] = v
-                elif k.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                    conda_packages[k] = v
     if not repodata:
         repodata = {
             "info": {
@@ -341,7 +332,18 @@ def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
 
     channel = Channel("https://conda.anaconda.org/dummy-channel/%s" % subdir)
     sd = SubdirData(channel)
-    sd._process_raw_repodata_str(json.dumps(repodata))
+    try:
+        # the next version of conda >= 4.13.0
+        # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
+        repodata_copy = repodata.copy()
+        for group in ("packages", "packages.conda"):
+            repodata_copy[group] = {
+                key: value.copy() for key, value in repodata.get(group, {}).items()
+            }
+        # adds url, Channel objects to each repodata package
+        sd._process_raw_repodata(repodata_copy)  # type: ignore
+    except AttributeError:
+        sd._process_raw_repodata_str(json.dumps(repodata))
     sd._loaded = True
     SubdirData._cache_[channel.url(with_credentials=True)] = sd
 
@@ -711,7 +713,7 @@ class ChannelIndex:
 
     def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
+            channel_root=self.channel_root, subdir=subdir
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
@@ -845,9 +847,7 @@ class ChannelIndex:
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
-        cache = self.cache_class(
-            channel_root=self.channel_root, channel=self.channel_name, subdir=subdir
-        )
+        cache = self.cache_for_subdir(subdir)
 
         legacy_packages = repodata["packages"]
         conda_packages = repodata["packages.conda"]
