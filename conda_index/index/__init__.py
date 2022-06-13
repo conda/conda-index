@@ -316,18 +316,9 @@ def _make_channeldata_index_html(channel_name, channeldata):
     return rendered_html
 
 
-def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
+def _get_resolve_object(subdir, precs=None, repodata=None):
     packages = {}
     conda_packages = {}
-    if file_path:
-        with open(file_path) as fi:
-            packages = json.load(fi)
-            recs = json.load(fi)
-            for k, v in recs.items():
-                if k.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                    packages[k] = v
-                elif k.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                    conda_packages[k] = v
     if not repodata:
         repodata = {
             "info": {
@@ -343,7 +334,7 @@ def _get_resolve_object(subdir, file_path=None, precs=None, repodata=None):
     sd = SubdirData(channel)
     try:
         # the next version of conda >= 4.13.0
-        # repodata = copy.deepcopy(repodata) # slower thahn json.dumps/load loop
+        # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
         repodata_copy = repodata.copy()
         for group in ("packages", "packages.conda"):
             repodata_copy[group] = {
