@@ -1,4 +1,5 @@
 import hashlib
+import os
 from contextlib import contextmanager
 
 from conda.base.constants import (
@@ -36,6 +37,9 @@ def file_contents_match(pathA, pathB):
     """
     Return True if pathA and pathB have identical contents.
     """
+    if os.stat(pathA).st_size != os.stat(pathB).st_size:
+        return False
+
     hashes = []
     for path in (pathA, pathB):
         hashfunc = hashlib.blake2b()
