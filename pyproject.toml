@@ -19,7 +19,6 @@ dependencies = [
     "jinja2",
     "more_itertools",
     "psutil",
-    "pytz",
     "PyYAML >=6",
     "tqdm",
     "zstandard >=0.15", # https://github.com/indygreg/python-zstandard

@@ -10,13 +10,11 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from numbers import Number
 from os.path import abspath, basename, getmtime, getsize, isfile, join
 from typing import NamedTuple
 from uuid import uuid4
-
-import pytz
 
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
@@ -268,7 +266,7 @@ def _get_jinja2_environment():
         if isinstance(dt, (int, float)):
             if dt > 253402300799:  # 9999-12-31
                 dt //= 1000  # convert milliseconds to seconds; see #1988
-            dt = datetime.utcfromtimestamp(dt).replace(tzinfo=pytz.UTC)
+            dt = datetime.fromtimestamp(dt, tz=timezone.utc)
         return dt.strftime(dt_format)
 
     def _filter_add_href(text, link, **kwargs):
@@ -298,7 +296,7 @@ def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths
     rendered_html = template.render(
         title="{}/{}".format(channel_name or "", subdir),
         packages=repodata_packages,
-        current_time=datetime.utcnow().replace(tzinfo=pytz.UTC),
+        current_time=datetime.now(timezone.utc),
         extra_paths=extra_paths,
     )
     return rendered_html
@@ -311,7 +309,7 @@ def _make_channeldata_index_html(channel_name, channeldata):
         title=channel_name,
         packages=channeldata["packages"],
         subdirs=channeldata["subdirs"],
-        current_time=datetime.utcnow().replace(tzinfo=pytz.UTC),
+        current_time=datetime.now(timezone.utc),
     )
     return rendered_html
 
