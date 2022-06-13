@@ -44,7 +44,7 @@ def file_contents_match(pathA, pathB):
     for path in (pathA, pathB):
         hashfunc = hashlib.blake2b()
         with open(path, "rb") as data:
-            while block := data.read(1 << 20):
+            while block := data.read(1 << 18):
                 hashfunc.update(block)
         hashes.append(hashfunc.digest())
     return hashes[0] == hashes[1]
