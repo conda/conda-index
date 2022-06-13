@@ -481,7 +481,7 @@ class ChannelIndex:
         self.output_root = abspath(output_root) if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
         self._subdirs = subdirs
-        self.thread_executor = (
+        self.thread_executor_factory = lambda: (
             DummyExecutor()
             if (debug or sys.version_info.major == 2 or threads == 1)
             else ProcessPoolExecutor(threads, initializer=logging_config)
@@ -753,28 +753,30 @@ class ChannelIndex:
 
         start_time = time.time()
         size_processed = 0
-        for fn, mtime, size, index_json in tqdm(
-            self.thread_executor.map(extract_func, extract),
-            desc="hash & extract packages for %s" % subdir,
-            disable=(verbose or not progress),
-            leave=False,
-        ):
-            size_processed += size  # even if processed incorrectly
-            # fn can be None if the file was corrupt or no longer there
-            if fn and mtime:
-                if index_json:
-                    pass  # correctly indexed a package! index_subdir will fetch.
-                else:
-                    log.error(
-                        "Package at %s did not contain valid index.json data.  Please"
-                        " check the file and remove/redownload if necessary to obtain "
-                        "a valid package." % os.path.join(subdir_path, fn)
-                    )
-        end_time = time.time()
-        try:
-            bytes_sec = size_processed / (end_time - start_time)
-        except ZeroDivisionError:
-            bytes_sec = 0
+
+        with self.thread_executor_factory() as thread_executor:
+            for fn, mtime, size, index_json in tqdm(
+                thread_executor.map(extract_func, extract),
+                desc="hash & extract packages for %s" % subdir,
+                disable=(verbose or not progress),
+                leave=False,
+            ):
+                size_processed += size  # even if processed incorrectly
+                # fn can be None if the file was corrupt or no longer there
+                if fn and mtime:
+                    if index_json:
+                        pass  # correctly indexed a package! index_subdir will fetch.
+                    else:
+                        log.error(
+                            "Package at %s did not contain valid index.json data.  Please"
+                            " check the file and remove/redownload if necessary to obtain "
+                            "a valid package." % os.path.join(subdir_path, fn)
+                        )
+            end_time = time.time()
+            try:
+                bytes_sec = size_processed / (end_time - start_time)
+            except ZeroDivisionError:
+                bytes_sec = 0
         log.info(
             "%s cached %s from %s packages at %s/second",
             subdir,
@@ -919,68 +921,69 @@ class ChannelIndex:
             fns, fn_dicts = zip(*groups)
 
         load_func = cache.load_all_from_cache
-        for fn_dict, data in zip(fn_dicts, self.thread_executor.map(load_func, fns)):
-            # not reached when older channeldata.json matches
-            if data:
-                data.update(fn_dict)
-                name = data["name"]
-                # existing record
-                erec = package_data.get(name, {})
-                data_v = data.get("version", "0")
-                erec_v = erec.get("version", "0")
-                data_newer = VersionOrder(data_v) > VersionOrder(erec_v)
+        with self.thread_executor_factory() as thread_executor:
+            for fn_dict, data in zip(fn_dicts, thread_executor.map(load_func, fns)):
+                # not reached when older channeldata.json matches
+                if data:
+                    data.update(fn_dict)
+                    name = data["name"]
+                    # existing record
+                    erec = package_data.get(name, {})
+                    data_v = data.get("version", "0")
+                    erec_v = erec.get("version", "0")
+                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v)
 
-                package_data[name] = package_data.get(name, {})
-                # keep newer value for these
-                for k in (
-                    "description",
-                    "dev_url",
-                    "doc_url",
-                    "doc_source_url",
-                    "home",
-                    "license",
-                    "source_url",
-                    "source_git_url",
-                    "summary",
-                    "icon_url",
-                    "icon_hash",
-                    "tags",
-                    "identifiers",
-                    "keywords",
-                    "recipe_origin",
-                    "version",
-                ):
-                    _replace_if_newer_and_present(
-                        package_data[name], data, erec, data_newer, k
+                    package_data[name] = package_data.get(name, {})
+                    # keep newer value for these
+                    for k in (
+                        "description",
+                        "dev_url",
+                        "doc_url",
+                        "doc_source_url",
+                        "home",
+                        "license",
+                        "source_url",
+                        "source_git_url",
+                        "summary",
+                        "icon_url",
+                        "icon_hash",
+                        "tags",
+                        "identifiers",
+                        "keywords",
+                        "recipe_origin",
+                        "version",
+                    ):
+                        _replace_if_newer_and_present(
+                            package_data[name], data, erec, data_newer, k
+                        )
+
+                    # keep any true value for these, since we don't distinguish subdirs
+                    for k in (
+                        "binary_prefix",
+                        "text_prefix",
+                        "activate.d",
+                        "deactivate.d",
+                        "pre_link",
+                        "post_link",
+                        "pre_unlink",
+                    ):
+                        package_data[name][k] = any((data.get(k), erec.get(k)))
+
+                    package_data[name]["subdirs"] = sorted(
+                        list(set(erec.get("subdirs", []) + [subdir]))
                     )
-
-                # keep any true value for these, since we don't distinguish subdirs
-                for k in (
-                    "binary_prefix",
-                    "text_prefix",
-                    "activate.d",
-                    "deactivate.d",
-                    "pre_link",
-                    "post_link",
-                    "pre_unlink",
-                ):
-                    package_data[name][k] = any((data.get(k), erec.get(k)))
-
-                package_data[name]["subdirs"] = sorted(
-                    list(set(erec.get("subdirs", []) + [subdir]))
-                )
-                # keep one run_exports entry per version of the package, since these vary by version
-                run_exports = erec.get("run_exports", {})
-                exports_from_this_version = data.get("run_exports")
-                if exports_from_this_version:
-                    run_exports[data_v] = data.get("run_exports")
-                package_data[name]["run_exports"] = run_exports
-                package_data[name]["timestamp"] = _make_seconds(
-                    max(
-                        data.get("timestamp", 0),
-                        channel_data.get(name, {}).get("timestamp", 0),
+                    # keep one run_exports entry per version of the package, since these vary by version
+                    run_exports = erec.get("run_exports", {})
+                    exports_from_this_version = data.get("run_exports")
+                    if exports_from_this_version:
+                        run_exports[data_v] = data.get("run_exports")
+                    package_data[name]["run_exports"] = run_exports
+                    package_data[name]["timestamp"] = _make_seconds(
+                        max(
+                            data.get("timestamp", 0),
+                            channel_data.get(name, {}).get("timestamp", 0),
+                        )
                     )
-                )
 
         channel_data.update(
             {
