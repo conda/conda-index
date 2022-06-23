@@ -20,7 +20,12 @@ from yaml.reader import ReaderError
 from yaml.scanner import ScannerError
 
 from ..utils import CONDA_PACKAGE_EXTENSIONS
-from . import common, convert_cache, package_streaming
+from . import common, convert_cache
+
+try:
+    from conda_package_streaming import package_streaming
+except ImportError:
+    from . import package_streaming
 
 log = logging.getLogger(__name__)
 
