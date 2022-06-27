@@ -1,4 +1,6 @@
-# Copyright (C) 2018 Anaconda, Inc
+# Copyright (C) 2018-2022 Anaconda, Inc
+
+from __future__ import annotations
 
 import bz2
 import copy
