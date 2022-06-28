@@ -13,8 +13,6 @@ dynamic = ["version", "description"]
 requires-python = ">=3.9"
 dependencies = [
     "conda >=4.12.0",
-    "conda-build >=3.21.0",
-    "conda-package-handling >=1.7.3",
     "filelock",
     "jinja2",
     "more_itertools",
@@ -26,6 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "conda-build >=3.21.0",
+    "conda-package-handling >=1.7.3",
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",

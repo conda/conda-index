@@ -14,7 +14,6 @@ from os.path import isdir, isfile, islink
 
 import filelock
 from conda.exports import root_dir
-from conda_build.exceptions import BuildLockError  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +27,10 @@ log = logging.getLogger(__name__)
 # )
 
 string_types = (str,)  # Python 3
+
+
+class LockError(Exception):
+    """Raised when we failed to acquire a lock."""
 
 
 def ensure_list(arg, include_dict=True):
@@ -108,11 +111,10 @@ def islist(arg, uniform=False, include_dict=True):
         # ValueError, TypeError: uniform function failed
         return False
 
-    # purpose here is that we want *one* lock per location on disk.  It can be locked or unlocked
 
-
-#    at any time, but the lock within this process should all be tied to the same tracking
-#    mechanism.
+# purpose here is that we want *one* lock per location on disk.  It can be
+# locked or unlocked at any time, but the lock within this process should all be
+# tied to the same tracking mechanism.
 _lock_folders = (
     os.path.join(root_dir, "locks"),
     os.path.expanduser(os.path.join("~", ".conda_build_locks")),
@@ -132,8 +134,6 @@ def get_lock(folder, timeout=900):
     # Hash the entire filename to avoid collisions.
     lock_filename = hashlib.sha256(b_location).hexdigest()
 
-    if hasattr(lock_filename, "decode"):
-        lock_filename = lock_filename.decode()
     for locks_dir in _lock_folders:
         try:
             if not os.path.isdir(locks_dir):
@@ -246,7 +246,7 @@ def try_acquire_locks(locks, timeout):
         # If we reach this point, we weren't able to acquire all locks within
         # the specified timeout. We shouldn't be holding any locks anymore at
         # this point, so we just raise an exception.
-        raise BuildLockError("Failed to acquire all locks")
+        raise LockError("Failed to acquire all locks")
 
     try:
         yield
