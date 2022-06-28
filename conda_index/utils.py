@@ -1,4 +1,5 @@
 import hashlib
+from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 
 from conda.base.constants import (
@@ -21,7 +22,38 @@ def LoggingContext(*args, **kwargs):
 
 
 # multithreaded checksums
-from conda_package_handling.utils import checksums
+
+
+def _checksum(fd, algorithm, buffersize=65536):
+    hash_impl = getattr(hashlib, algorithm)
+    if not hash_impl:
+        raise ValueError("Unrecognized hash algorithm: {}".format(algorithm))
+    else:
+        hash_impl = hash_impl()
+    for block in iter(lambda: fd.read(buffersize), b""):
+        hash_impl.update(block)
+    return hash_impl.hexdigest()
+
+
+def checksum(fn, algorithm, buffersize=1 << 18):
+    """
+    Calculate a checksum for a filename (not an open file).
+    """
+    with open(fn, "rb") as fd:
+        return _checksum(fd, algorithm, buffersize)
+
+
+def checksums(fn, algorithms, buffersize=1 << 18):
+    """
+    Calculate multiple checksums for a filename in parallel.
+    """
+    with ThreadPoolExecutor(max_workers=len(algorithms)) as e:
+        # take care not to share hash_impl between threads
+        results = [
+            e.submit(checksum, fn, algorithm, buffersize) for algorithm in algorithms
+        ]
+    return [result.result() for result in results]
+
 
 from .utils_build import (
     ensure_list,
