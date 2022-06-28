@@ -19,7 +19,7 @@ from yaml.reader import ReaderError
 from yaml.scanner import ScannerError
 
 from ..utils import CONDA_PACKAGE_EXTENSIONS, checksums
-from . import common
+from . import common, convert_cache
 
 try:
     from conda_package_streaming import package_streaming
