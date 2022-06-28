@@ -13,13 +13,12 @@ from typing import Any
 from zipfile import BadZipFile
 
 import yaml
-from conda_package_handling.utils import checksums
 from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
 from yaml.reader import ReaderError
 from yaml.scanner import ScannerError
 
-from ..utils import CONDA_PACKAGE_EXTENSIONS
+from ..utils import CONDA_PACKAGE_EXTENSIONS, checksums
 from . import common, convert_cache
 
 try:

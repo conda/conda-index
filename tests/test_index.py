@@ -1021,9 +1021,11 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     # mock the extract function, so that we can assert that it is not called
     #     with the .tar.bz2, because the .conda should be preferred
     import conda_index.index
-    import conda_index.index.package_streaming
+    import conda_index.index.sqlitecache
 
-    cph_extract = mocker.spy(conda_index.index.package_streaming, "stream_conda_info")
+    cph_extract = mocker.spy(
+        conda_index.index.sqlitecache.package_streaming, "stream_conda_info"
+    )
     conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", debug=True
     )

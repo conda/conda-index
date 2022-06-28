@@ -18,11 +18,12 @@ from os.path import abspath, basename, getmtime, getsize, isfile, join
 from typing import NamedTuple
 from uuid import uuid4
 
+from conda.base.context import context
+
 #  BAD BAD BAD - conda internals
 from conda.core.subdir_data import SubdirData
-from conda.exports import MatchSpec, VersionOrder, human_bytes
+from conda.exports import MatchSpec, Resolve, VersionOrder, human_bytes
 from conda.models.channel import Channel
-from conda_build.conda_interface import Resolve, context
 from jinja2 import Environment, PackageLoader
 from tqdm import tqdm
 
@@ -281,7 +282,7 @@ def _get_jinja2_environment():
             return text
 
     environment = Environment(
-        loader=PackageLoader("conda_build", "templates"),
+        loader=PackageLoader("conda_index", "templates"),
     )
     environment.filters["human_bytes"] = human_bytes
     environment.filters["strftime"] = _filter_strftime
@@ -661,11 +662,6 @@ class ChannelIndex:
         return channeldata_file
 
     def index_subdir(self, subdir, verbose=False, progress=False):
-        return self.index_subdir_unidirectional(
-            subdir, verbose=verbose, progress=progress
-        )
-
-    def index_subdir_unidirectional(self, subdir, verbose=False, progress=False):
         """
         Return repodata from the cache without reading old repodata.json
 
