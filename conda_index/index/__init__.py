@@ -25,7 +25,6 @@ from conda.core.subdir_data import SubdirData
 from conda.exports import MatchSpec, Resolve, VersionOrder, human_bytes
 from conda.models.channel import Channel
 from jinja2 import Environment, PackageLoader
-from tqdm import tqdm
 
 from .. import utils
 from ..utils import (
@@ -771,11 +770,8 @@ class ChannelIndex:
         size_processed = 0
 
         with self.thread_executor_factory() as thread_executor:
-            for fn, mtime, size, index_json in tqdm(
-                thread_executor.map(extract_func, extract),
-                desc="hash & extract packages for %s" % subdir,
-                disable=(verbose or not progress),
-                leave=False,
+            for fn, mtime, size, index_json in thread_executor.map(
+                extract_func, extract
             ):
                 size_processed += size  # even if processed incorrectly
                 # fn can be None if the file was corrupt or no longer there
