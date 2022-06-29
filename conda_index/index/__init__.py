@@ -464,6 +464,14 @@ def _build_current_repodata(subdir, repodata, pins):
     return new_repodata
 
 
+def thread_executor_factory(debug, threads):
+    return (
+        DummyExecutor()
+        if (debug or sys.version_info.major == 2 or threads == 1)
+        else ProcessPoolExecutor(threads, initializer=logging_config)
+    )
+
+
 class ChannelIndex:
     def __init__(
         self,
@@ -482,10 +490,9 @@ class ChannelIndex:
         self.output_root = abspath(output_root) if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
         self._subdirs = subdirs
-        self.thread_executor_factory = lambda: (
-            DummyExecutor()
-            if (debug or sys.version_info.major == 2 or threads == 1)
-            else ProcessPoolExecutor(threads, initializer=logging_config)
+        # no lambdas in pickleable
+        self.thread_executor_factory = functools.partial(
+            thread_executor_factory, debug, threads
         )
         self.debug = debug
         self.deep_integrity_check = deep_integrity_check
@@ -540,74 +547,79 @@ class ChannelIndex:
 
                 # Collect repodata from packages, save to
                 # REPODATA_FROM_PKGS_JSON_FN file
-                t = tqdm(
-                    extract_subdirs_to_cache(),
-                    total=len(subdirs),
-                    disable=(verbose or not progress),
-                    leave=False,
-                )
-                for subdir in t:
-                    t.set_description("Subdir: %s" % subdir)
-                    t.update()
-                    with tqdm(
-                        total=8, disable=(verbose or not progress), leave=False
-                    ) as t2:
-                        t2.set_description("Gathering repodata")
-                        t2.update()
-                        log.debug("gather repodata")
-
-                        repodata_from_packages = self.index_subdir(
-                            subdir, verbose=verbose, progress=progress
+                with self.thread_executor_factory() as index_process:
+                    futures = [
+                        index_process.submit(
+                            functools.partial(
+                                self.index_prepared_subdir,
+                                subdir=subdir,
+                                verbose=verbose,
+                                progress=progress,
+                                patch_generator=patch_generator,
+                                current_index_versions=current_index_versions,
+                            )
                         )
+                        for subdir in extract_subdirs_to_cache()
+                    ]
+                    for f in futures:
+                        log.info(f"From subprocess {f.result()}")
 
-                        t2.set_description("Writing pre-patch repodata")
-                        t2.update()
-                        log.debug("write repodata")
-                        self._write_repodata(
-                            subdir,
-                            repodata_from_packages,
-                            REPODATA_FROM_PKGS_JSON_FN,
-                        )
+    def index_prepared_subdir(
+        self, subdir, verbose, progress, patch_generator, current_index_versions
+    ):
+        log.info("Subdir: %s", subdir)
+        log.info("Gathering repodata")
 
-                        # Apply patch instructions.
-                        t2.set_description("Applying patch instructions")
-                        t2.update()
-                        log.debug("apply patch instructions")
-                        patched_repodata, _ = self._patch_repodata(
-                            subdir, repodata_from_packages, patch_generator
-                        )
+        repodata_from_packages = self.index_subdir(
+            subdir, verbose=verbose, progress=progress
+        )
 
-                        # Save patched and augmented repodata. If the contents
-                        # of repodata have changed, write a new repodata.json.
-                        # Create associated index.html.
+        log.info("Writing pre-patch repodata")
+        self._write_repodata(
+            subdir,
+            repodata_from_packages,
+            REPODATA_FROM_PKGS_JSON_FN,
+        )
 
-                        t2.set_description("Writing patched repodata")
-                        t2.update()
-                        log.debug("%s write patched repodata", subdir)
-                        self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
+        # Apply patch instructions.
+        log.info("Applying patch instructions")
+        patched_repodata, _ = self._patch_repodata(
+            subdir, repodata_from_packages, patch_generator
+        )
 
-                        t2.set_description("Building current_repodata subset")
-                        t2.update()
-                        log.debug("%s build current_repodata", subdir)
-                        current_repodata = _build_current_repodata(
-                            subdir, patched_repodata, pins=current_index_versions
-                        )
+        # Save patched and augmented repodata. If the contents
+        # of repodata have changed, write a new repodata.json.
+        # Create associated index.html.
 
-                        t2.set_description("Writing current_repodata subset")
-                        t2.update()
-                        log.debug("%s write current_repodata", subdir)
-                        self._write_repodata(
-                            subdir,
-                            current_repodata,
-                            json_filename="current_repodata.json",
-                        )
+        log.info("Writing patched repodata")
 
-                        t2.set_description("Writing subdir index HTML")
-                        t2.update()
-                        log.debug("%s write index.html", subdir)
-                        self._write_subdir_index_html(subdir, patched_repodata)
+        log.debug("%s write patched repodata", subdir)
+        self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
-                        log.debug("%s finish", subdir)
+        log.info("Building current_repodata subset")
+
+        log.debug("%s build current_repodata", subdir)
+        current_repodata = _build_current_repodata(
+            subdir, patched_repodata, pins=current_index_versions
+        )
+
+        log.info("Writing current_repodata subset")
+
+        log.debug("%s write current_repodata", subdir)
+        self._write_repodata(
+            subdir,
+            current_repodata,
+            json_filename="current_repodata.json",
+        )
+
+        log.info("Writing subdir index HTML")
+
+        log.debug("%s write index.html", subdir)
+        self._write_subdir_index_html(subdir, patched_repodata)
+
+        log.debug("%s finish", subdir)
+
+        return subdir
 
     def update_channeldata(self):
         """
