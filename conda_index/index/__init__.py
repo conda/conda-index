@@ -61,6 +61,13 @@ class DummyExecutor(Executor):
             for thing in iterable:
                 yield func(thing)
 
+    def submit(self, func, *args, **kwargs):
+        class future:
+            def result(self):
+                return func(*args, **kwargs)
+
+        return future()
+
 
 local_index_timestamp = 0
 cached_index = None
@@ -467,7 +474,7 @@ def _build_current_repodata(subdir, repodata, pins):
 def thread_executor_factory(debug, threads):
     return (
         DummyExecutor()
-        if (debug or sys.version_info.major == 2 or threads == 1)
+        if (debug or threads == 1)
         else ProcessPoolExecutor(threads, initializer=logging_config)
     )
 
@@ -561,20 +568,21 @@ class ChannelIndex:
                         )
                         for subdir in extract_subdirs_to_cache()
                     ]
-                    for f in futures:
-                        log.info(f"From subprocess {f.result()}")
+                    # limited API to support DummyExecutor
+                    for future in futures:
+                        result = future.result()
+                        log.info(f"Completed {result}")
 
     def index_prepared_subdir(
         self, subdir, verbose, progress, patch_generator, current_index_versions
     ):
-        log.info("Subdir: %s", subdir)
-        log.info("Gathering repodata")
+        log.info("Subdir: %s Gathering repodata", subdir)
 
         repodata_from_packages = self.index_subdir(
             subdir, verbose=verbose, progress=progress
         )
 
-        log.info("Writing pre-patch repodata")
+        log.info("%s Writing pre-patch repodata", subdir)
         self._write_repodata(
             subdir,
             repodata_from_packages,
@@ -582,7 +590,7 @@ class ChannelIndex:
         )
 
         # Apply patch instructions.
-        log.info("Applying patch instructions")
+        log.info("%s Applying patch instructions", subdir)
         patched_repodata, _ = self._patch_repodata(
             subdir, repodata_from_packages, patch_generator
         )
@@ -591,19 +599,19 @@ class ChannelIndex:
         # of repodata have changed, write a new repodata.json.
         # Create associated index.html.
 
-        log.info("Writing patched repodata")
+        log.info("%s Writing patched repodata", subdir)
 
         log.debug("%s write patched repodata", subdir)
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
-        log.info("Building current_repodata subset")
+        log.info("%s Building current_repodata subset", subdir)
 
         log.debug("%s build current_repodata", subdir)
         current_repodata = _build_current_repodata(
             subdir, patched_repodata, pins=current_index_versions
         )
 
-        log.info("Writing current_repodata subset")
+        log.info("%s Writing current_repodata subset", subdir)
 
         log.debug("%s write current_repodata", subdir)
         self._write_repodata(
@@ -612,7 +620,7 @@ class ChannelIndex:
             json_filename="current_repodata.json",
         )
 
-        log.info("Writing subdir index HTML")
+        log.info("%s Writing index HTML", subdir)
 
         log.debug("%s write index.html", subdir)
         self._write_subdir_index_html(subdir, patched_repodata)
