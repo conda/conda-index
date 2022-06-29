@@ -16,9 +16,7 @@ dependencies = [
     "filelock",
     "jinja2",
     "more_itertools",
-    "psutil",
     "PyYAML >=6",
-    "tqdm",
     "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
