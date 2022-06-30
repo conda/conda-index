@@ -475,8 +475,12 @@ def thread_executor_factory(debug, threads):
     return (
         DummyExecutor()
         if (debug or threads == 1)
-        else ProcessPoolExecutor(threads, initializer=logging_config, mp_context=multiprocessing.get_context("spawn"))
-    ) # "fork" start method may cause hangs even on Linux?
+        else ProcessPoolExecutor(
+            threads,
+            initializer=logging_config,
+            mp_context=multiprocessing.get_context("spawn"),
+        )
+    )  # "fork" start method may cause hangs even on Linux?
 
 
 class ChannelIndex:
