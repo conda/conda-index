@@ -1,5 +1,5 @@
 """
-Updated command line interface for conda-channel.
+Updated command line interface for conda-index.
 """
 import logging
 import os.path
@@ -12,13 +12,12 @@ from conda_index.utils import DEFAULT_SUBDIRS
 
 @click.command()
 @click.argument("dir")
-@click.option("--output", help="Output repodata to given directory")
+@click.option("--repodata", help="Output repodata to given directory")
 @click.option(
     "--subdir",
     multiple=True,
-    default=DEFAULT_SUBDIRS,
+    default=None,
     help="Subdir to index. Accepts multiple.",
-    show_default=True,
 )
 @click.option(
     "-n",
@@ -39,7 +38,7 @@ from conda_index.utils import DEFAULT_SUBDIRS
     show_default=True,
 )
 @click.option(
-    "--write-bz2/--no-write-bz2",
+    "--bz2/--no-bz2",
     help="Write repodata.json.bz2?",
     default=False,
     show_default=True,
@@ -68,6 +67,8 @@ def cli(
     verbose=False,
     threads=None,
     current_index_versions_file=None,
+    channel_name=None,
+    bz2=False,
 ):
     logutil.configure()
     if verbose:
@@ -78,10 +79,10 @@ def cli(
 
     channel_index = ChannelIndex(
         os.path.expanduser(dir),
-        None,
+        channel_name=channel_name,
         output_root=repodata,
         subdirs=subdir,
-        write_bz2=True,
+        write_bz2=bz2,
         threads=threads,
     )
 
