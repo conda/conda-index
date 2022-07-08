@@ -92,7 +92,7 @@ LOCKFILE_NAME = ".lock"
 try:
     # Cython implementation of the toolz package
     # not itertools.groupby
-    from cytoolz.itertoolz import groupby
+    from cytoolz.itertoolz import groupby  # type: ignore
 except ImportError:  # pragma: no cover
     from conda._vendor.toolz.itertoolz import groupby  # NOQA
 
@@ -124,7 +124,7 @@ def update_index(
     check_md5=False,
     channel_name=None,
     patch_generator=None,
-    threads=MAX_THREADS_DEFAULT,
+    threads: (int | None) = MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
     subdirs=None,
@@ -489,13 +489,16 @@ class ChannelIndex:
         channel_root,
         channel_name,
         subdirs=None,
-        threads: int = MAX_THREADS_DEFAULT,
+        threads: (int | None) = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
         cache_class=sqlitecache.CondaIndexCache,
         write_bz2=False,
     ):
+        if threads is None:
+            threads = MAX_THREADS_DEFAULT
+
         self.cache_class = cache_class
         self.channel_root = abspath(channel_root)
         self.output_root = abspath(output_root) if output_root else self.channel_root

@@ -8,10 +8,10 @@ collections of conda packages.
 python -m conda_index <path to channel directory>
 ```
 
-## Run with extra logs
+## Run for debugging
 
 ```sh
-python -m conda_index.index --verbose --no-progress --threads=1 <path to channel directory>
+python -m conda_index --verbose --threads=1 <path to channel directory>
 ```
 
 ## Contributing

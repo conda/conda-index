@@ -1,0 +1,95 @@
+"""
+Updated command line interface for conda-channel.
+"""
+import logging
+import os.path
+
+import click
+
+from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
+from conda_index.utils import DEFAULT_SUBDIRS
+
+
+@click.command()
+@click.argument("dir")
+@click.option("--output", help="Output repodata to given directory")
+@click.option(
+    "--subdir",
+    multiple=True,
+    default=DEFAULT_SUBDIRS,
+    help="Subdir to index. Accepts multiple.",
+    show_default=True,
+)
+@click.option(
+    "-n",
+    "--channel-name",
+    help="Customize the channel name listed in each channel's index.html.",
+)
+@click.option(
+    "--patch-generator",
+    required=False,
+    help="Path to Python file that outputs metadata patch instructions from its "
+    "_patch_repodata function or a .tar.bz2/.conda file which contains a "
+    "patch_instructions.json file for each subdir",
+)
+@click.option(
+    "--channeldata/--no-channeldata",
+    help="Generate channeldata.json?",
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--write-bz2/--no-write-bz2",
+    help="Write repodata.json.bz2?",
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--current-index-versions-file",
+    "-m",
+    help="""
+        YAML file containing name of package as key, and list of versions as values.  The current_index.json
+        will contain the newest from this series of versions.  For example:
+
+        python:
+          - 3.8
+          - 3.9
+
+        will keep python 3.8.X and 3.9.Y in the current_index.json, instead of only the very latest python version.
+        """,
+)
+@click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
+def cli(
+    dir,
+    patch_generator=None,
+    subdir=None,
+    repodata=None,
+    channeldata=False,
+    verbose=False,
+    threads=None,
+    current_index_versions_file=None,
+):
+    logutil.configure()
+    if verbose:
+        logging.getLogger("conda_index.index").setLevel(logging.DEBUG)
+
+    if repodata:
+        repodata = os.path.expanduser(repodata)
+
+    channel_index = ChannelIndex(
+        os.path.expanduser(dir),
+        None,
+        output_root=repodata,
+        subdirs=subdir,
+        write_bz2=True,
+        threads=threads,
+    )
+
+    channel_index.index(
+        patch_generator=patch_generator,  # or will use outdated .py patch functions
+        current_index_versions=current_index_versions_file,
+        progress=False,  # clone is a batch job
+    )
+
+    if channeldata:  # about 2 1/2 minutes for conda-forge
+        channel_index.update_channeldata()

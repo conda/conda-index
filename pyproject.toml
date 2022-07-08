@@ -12,6 +12,7 @@ readme = "README.md"
 dynamic = ["version", "description"]
 requires-python = ">=3.9"
 dependencies = [
+    "click >=8",
     "conda >=4.12.0",
     "filelock",
     "jinja2",
@@ -36,3 +37,8 @@ conda-index = "conda_index.cli.main_index:main"
 
 [project.urls]
 Home = "https://github.com/conda-incubator/conda-index"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "--cov=conda_index"
+testpaths = ["tests"]
