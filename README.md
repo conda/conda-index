@@ -19,8 +19,9 @@ python -m conda_index --verbose --threads=1 <path to channel directory>
 ## Contributing
 
 ```sh
+conda create -n conda-index "python >=3.9" conda conda-build pip
 # pip >=22 is required for pip install -e conda-index
-conda create -n conda-index python=3.10 conda conda-build "pip >=22"
+pip install --upgrade pip # if pip < 22
 # in a parent directory
 git clone https://github.com/conda-incubator/conda-index.git
 pip install -e conda-index[test]
