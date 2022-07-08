@@ -25,6 +25,7 @@ from conda.base.context import context
 from conda.core.subdir_data import SubdirData
 from conda.exports import MatchSpec, Resolve, VersionOrder, human_bytes
 from conda.models.channel import Channel
+from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
 from .. import utils
@@ -1028,7 +1029,6 @@ class ChannelIndex:
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
-        from . import package_streaming
 
         target = "/".join((subdir, "patch_instructions.json"))
         for tar, member in package_streaming.stream_conda_component(

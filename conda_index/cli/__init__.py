@@ -12,7 +12,7 @@ from conda_index.utils import DEFAULT_SUBDIRS
 
 @click.command()
 @click.argument("dir")
-@click.option("--repodata", help="Output repodata to given directory")
+@click.option("--output", help="Output repodata to given directory")
 @click.option(
     "--subdir",
     multiple=True,
@@ -62,7 +62,7 @@ def cli(
     dir,
     patch_generator=None,
     subdir=None,
-    repodata=None,
+    output=None,
     channeldata=False,
     verbose=False,
     threads=None,
@@ -74,13 +74,13 @@ def cli(
     if verbose:
         logging.getLogger("conda_index.index").setLevel(logging.DEBUG)
 
-    if repodata:
-        repodata = os.path.expanduser(repodata)
+    if output:
+        output = os.path.expanduser(output)
 
     channel_index = ChannelIndex(
         os.path.expanduser(dir),
         channel_name=channel_name,
-        output_root=repodata,
+        output_root=output,
         subdirs=subdir,
         write_bz2=bz2,
         threads=threads,
