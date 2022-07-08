@@ -12,6 +12,8 @@ import conda_index.index
 import conda_index.index.convert_cache
 from conda_index.utils import _checksum
 
+PATCH_GENERATOR = os.path.join(os.path.dirname(__file__), "gen_patch.py")
+
 
 def test_coverage_1():
     conda_index.index.logging_config()
@@ -34,6 +36,21 @@ def test_ensure_valid_channel(testing_workdir):
 def test_bad_subdir(testing_workdir):
     with pytest.raises(SystemExit):
         conda_index.api.update_index(os.path.join(testing_workdir, "osx-64"))
+
+
+def test_no_noarch_and_patch_generator(testing_workdir):
+    # logs a warning if noarch is not indexed
+    conda_index.api.update_index(
+        testing_workdir, subdir="osx-64", patch_generator=PATCH_GENERATOR, threads=1
+    )
+
+    with pytest.raises(ValueError):
+        conda_index.api.update_index(
+            testing_workdir,
+            subdir="osx-64",
+            patch_generator="patch-generator-does-not-exist",
+            threads=1,
+        )
 
 
 def test_migrate_1():
@@ -59,3 +76,21 @@ def test_unknown_hash_algorithm():
 
     with pytest.raises(AttributeError):
         _checksum("not-a-real-file.txt", "sha0")
+
+
+def test_apply_instructions():
+    # how does this work? in any case, "revoke" requires "depends".
+    conda_index.index._apply_instructions(
+        "noarch",
+        {
+            "packages": {
+                "jim.tar.bz2": {"depends": []},
+                "bob.tar.bz2": {"depends": []},
+            },
+            "packages.conda": {
+                "jim.conda": {"depends": []},
+                "bob.conda": {"depends": []},
+            },
+        },
+        {"revoke": ["jim.tar.bz2"], "remove": ["bob.tar.bz2"]},
+    )

@@ -1045,20 +1045,14 @@ class ChannelIndex:
             log.debug(f"using patch generator {gen_patch_path} for {subdir}")
 
             # https://stackoverflow.com/a/41595552/2127762
-            try:
-                from importlib.util import module_from_spec, spec_from_file_location
+            from importlib.util import module_from_spec, spec_from_file_location
 
-                spec = spec_from_file_location("a_b", gen_patch_path)
-                if spec and spec.loader:
-                    mod = module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                else:
-                    raise ImportError()
-            # older pythons
-            except ImportError:
-                import imp
-
-                mod = imp.load_source("a_b", gen_patch_path)
+            spec = spec_from_file_location("a_b", gen_patch_path)
+            if spec and spec.loader:
+                mod = module_from_spec(spec)
+                spec.loader.exec_module(mod)
+            else:
+                raise ImportError()
 
             instructions = mod._patch_repodata(repodata, subdir)
 
