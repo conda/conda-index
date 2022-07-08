@@ -443,7 +443,10 @@ def test_file_index_noarch_osx64_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+    # test threads=1 flow
+    conda_index.index.update_index(
+        testing_workdir, channel_name="test-channel", threads=1
+    )
 
     # #######################################
     # tests for osx-64 subdir
@@ -1083,7 +1086,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     #     on which of those 2 existed in the cache.
     rm_rf(os.path.join(testing_workdir, "osx-64", "stat.json"))
     conda_index.index.update_index(
-        testing_workdir, channel_name="test-channel", debug=True
+        testing_workdir, channel_name="test-channel", verbose=True, debug=True
     )
 
     with open(join(testing_workdir, "osx-64", "repodata.json")) as fh:

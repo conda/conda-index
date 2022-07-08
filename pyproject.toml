@@ -26,6 +26,7 @@ dependencies = [
 test = [
     "conda-build >=3.21.0",
     "conda-package-handling >=1.7.3",
+    "coverage[toml]",
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
@@ -42,3 +43,6 @@ Home = "https://github.com/conda-incubator/conda-index"
 minversion = "7.0"
 addopts = "--cov=conda_index"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+concurrency = [ "multiprocessing", "thread" ]
