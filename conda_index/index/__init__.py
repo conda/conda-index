@@ -283,7 +283,6 @@ def _get_jinja2_environment():
     def _filter_add_href(text, link, **kwargs):
         if link:
             kwargs_list = [f'href="{link}"']
-            kwargs_list.append(f'alt="{text}"')
             kwargs_list += [f'{k}="{v}"' for k, v in kwargs.items()]
             return "<a {}>{}</a>".format(" ".join(kwargs_list), text)
         else:
