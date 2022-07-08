@@ -8,6 +8,8 @@ collections of conda packages.
 python -m conda_index <path to channel directory>
 ```
 
+Note `conda index` may find legacy `conda-build index` instead.
+
 ## Run for debugging
 
 ```sh

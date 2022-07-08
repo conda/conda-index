@@ -29,11 +29,10 @@ test = [
     "pytest-cov",
     "pytest-mock",
 ]
-# testing also requires the conda-build source code at the moment
 
 [project.scripts]
 # conflicts with conda-build's conda-index... which script will win?
-conda-index = "conda_index.cli.main_index:main"
+conda-index = "conda_index.cli:cli"
 
 [project.urls]
 Home = "https://github.com/conda-incubator/conda-index"
