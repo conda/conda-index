@@ -58,9 +58,7 @@ def test_index_on_single_subdir_1(testing_workdir):
     with open(join(testing_workdir, "osx-64", "repodata_from_packages.json")) as fh:
         actual_pkg_repodata_json = json.loads(fh.read())
     expected_repodata_json = {
-        "info": {
-            "subdir": "osx-64",
-        },
+        "info": {"subdir": "osx-64",},
         "packages": {
             "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2": {
                 "build": "py27h5e241af_0",
@@ -106,9 +104,7 @@ def test_index_on_single_subdir_1(testing_workdir):
                 "home": "https://anaconda.org/conda-test/conda-index-pkg-a",
                 "license": "BSD",
                 "source_git_url": "https://github.com/kalefranz/conda-test-packages.git",
-                "subdirs": [
-                    "osx-64",
-                ],
+                "subdirs": ["osx-64",],
                 "summary": "Summary field for conda-index-pkg-a",
                 "version": "1.0",
                 "activate.d": False,
@@ -156,9 +152,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
     with open(join(testing_workdir, "osx-64", "repodata_from_packages.json")) as fh:
         actual_pkg_repodata_json = json.loads(fh.read())
     expected_repodata_json = {
-        "info": {
-            "subdir": "osx-64",
-        },
+        "info": {"subdir": "osx-64",},
         "packages": {
             "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2": {
                 "build": "py27h5e241af_0",
@@ -252,9 +246,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
                 "home": "https://anaconda.org/conda-test/conda-index-pkg-a",
                 "license": "BSD",
                 "source_git_url": "https://github.com/kalefranz/conda-test-packages.git",
-                "subdirs": [
-                    "osx-64",
-                ],
+                "subdirs": ["osx-64",],
                 "summary": "Summary field for conda-index-pkg-a",
                 "version": "1.0",
                 "activate.d": False,
@@ -347,9 +339,7 @@ def test_index_noarch_osx64_1(testing_workdir):
     with open(join(testing_workdir, "noarch", "repodata_from_packages.json")) as fh:
         actual_pkg_repodata_json = json.loads(fh.read())
     expected_repodata_json = {
-        "info": {
-            "subdir": "noarch",
-        },
+        "info": {"subdir": "noarch",},
         "packages": {
             "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2": {
                 "build": "pyhed9eced_1",
@@ -397,10 +387,7 @@ def test_index_noarch_osx64_1(testing_workdir):
                 "license": "BSD",
                 "source_git_url": "https://github.com/kalefranz/conda-test-packages.git",
                 "source_url": None,
-                "subdirs": [
-                    "noarch",
-                    "osx-64",
-                ],
+                "subdirs": ["noarch", "osx-64",],
                 "summary": "Summary field for conda-index-pkg-a. This is the python noarch version.",  # <- tests that the higher noarch build number is the data collected
                 "version": "1.0",
                 "activate.d": False,
@@ -420,10 +407,7 @@ def test_index_noarch_osx64_1(testing_workdir):
                 "recipe_origin": None,
             }
         },
-        "subdirs": [
-            "noarch",
-            "osx-64",
-        ],
+        "subdirs": ["noarch", "osx-64",],
     }
     assert actual_channeldata_json == expected_channeldata_json
 
@@ -468,9 +452,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
     with open(join(testing_workdir, "noarch", "repodata_from_packages.json")) as fh:
         actual_pkg_repodata_json = json.loads(fh.read())
     expected_repodata_json = {
-        "info": {
-            "subdir": "noarch",
-        },
+        "info": {"subdir": "noarch",},
         "packages": {
             "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2": {
                 "build": "pyhed9eced_1",
@@ -584,10 +566,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
                 "license": "BSD",
                 "source_git_url": "https://github.com/kalefranz/conda-test-packages.git",
                 "source_url": None,
-                "subdirs": [
-                    "noarch",
-                    "osx-64",
-                ],
+                "subdirs": ["noarch", "osx-64",],
                 "summary": "Summary field for conda-index-pkg-a. This is the python noarch version.",  # <- tests that the higher noarch build number is the data collected
                 "version": "1.0",
                 "activate.d": False,
@@ -636,10 +615,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
                 "version": "0.11.1",
             },
         },
-        "subdirs": [
-            "noarch",
-            "osx-64",
-        ],
+        "subdirs": ["noarch", "osx-64",],
     }
     assert actual_channeldata_json == expected_channeldata_json
 
@@ -733,9 +709,7 @@ def _patch_repodata(repodata, subdir):
     # indexing a second time with the same patchset should keep the removals
     for i in (1, 2):
         conda_index.index.update_index(
-            testing_workdir,
-            patch_generator=patch_file,
-            verbose=True,
+            testing_workdir, patch_generator=patch_file, verbose=True,
         )
         with open(os.path.join(testing_workdir, TEST_SUBDIR, "repodata.json")) as f:
             patched_metadata = json.load(f)
@@ -1039,9 +1013,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
         actual_repodata_json = json.loads(fh.read())
 
     expected_repodata_json = {
-        "info": {
-            "subdir": "osx-64",
-        },
+        "info": {"subdir": "osx-64",},
         "packages": {
             "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2": {
                 "build": "py27h5e241af_0",
@@ -1121,9 +1093,7 @@ def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
         actual_repodata_json = json.loads(fh.read())
 
     expected_repodata_json = {
-        "info": {
-            "subdir": "osx-64",
-        },
+        "info": {"subdir": "osx-64",},
         "packages": {
             "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2": {
                 "build": "py27h5e241af_0",
