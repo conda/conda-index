@@ -43,10 +43,7 @@ def parse_args(args):
         "" % ", ".join(DEFAULT_SUBDIRS),
     )
     p.add_argument(
-        "-t",
-        "--threads",
-        default=MAX_THREADS_DEFAULT,
-        type=int,
+        "-t", "--threads", default=MAX_THREADS_DEFAULT, type=int,
     )
     p.add_argument(
         "-p",
