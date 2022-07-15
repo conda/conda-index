@@ -46,15 +46,6 @@ def logging_config():
     conda_index.index.logutil.configure()
 
 
-def ensure_binary(value):
-    try:
-        return value.encode("utf-8")
-    except AttributeError:  # pragma: no cover
-        # AttributeError: '<>' object has no attribute 'encode'
-        # In this case assume already binary type and do nothing
-        return value
-
-
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
 class DummyExecutor(Executor):
     def map(self, func, *iterables):
@@ -824,9 +815,7 @@ class ChannelIndex:
             repodata_bz2_path = repodata_json_path + ".bz2"
             if self.write_bz2:
                 bz2_content = bz2.compress(new_repodata_binary)
-                self._maybe_write(
-                    repodata_bz2_path, bz2_content, content_is_binary=True
-                )
+                self._maybe_write(repodata_bz2_path, bz2_content)
             else:
                 self._maybe_remove(repodata_bz2_path)
         return write_result
@@ -859,13 +848,15 @@ class ChannelIndex:
         rendered_html = _make_subdir_index_html(
             self.channel_name, subdir, repodata_packages, extra_paths
         )
+        assert rendered_html
         index_path = join(subdir_path, "index.html")
-        return self._maybe_write(index_path, rendered_html)
+        return self._maybe_write(index_path, rendered_html.encode("utf-8"))
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
+        assert rendered_html
         index_path = join(self.channel_root, "index.html")
-        self._maybe_write(index_path, rendered_html)
+        self._maybe_write(index_path, rendered_html.encode("utf-8"))
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
@@ -1030,7 +1021,7 @@ class ChannelIndex:
             if "commits" in pkg_dict:
                 del pkg_dict["commits"]
         channeldata_path = join(self.channel_root, "channeldata.json")
-        content = json.dumps(channeldata, indent=2, sort_keys=True)
+        content = json.dumps(channeldata, indent=2, sort_keys=True).encode("utf-8")
         self._maybe_write(channeldata_path, content, True)
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
@@ -1078,7 +1069,7 @@ class ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
+        new_patch = json.dumps(instructions, indent=2, sort_keys=True).encode("utf-8")
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )
@@ -1115,9 +1106,7 @@ class ChannelIndex:
 
         return _apply_instructions(subdir, repodata, instructions), instructions
 
-    def _maybe_write(
-        self, path, content, write_newline_end=False, content_is_binary=False
-    ):
+    def _maybe_write(self, path, content: bytes, write_newline_end=False):
         # Create the temp file next "path" so that we can use an atomic move, see
         # https://github.com/conda/conda-build/issues/3833
         temp_path = f"{path}.{uuid4()}"
@@ -1134,9 +1123,6 @@ class ChannelIndex:
         os.makedirs(os.path.dirname(output_temp_path), exist_ok=True)
 
         log.debug(f"_maybe_write {path} to {output_path}")
-
-        if not content_is_binary:
-            content = ensure_binary(content)
 
         return self._maybe_write_output_paths(
             content, output_path, output_temp_path, write_newline_end
