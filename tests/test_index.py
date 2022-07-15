@@ -524,7 +524,7 @@ def test_file_index_noarch_osx64_1(testing_workdir):
 
     # only tell index to index one of them and then assert that it was added
     p = os.path.join(testing_workdir, "index_file")
-    with open(os.path.join(testing_workdir, "index_file"), "a+") as fh:
+    with open(p, "a+") as fh:
         fh.write("noarch/flask-0.11.1-py_0.tar.bz2\n")
         fh.write("osx/fly-2.5.2-0.tar.bz2\n")
 

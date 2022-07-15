@@ -931,11 +931,11 @@ class ChannelIndex:
                 )
                 _append_group(groups, candidate)
 
-        def _replace_if_newer_and_present(pd, data, erec, data_newer, k):
-            if data.get(k) and (data_newer or not erec.get(k)):
+        def _replace_if_newer_and_present(pd, data, existing_record, data_newer, k):
+            if data.get(k) and (data_newer or not existing_record.get(k)):
                 pd[k] = data[k]
             else:
-                pd[k] = erec.get(k)
+                pd[k] = existing_record.get(k)
 
         # unzipping
         fns, fn_dicts = [], []
@@ -950,10 +950,15 @@ class ChannelIndex:
                     data.update(fn_dict)
                     name = data["name"]
                     # existing record
-                    erec = package_data.get(name, {})
+                    existing_record = package_data.get(name, {})
                     data_v = data.get("version", "0")
-                    erec_v = erec.get("version", "0")
-                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v)
+                    erec_v = existing_record.get("version", "0")
+                    # are timestamps already normalized to seconds?
+                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v) or (
+                        data_v == erec_v
+                        and _make_seconds(data.get("timestamp", 0))
+                        > _make_seconds(existing_record.get("timestamp", 0))
+                    )
 
                     package_data[name] = package_data.get(name, {})
                     # keep newer value for these
@@ -976,7 +981,7 @@ class ChannelIndex:
                         "version",
                     ):
                         _replace_if_newer_and_present(
-                            package_data[name], data, erec, data_newer, k
+                            package_data[name], data, existing_record, data_newer, k
                         )
 
                     # keep any true value for these, since we don't distinguish subdirs
@@ -989,13 +994,15 @@ class ChannelIndex:
                         "post_link",
                         "pre_unlink",
                     ):
-                        package_data[name][k] = any((data.get(k), erec.get(k)))
+                        package_data[name][k] = any(
+                            (data.get(k), existing_record.get(k))
+                        )
 
                     package_data[name]["subdirs"] = sorted(
-                        list(set(erec.get("subdirs", []) + [subdir]))
+                        list(set(existing_record.get("subdirs", []) + [subdir]))
                     )
                     # keep one run_exports entry per version of the package, since these vary by version
-                    run_exports = erec.get("run_exports", {})
+                    run_exports = existing_record.get("run_exports", {})
                     exports_from_this_version = data.get("run_exports")
                     if exports_from_this_version:
                         run_exports[data_v] = data.get("run_exports")
