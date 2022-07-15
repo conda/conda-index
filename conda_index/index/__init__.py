@@ -899,9 +899,9 @@ class ChannelIndex:
             # run_exports.
 
             # This is more deterministic than, but slower than the old "newest
-            # timestamp across all versions if no run_exports". When
-            # channeldata.json is not being built from scratch the speed
-            # difference is not noticable.
+            # timestamp across all versions if no run_exports", unsatisfying
+            # when old versions get new builds. When channeldata.json is not
+            # being built from scratch the speed difference is not noticable.
             for vgroup in groupby(lambda x: x[1]["version"], group).values():
                 candidate = next(
                     iter(
