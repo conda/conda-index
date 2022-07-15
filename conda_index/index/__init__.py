@@ -25,6 +25,7 @@ from conda.base.context import context
 from conda.core.subdir_data import SubdirData
 from conda.exports import MatchSpec, Resolve, VersionOrder, human_bytes
 from conda.models.channel import Channel
+from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
 from .. import utils
@@ -92,7 +93,7 @@ LOCKFILE_NAME = ".lock"
 try:
     # Cython implementation of the toolz package
     # not itertools.groupby
-    from cytoolz.itertoolz import groupby
+    from cytoolz.itertoolz import groupby  # type: ignore
 except ImportError:  # pragma: no cover
     from conda._vendor.toolz.itertoolz import groupby  # NOQA
 
@@ -124,7 +125,7 @@ def update_index(
     check_md5=False,
     channel_name=None,
     patch_generator=None,
-    threads=MAX_THREADS_DEFAULT,
+    threads: (int | None) = MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
     subdirs=None,
@@ -282,7 +283,6 @@ def _get_jinja2_environment():
     def _filter_add_href(text, link, **kwargs):
         if link:
             kwargs_list = [f'href="{link}"']
-            kwargs_list.append(f'alt="{text}"')
             kwargs_list += [f'{k}="{v}"' for k, v in kwargs.items()]
             return "<a {}>{}</a>".format(" ".join(kwargs_list), text)
         else:
@@ -475,8 +475,12 @@ def thread_executor_factory(debug, threads):
     return (
         DummyExecutor()
         if (debug or threads == 1)
-        else ProcessPoolExecutor(threads, initializer=logging_config, mp_context=multiprocessing.get_context("spawn"))
-    ) # "fork" start method may cause hangs even on Linux?
+        else ProcessPoolExecutor(
+            threads,
+            initializer=logging_config,
+            mp_context=multiprocessing.get_context("spawn"),
+        )
+    )  # "fork" start method may cause hangs even on Linux?
 
 
 class ChannelIndex:
@@ -485,13 +489,16 @@ class ChannelIndex:
         channel_root,
         channel_name,
         subdirs=None,
-        threads: int = MAX_THREADS_DEFAULT,
+        threads: (int | None) = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
         cache_class=sqlitecache.CondaIndexCache,
         write_bz2=False,
     ):
+        if threads is None:
+            threads = MAX_THREADS_DEFAULT
+
         self.cache_class = cache_class
         self.channel_root = abspath(channel_root)
         self.output_root = abspath(output_root) if output_root else self.channel_root
@@ -1021,7 +1028,6 @@ class ChannelIndex:
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
-        from . import package_streaming
 
         target = "/".join((subdir, "patch_instructions.json"))
         for tar, member in package_streaming.stream_conda_component(
@@ -1039,20 +1045,14 @@ class ChannelIndex:
             log.debug(f"using patch generator {gen_patch_path} for {subdir}")
 
             # https://stackoverflow.com/a/41595552/2127762
-            try:
-                from importlib.util import module_from_spec, spec_from_file_location
+            from importlib.util import module_from_spec, spec_from_file_location
 
-                spec = spec_from_file_location("a_b", gen_patch_path)
-                if spec and spec.loader:
-                    mod = module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                else:
-                    raise ImportError()
-            # older pythons
-            except ImportError:
-                import imp
-
-                mod = imp.load_source("a_b", gen_patch_path)
+            spec = spec_from_file_location("a_b", gen_patch_path)
+            if spec and spec.loader:
+                mod = module_from_spec(spec)
+                spec.loader.exec_module(mod)
+            else:
+                raise ImportError()
 
             instructions = mod._patch_repodata(repodata, subdir)
 
