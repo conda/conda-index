@@ -892,31 +892,23 @@ class ChannelIndex:
         groups = []
         package_groups = groupby(lambda x: x[1]["name"], all_repodata_packages.items())
         for groupname, group in package_groups.items():
-            if groupname not in package_data or package_data[groupname].get(
-                "run_exports"
-            ):
-                # Pay special attention to groups that have run_exports - we
-                # need to process each version group by version; take newest per
-                # version group.  We handle groups that are not in the index at
-                # all yet similarly, because we can't check if they have any
-                # run_exports
-                for vgroup in groupby(lambda x: x[1]["version"], group).values():
-                    candidate = next(
-                        iter(
-                            sorted(
-                                vgroup,
-                                key=lambda x: x[1].get("timestamp", 0),
-                                reverse=True,
-                            )
-                        )
-                    )
-                    _append_group(groups, candidate)
-            else:
-                # take newest per group
+            # Pay special attention to groups that have run_exports - we
+            # need to process each version group by version; take newest per
+            # version group.  We handle groups that are not in the index at
+            # all yet similarly, because we can't check if they have any
+            # run_exports.
+
+            # This is more deterministic than, but slower than the old "newest
+            # timestamp across all versions if no run_exports". When
+            # channeldata.json is not being built from scratch the speed
+            # difference is not noticable.
+            for vgroup in groupby(lambda x: x[1]["version"], group).values():
                 candidate = next(
                     iter(
                         sorted(
-                            group, key=lambda x: x[1].get("timestamp", 0), reverse=True
+                            vgroup,
+                            key=lambda x: x[1].get("timestamp", 0),
+                            reverse=True,
                         )
                     )
                 )
