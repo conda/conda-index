@@ -803,18 +803,18 @@ class ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        new_repodata_binary = json.dumps(
+        new_repodata = json.dumps(
             repodata,
             indent=2,
             sort_keys=True,
-        ).encode("utf-8")
+        )
         write_result = self._maybe_write(
-            repodata_json_path, new_repodata_binary, write_newline_end=True
+            repodata_json_path, new_repodata, write_newline_end=True
         )
         if write_result:
             repodata_bz2_path = repodata_json_path + ".bz2"
             if self.write_bz2:
-                bz2_content = bz2.compress(new_repodata_binary)
+                bz2_content = bz2.compress(new_repodata.encode("utf-8"))
                 self._maybe_write(repodata_bz2_path, bz2_content)
             else:
                 self._maybe_remove(repodata_bz2_path)
@@ -850,13 +850,13 @@ class ChannelIndex:
         )
         assert rendered_html
         index_path = join(subdir_path, "index.html")
-        return self._maybe_write(index_path, rendered_html.encode("utf-8"))
+        return self._maybe_write(index_path, rendered_html)
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
         assert rendered_html
         index_path = join(self.channel_root, "index.html")
-        self._maybe_write(index_path, rendered_html.encode("utf-8"))
+        self._maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
@@ -1013,7 +1013,7 @@ class ChannelIndex:
             if "commits" in pkg_dict:
                 del pkg_dict["commits"]
         channeldata_path = join(self.channel_root, "channeldata.json")
-        content = json.dumps(channeldata, indent=2, sort_keys=True).encode("utf-8")
+        content = json.dumps(channeldata, indent=2, sort_keys=True)
         self._maybe_write(channeldata_path, content, True)
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
@@ -1061,7 +1061,7 @@ class ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True).encode("utf-8")
+        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )
@@ -1098,7 +1098,7 @@ class ChannelIndex:
 
         return _apply_instructions(subdir, repodata, instructions), instructions
 
-    def _maybe_write(self, path, content: bytes, write_newline_end=False):
+    def _maybe_write(self, path, content: str | bytes, write_newline_end=False):
         # Create the temp file next "path" so that we can use an atomic move, see
         # https://github.com/conda/conda-build/issues/3833
         temp_path = f"{path}.{uuid4()}"
@@ -1121,16 +1121,26 @@ class ChannelIndex:
         )
 
     def _maybe_write_output_paths(
-        self, content, output_path, output_temp_path, write_newline_end
+        self, content: str | bytes, output_path, output_temp_path, write_newline_end
     ):
         """
         Internal to _maybe_write.
         """
 
-        with open(output_temp_path, "wb") as fh:
+        if isinstance(content, str):
+            mode = "w"
+            opts = {"encoding": "utf-8"}
+            newline = "\n"
+        else:
+            mode = "wb"
+            opts = {}
+            newline = b"\n"
+
+        with open(output_temp_path, mode=mode, **opts) as fh:
             fh.write(content)
             if write_newline_end:
-                fh.write(b"\n")
+                fh.write(newline)
+
         if isfile(output_path):
             if utils.file_contents_match(output_temp_path, output_path):
                 # No need to change mtimes. The contents already match.
