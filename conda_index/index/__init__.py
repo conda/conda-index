@@ -1129,14 +1129,14 @@ class ChannelIndex:
 
         if isinstance(content, str):
             mode = "w"
-            opts = {"encoding": "utf-8"}
+            encoding = "utf-8"
             newline = "\n"
         else:
             mode = "wb"
-            opts = {}
+            encoding = None
             newline = b"\n"
 
-        with open(output_temp_path, mode=mode, **opts) as fh:
+        with open(output_temp_path, mode=mode, encoding=encoding) as fh:
             fh.write(content)
             if write_newline_end:
                 fh.write(newline)
