@@ -46,15 +46,6 @@ def logging_config():
     conda_index.index.logutil.configure()
 
 
-def ensure_binary(value):
-    try:
-        return value.encode("utf-8")
-    except AttributeError:  # pragma: no cover
-        # AttributeError: '<>' object has no attribute 'encode'
-        # In this case assume already binary type and do nothing
-        return value
-
-
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
 class DummyExecutor(Executor):
     def map(self, func, *iterables):
@@ -812,21 +803,19 @@ class ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        new_repodata_binary = json.dumps(
+        new_repodata = json.dumps(
             repodata,
             indent=2,
             sort_keys=True,
-        ).encode("utf-8")
+        )
         write_result = self._maybe_write(
-            repodata_json_path, new_repodata_binary, write_newline_end=True
+            repodata_json_path, new_repodata, write_newline_end=True
         )
         if write_result:
             repodata_bz2_path = repodata_json_path + ".bz2"
             if self.write_bz2:
-                bz2_content = bz2.compress(new_repodata_binary)
-                self._maybe_write(
-                    repodata_bz2_path, bz2_content, content_is_binary=True
-                )
+                bz2_content = bz2.compress(new_repodata.encode("utf-8"))
+                self._maybe_write(repodata_bz2_path, bz2_content)
             else:
                 self._maybe_remove(repodata_bz2_path)
         return write_result
@@ -859,11 +848,13 @@ class ChannelIndex:
         rendered_html = _make_subdir_index_html(
             self.channel_name, subdir, repodata_packages, extra_paths
         )
+        assert rendered_html
         index_path = join(subdir_path, "index.html")
         return self._maybe_write(index_path, rendered_html)
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
+        assert rendered_html
         index_path = join(self.channel_root, "index.html")
         self._maybe_write(index_path, rendered_html)
 
@@ -901,41 +892,33 @@ class ChannelIndex:
         groups = []
         package_groups = groupby(lambda x: x[1]["name"], all_repodata_packages.items())
         for groupname, group in package_groups.items():
-            if groupname not in package_data or package_data[groupname].get(
-                "run_exports"
-            ):
-                # Pay special attention to groups that have run_exports - we
-                # need to process each version group by version; take newest per
-                # version group.  We handle groups that are not in the index at
-                # all yet similarly, because we can't check if they have any
-                # run_exports
-                for vgroup in groupby(lambda x: x[1]["version"], group).values():
-                    candidate = next(
-                        iter(
-                            sorted(
-                                vgroup,
-                                key=lambda x: x[1].get("timestamp", 0),
-                                reverse=True,
-                            )
-                        )
-                    )
-                    _append_group(groups, candidate)
-            else:
-                # take newest per group
+            # Pay special attention to groups that have run_exports - we
+            # need to process each version group by version; take newest per
+            # version group.  We handle groups that are not in the index at
+            # all yet similarly, because we can't check if they have any
+            # run_exports.
+
+            # This is more deterministic than, but slower than the old "newest
+            # timestamp across all versions if no run_exports", unsatisfying
+            # when old versions get new builds. When channeldata.json is not
+            # being built from scratch the speed difference is not noticable.
+            for vgroup in groupby(lambda x: x[1]["version"], group).values():
                 candidate = next(
                     iter(
                         sorted(
-                            group, key=lambda x: x[1].get("timestamp", 0), reverse=True
+                            vgroup,
+                            key=lambda x: x[1].get("timestamp", 0),
+                            reverse=True,
                         )
                     )
                 )
                 _append_group(groups, candidate)
 
-        def _replace_if_newer_and_present(pd, data, erec, data_newer, k):
-            if data.get(k) and (data_newer or not erec.get(k)):
+        def _replace_if_newer_and_present(pd, data, existing_record, data_newer, k):
+            if data.get(k) and (data_newer or not existing_record.get(k)):
                 pd[k] = data[k]
             else:
-                pd[k] = erec.get(k)
+                pd[k] = existing_record.get(k)
 
         # unzipping
         fns, fn_dicts = [], []
@@ -950,10 +933,15 @@ class ChannelIndex:
                     data.update(fn_dict)
                     name = data["name"]
                     # existing record
-                    erec = package_data.get(name, {})
+                    existing_record = package_data.get(name, {})
                     data_v = data.get("version", "0")
-                    erec_v = erec.get("version", "0")
-                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v)
+                    erec_v = existing_record.get("version", "0")
+                    # are timestamps already normalized to seconds?
+                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v) or (
+                        data_v == erec_v
+                        and _make_seconds(data.get("timestamp", 0))
+                        > _make_seconds(existing_record.get("timestamp", 0))
+                    )
 
                     package_data[name] = package_data.get(name, {})
                     # keep newer value for these
@@ -976,7 +964,7 @@ class ChannelIndex:
                         "version",
                     ):
                         _replace_if_newer_and_present(
-                            package_data[name], data, erec, data_newer, k
+                            package_data[name], data, existing_record, data_newer, k
                         )
 
                     # keep any true value for these, since we don't distinguish subdirs
@@ -989,13 +977,15 @@ class ChannelIndex:
                         "post_link",
                         "pre_unlink",
                     ):
-                        package_data[name][k] = any((data.get(k), erec.get(k)))
+                        package_data[name][k] = any(
+                            (data.get(k), existing_record.get(k))
+                        )
 
                     package_data[name]["subdirs"] = sorted(
-                        list(set(erec.get("subdirs", []) + [subdir]))
+                        list(set(existing_record.get("subdirs", []) + [subdir]))
                     )
                     # keep one run_exports entry per version of the package, since these vary by version
-                    run_exports = erec.get("run_exports", {})
+                    run_exports = existing_record.get("run_exports", {})
                     exports_from_this_version = data.get("run_exports")
                     if exports_from_this_version:
                         run_exports[data_v] = data.get("run_exports")
@@ -1108,9 +1098,7 @@ class ChannelIndex:
 
         return _apply_instructions(subdir, repodata, instructions), instructions
 
-    def _maybe_write(
-        self, path, content, write_newline_end=False, content_is_binary=False
-    ):
+    def _maybe_write(self, path, content: str | bytes, write_newline_end=False):
         # Create the temp file next "path" so that we can use an atomic move, see
         # https://github.com/conda/conda-build/issues/3833
         temp_path = f"{path}.{uuid4()}"
@@ -1128,24 +1116,31 @@ class ChannelIndex:
 
         log.debug(f"_maybe_write {path} to {output_path}")
 
-        if not content_is_binary:
-            content = ensure_binary(content)
-
         return self._maybe_write_output_paths(
             content, output_path, output_temp_path, write_newline_end
         )
 
     def _maybe_write_output_paths(
-        self, content, output_path, output_temp_path, write_newline_end
+        self, content: str | bytes, output_path, output_temp_path, write_newline_end
     ):
         """
         Internal to _maybe_write.
         """
 
-        with open(output_temp_path, "wb") as fh:
+        if isinstance(content, str):
+            mode = "w"
+            encoding = "utf-8"
+            newline = "\n"
+        else:
+            mode = "wb"
+            encoding = None
+            newline = b"\n"
+
+        with open(output_temp_path, mode=mode, encoding=encoding) as fh:
             fh.write(content)
             if write_newline_end:
-                fh.write(b"\n")
+                fh.write(newline)
+
         if isfile(output_path):
             if utils.file_contents_match(output_temp_path, output_path):
                 # No need to change mtimes. The contents already match.

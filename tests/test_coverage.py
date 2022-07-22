@@ -17,7 +17,6 @@ PATCH_GENERATOR = os.path.join(os.path.dirname(__file__), "gen_patch.py")
 
 def test_coverage_1():
     conda_index.index.logging_config()
-    conda_index.index.ensure_binary(b"")
 
 
 def test_dummy_executor():
