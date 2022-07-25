@@ -33,6 +33,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
+from . import rss
 from . import sqlitecache
 
 log = logging.getLogger(__name__)
@@ -320,6 +321,10 @@ def _make_channeldata_index_html(channel_name, channeldata):
         current_time=datetime.now(timezone.utc),
     )
     return rendered_html
+
+
+def _make_rss(channel_name, channeldata, threshold_days=14):
+    return rss.get_rss(channel_name, channeldata, threshold_days)
 
 
 def _get_resolve_object(subdir, precs=None, repodata=None):
@@ -655,6 +660,9 @@ class ChannelIndex:
 
             log.debug("%s channeldata finished", subdir)
 
+        # Create and write the rss feed.
+        self._write_rss(channel_data)
+
         # Create and write channeldata.
         self._write_channeldata_index_html(channel_data)
         log.debug("write channeldata")
@@ -848,6 +856,11 @@ class ChannelIndex:
         )
         index_path = join(subdir_path, "index.html")
         return self._maybe_write(index_path, rendered_html)
+
+    def _write_rss(self, channeldata):
+        rss = _make_rss(self.channel_name, channeldata)
+        rss_path = join(self.channel_root, "rss.xml")
+        self._maybe_write(rss_path, rss)
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
