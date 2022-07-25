@@ -65,8 +65,8 @@ class rssTest(unittest.TestCase):
 
     def testGetRecentPackages(self):
         actual = rss.get_recent_packages(self.channeldata, 2)
-        expected = [{"example1": self.channeldata["packages"]["example1"]}]
-        self.assertDictEqual(actual[0], expected[0])
+        expected = [("example1", self.channeldata["packages"]["example1"])]
+        self.assertDictEqual(actual[0][1], expected[0][1])
 
     def testGetChannel(self):
         packages = rss.get_recent_packages(self.channeldata, 2)
@@ -93,8 +93,9 @@ class rssTest(unittest.TestCase):
 
     def testGetItems(self):
         packages = [
-            {
-                "example1": {
+            (
+                "example1",
+                {
                     "description": "Long description.",
                     "dev_url": None,
                     "doc_source_url": None,
@@ -107,8 +108,8 @@ class rssTest(unittest.TestCase):
                     "summary": "Short description",
                     "timestamp": time.time() - 1 * _DAY,
                     "version": "123",
-                }
-            }
+                },
+            )
         ]
         actual = rss._get_items(packages)
         expected = [
