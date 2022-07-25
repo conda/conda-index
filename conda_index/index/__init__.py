@@ -315,8 +315,8 @@ def _make_channeldata_index_html(channel_name, channeldata):
     return rendered_html
 
 
-def _make_rss(channel_name, channeldata, threshold_days=14):
-    return rss.get_rss(channel_name, channeldata, threshold_days)
+def _make_rss(channel_name, channeldata):
+    return rss.get_rss(channel_name, channeldata)
 
 
 def _get_resolve_object(subdir, precs=None, repodata=None):
@@ -860,9 +860,11 @@ class ChannelIndex:
         return self._maybe_write(index_path, rendered_html)
 
     def _write_rss(self, channeldata):
+        log.info("Build RSS")
         rss = _make_rss(self.channel_name, channeldata)
         rss_path = join(self.channel_root, "rss.xml")
         self._maybe_write(rss_path, rss)
+        log.info("Built RSS")
 
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)

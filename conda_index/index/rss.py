@@ -1,38 +1,33 @@
+"""
+Generate RSS feed from channeldata.
+"""
+from __future__ import annotations
+
 import time
-from xml.dom.minidom import getDOMImplementation
+from xml.dom import minidom
 
 
-def get_recent_packages(channeldata, threshold_days):
-
-    threshold = time.time() - threshold_days * 24 * 60 * 60
-
-    def all_packages():
-        for name, package in channeldata.get("packages", {}).items():
-            yield {name: package}
-        for name, package in channeldata.get("packages.conda", {}).items():
-            yield {name: package}
-
-    def find_recent_packages():
-        for package in all_packages():
-            if tuple(package.values())[0].get("timestamp", threshold) > threshold:
-                yield package
-
-    return sorted(
-        find_recent_packages(),
-        key=lambda x: tuple(x.values())[0]["timestamp"],
-        reverse=True,
-    )
+# Should we have either n packages or m days?
+def get_recent_packages(channeldata, threshold_packages=100):
+    return [
+        dict((item,))
+        for item in sorted(
+            channeldata["packages"].items(),
+            key=lambda item: item[1].get("timestamp", 0),
+            reverse=True,
+        )[:threshold_packages]
+    ]
 
 
 def _iso822(timestamp):
     return time.strftime("%a, %d %b %Y %T GMT", time.gmtime(timestamp))
 
 
-def _get_channel(channel_name, packages, threshold_days):
+def _get_channel(channel_name, packages):
     return {
         "title": f"anaconda.org/{channel_name}",
         "link": f"https://conda.anaconda.org/{channel_name}",
-        "description": f"An anaconda.org community with {len(packages)} package updates in the past {threshold_days} days.",
+        "description": f"The most recent {len(packages)} updates for {channel_name}.",
         "pubDate": _iso822(time.time()),
         "lastBuildDate": _iso822(time.time()),
     }
@@ -70,28 +65,28 @@ def _get_items(packages):
     return items
 
 
-def get_rss(channel_name, channeldata, threshold_days):
-    newdoc = getDOMImplementation().createDocument(None, "rss", None)
+def get_rss(channel_name, channeldata):
+    newdoc: minidom.Document = minidom.parseString("<rss version='2.0'></rss>")
 
-    def append_strings(node, strings):
+    def append_strings(node: minidom.Element, strings: dict[str, str]):
         for key, value in strings.items():
-            key = newdoc.createElement(key)
-            key.appendChild(newdoc.createTextNode(str(value)))
-            node.appendChild(key)
+            e: minidom.Element = newdoc.createElement(key)
+            e.appendChild(newdoc.createTextNode(str(value)))
+            node.appendChild(e)
 
-    packages = get_recent_packages(channeldata, threshold_days)
+    packages = get_recent_packages(channeldata)
 
-    channel = newdoc.createElement("channel")
-    append_strings(channel, _get_channel(channel_name, packages, threshold_days))
+    channel: minidom.Element = newdoc.createElement("channel")
+    append_strings(channel, _get_channel(channel_name, packages))
 
     for package in _get_items(packages):
         item = newdoc.createElement("item")
         append_strings(item, package)
         channel.appendChild(item)
 
-    rss = newdoc.documentElement
-    rss.setAttribute("version", "2.0")
+    rss: minidom.Element = newdoc.documentElement
     rss.appendChild(channel)
+
     return newdoc.toprettyxml(indent="    ")
 
 
@@ -101,4 +96,4 @@ if __name__ == "__main__":  # pragma: no cover
 
     channel, channeldata_fn, threshold_days = sys.argv[1:]
     with open(channeldata_fn) as fd:
-        print(get_rss(channel, json.load(fd), int(threshold_days)))
+        print(get_rss(channel, json.load(fd)))

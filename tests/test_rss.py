@@ -1,7 +1,7 @@
 import time
 import unittest
 
-import rss
+from conda_index.index import rss
 
 _DAY = 24 * 60 * 60
 
@@ -70,7 +70,7 @@ class rssTest(unittest.TestCase):
 
     def testGetChannel(self):
         packages = rss.get_recent_packages(self.channeldata, 2)
-        actual = rss._get_channel("example", packages, 2)
+        actual = rss._get_channel("example", packages)
         expected = {
             "title": "anaconda.org/example",
             "link": "https://conda.anaconda.org/example",
@@ -124,7 +124,7 @@ class rssTest(unittest.TestCase):
         self.assertDictEqual(expected[0], actual[0])
 
     def testGetRss(self):
-        actual = rss.get_rss("example", self.channeldata, 2)
+        actual = rss.get_rss("example", self.channeldata)
         expected = """<?xml version="1.0" ?>
 <rss version="2.0">
     <channel>
