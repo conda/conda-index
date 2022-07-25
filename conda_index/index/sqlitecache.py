@@ -160,7 +160,8 @@ class CondaIndexCache:
         # if this is interrupted, we may have to re-extract the missing files
         if self.cache_is_brand_new or force:
             convert_cache.convert_cache(
-                self.db, convert_cache.extract_cache_filesystem(self.cache_dir),
+                self.db,
+                convert_cache.extract_cache_filesystem(self.cache_dir),
             )
 
             with self.db:

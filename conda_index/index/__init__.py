@@ -34,8 +34,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-from . import rss
-from . import sqlitecache
+from . import rss, sqlitecache
 
 log = logging.getLogger(__name__)
 
@@ -280,7 +279,9 @@ def _get_jinja2_environment():
         else:
             return text
 
-    environment = Environment(loader=PackageLoader("conda_index", "templates"),)
+    environment = Environment(
+        loader=PackageLoader("conda_index", "templates"),
+    )
     environment.filters["human_bytes"] = human_bytes
     environment.filters["strftime"] = _filter_strftime
     environment.filters["add_href"] = _filter_add_href
@@ -585,7 +586,9 @@ class ChannelIndex:
 
         log.info("%s Writing pre-patch repodata", subdir)
         self._write_repodata(
-            subdir, repodata_from_packages, REPODATA_FROM_PKGS_JSON_FN,
+            subdir,
+            repodata_from_packages,
+            REPODATA_FROM_PKGS_JSON_FN,
         )
 
         # Apply patch instructions.
@@ -614,7 +617,9 @@ class ChannelIndex:
 
         log.debug("%s write current_repodata", subdir)
         self._write_repodata(
-            subdir, current_repodata, json_filename="current_repodata.json",
+            subdir,
+            current_repodata,
+            json_filename="current_repodata.json",
         )
 
         log.info("%s Writing index HTML", subdir)
@@ -718,7 +723,9 @@ class ChannelIndex:
         new_repodata = {
             "packages": new_repodata_packages,
             "packages.conda": new_repodata_conda_packages,
-            "info": {"subdir": subdir,},
+            "info": {
+                "subdir": subdir,
+            },
             "repodata_version": REPODATA_VERSION,
             "removed": [],  # can be added by patch/hotfix process
         }

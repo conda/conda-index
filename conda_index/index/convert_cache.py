@@ -257,7 +257,10 @@ def convert_cache(conn, cache_generator):
                         INSERT OR IGNORE INTO {table} (path, {table})
                         VALUES (:path, json(:data))
                         """,
-                            {"path": db_path(match), "data": member.read(),},
+                            {
+                                "path": db_path(match),
+                                "data": member.read(),
+                            },
                         )
                     except sqlite3.OperationalError as e:
                         log.warn("SQL error. Not JSON? %s %s", match.groups(0), e)
@@ -268,7 +271,10 @@ def convert_cache(conn, cache_generator):
                     INSERT OR IGNORE INTO icon (path, icon_png)
                     VALUES (:path, :data)
                     """,
-                        {"path": db_path(match), "data": member.read(),},
+                        {
+                            "path": db_path(match),
+                            "data": member.read(),
+                        },
                     )
 
                 else:

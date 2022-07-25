@@ -96,8 +96,8 @@ def get_rss(channel_name, channeldata, threshold_days):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    import sys
     import json
+    import sys
 
     channel, channeldata_fn, threshold_days = sys.argv[1:]
     with open(channeldata_fn) as fd:
