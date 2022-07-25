@@ -2,28 +2,32 @@
 conda index, formerly part of conda-build. Create `repodata.json` for
 collections of conda packages.
 
-## Getting started
-
-```sh
-conda create -n conda-index python=3.10 conda
-# in a parent directory
-pip install -e git+https://git@github.com/conda/conda-build.git#egg=conda-build
-git clone (url of the conda-index repository)
-pip install -e conda-index[test] # pip >=22
-
-pytest
-```
-
 ## Run normally
 
 ```sh
 python -m conda_index <path to channel directory>
 ```
 
-## Run with extra logs
+Note `conda index` may find legacy `conda-build index` instead.
+
+## Run for debugging
 
 ```sh
-python -m conda_index.index --verbose --no-progress --threads=1 <path to channel directory>
+python -m conda_index --verbose --threads=1 <path to channel directory>
+```
+
+## Contributing
+
+```sh
+conda create -n conda-index "python >=3.9" conda conda-build pip
+# pip >=22 is required for pip install -e conda-index
+pip install --upgrade pip # if pip < 22
+# in a parent directory
+git clone https://github.com/conda-incubator/conda-index.git
+pip install -e conda-index[test]
+
+cd conda-index
+pytest
 ```
 
 ## Summary of changes from the previous `conda-build index` version
@@ -64,3 +68,6 @@ python -m conda_index.index --verbose --no-progress --threads=1 <path to channel
 
 This version of conda-index continues indexing packages from other subdirs while
 the main thread is writing a repodata.json.
+
+All `current_repodata.json` are generated in parallel. This may use a lot of ram
+if `repodata.json` has tens of thousands of entries.

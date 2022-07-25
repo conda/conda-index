@@ -10,10 +10,10 @@ from conda_build.utils import on_win
 
 
 def get_root_dir():
-    import conda_build
+    import conda_index
 
-    conda_build_dir = os.path.realpath(os.path.dirname(conda_build.__file__))
-    return os.path.abspath(os.path.join(conda_build_dir, ".."))
+    conda_index_dir = os.path.realpath(os.path.dirname(conda_index.__file__))
+    return os.path.abspath(os.path.join(conda_index_dir, ".."))
 
 
 thisdir = os.path.join(get_root_dir(), "tests")

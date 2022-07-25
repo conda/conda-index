@@ -27,11 +27,7 @@ def LoggingContext(*args, **kwargs):
 
 
 def _checksum(fd, algorithm, buffersize=65536):
-    hash_impl = getattr(hashlib, algorithm)
-    if not hash_impl:
-        raise ValueError("Unrecognized hash algorithm: {}".format(algorithm))
-    else:
-        hash_impl = hash_impl()
+    hash_impl = getattr(hashlib, algorithm)()
     for block in iter(lambda: fd.read(buffersize), b""):
         hash_impl.update(block)
     return hash_impl.hexdigest()
