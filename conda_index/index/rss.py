@@ -8,15 +8,12 @@ from xml.dom import minidom
 
 
 # Should we have either n packages or m days?
-def get_recent_packages(channeldata, threshold_packages=100):
-    return [
-        dict((item,))
-        for item in sorted(
-            channeldata["packages"].items(),
-            key=lambda item: item[1].get("timestamp", 0),
-            reverse=True,
-        )[:threshold_packages]
-    ]
+def get_recent_packages(channeldata, threshold_packages=100) -> list[tuple[str, dict]]:
+    return sorted(
+        channeldata["packages"].items(),
+        key=lambda item: item[1].get("timestamp", 0),
+        reverse=True,
+    )[:threshold_packages]
 
 
 def _iso822(timestamp):
@@ -37,10 +34,10 @@ def _get_title(name, version, subdirs):
     return f"{name} {version} [{', '.join(sorted({x for x in subdirs}))}]"
 
 
-def _get_items(packages):
+def _get_items(packages: list[tuple[str, dict]]):
 
     items = []
-    for name, package in [tuple(p.items())[0] for p in packages]:
+    for name, package in packages:
         __ = lambda x: package.get(x)
 
         def coalesce(*args, default="No description."):
