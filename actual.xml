@@ -1,0 +1,26 @@
+<?xml version="1.0" ?>
+<rss version="2.0">
+    <channel>
+        <title>anaconda.org/example</title>
+        <link>https://conda.anaconda.org/example</link>
+        <description>The most recent 2 updates for example.</description>
+        <pubDate>Sat, 02 Jul 2022 05:52:41 GMT</pubDate>
+        <lastBuildDate>Sat, 02 Jul 2022 05:52:41 GMT</lastBuildDate>
+        <item>
+            <title>example1 123 [win-32, win-64]</title>
+            <description>Long description.</description>
+            <link>https://anaconda.org/anaconda/example1</link>
+            <guid>http://example1.org/package_sources.zip/download</guid>
+            <pubDate>Fri, 01 Jul 2022 05:52:41 GMT</pubDate>
+            <source>http://example1.org/</source>
+        </item>
+        <item>
+            <title>example2 1.2.3.4 [linux-64, osx-64, win-32]</title>
+            <description>Long description.</description>
+            <link>https://anaconda.org/anaconda/example2</link>
+            <guid>http://example2.com/src.tar.gz</guid>
+            <pubDate>Wed, 29 Jun 2022 05:52:41 GMT</pubDate>
+            <source>http://www.example2.com/</source>
+        </item>
+    </channel>
+</rss>

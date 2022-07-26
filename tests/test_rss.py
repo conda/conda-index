@@ -1,3 +1,4 @@
+import re
 import time
 import unittest
 
@@ -74,7 +75,7 @@ class rssTest(unittest.TestCase):
         expected = {
             "title": "anaconda.org/example",
             "link": "https://conda.anaconda.org/example",
-            "description": "An anaconda.org community with 1 package updates in the past 2 days.",
+            "description": "The most recent 2 updates for example.",
             "pubDate": rss._iso822(time.time()),
             "lastBuildDate": rss._iso822(time.time()),
         }
@@ -131,7 +132,7 @@ class rssTest(unittest.TestCase):
     <channel>
         <title>anaconda.org/example</title>
         <link>https://conda.anaconda.org/example</link>
-        <description>An anaconda.org community with 1 package updates in the past 2 days.</description>
+        <description>The most recent 2 updates for example.</description>
         <pubDate>Sat, 02 Jul 2022 05:52:41 GMT</pubDate>
         <lastBuildDate>Sat, 02 Jul 2022 05:52:41 GMT</lastBuildDate>
         <item>
@@ -142,10 +143,22 @@ class rssTest(unittest.TestCase):
             <pubDate>Fri, 01 Jul 2022 05:52:41 GMT</pubDate>
             <source>http://example1.org/</source>
         </item>
+        <item>
+            <title>example2 1.2.3.4 [linux-64, osx-64, win-32]</title>
+            <description>Long description.</description>
+            <link>https://anaconda.org/anaconda/example2</link>
+            <guid>http://example2.com/src.tar.gz</guid>
+            <pubDate>Wed, 29 Jun 2022 05:52:41 GMT</pubDate>
+            <source>http://www.example2.com/</source>
+        </item>
     </channel>
 </rss>
 """
-        self.assertEqual(actual, expected)
+
+        def dedent(text):
+            return re.sub(r"^\s+", "", text, flags=re.MULTILINE)
+
+        self.assertEqual(dedent(actual), dedent(expected))
 
 
 if __name__ == "__main__":

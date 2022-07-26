@@ -81,7 +81,7 @@ def get_rss(channel_name, channeldata):
     rss: minidom.Element = newdoc.documentElement
     rss.appendChild(channel)
 
-    return newdoc.toprettyxml(indent="    ")
+    return newdoc.toprettyxml(indent="  ")
 
 
 if __name__ == "__main__":  # pragma: no cover
