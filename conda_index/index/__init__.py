@@ -34,7 +34,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-from . import sqlitecache
+from . import rss, sqlitecache
 
 log = logging.getLogger(__name__)
 
@@ -313,6 +313,10 @@ def _make_channeldata_index_html(channel_name, channeldata):
         current_time=datetime.now(timezone.utc),
     )
     return rendered_html
+
+
+def _make_rss(channel_name, channeldata):
+    return rss.get_rss(channel_name, channeldata)
 
 
 def _get_resolve_object(subdir, precs=None, repodata=None):
@@ -655,6 +659,9 @@ class ChannelIndex:
 
             log.debug("%s channeldata finished", subdir)
 
+        # Create and write the rss feed.
+        self._write_rss(channel_data)
+
         # Create and write channeldata.
         self._write_channeldata_index_html(channel_data)
         log.debug("write channeldata")
@@ -852,6 +859,13 @@ class ChannelIndex:
         index_path = join(subdir_path, "index.html")
         return self._maybe_write(index_path, rendered_html)
 
+    def _write_rss(self, channeldata):
+        log.info("Build RSS")
+        rss = _make_rss(self.channel_name, channeldata)
+        rss_path = join(self.channel_root, "rss.xml")
+        self._maybe_write(rss_path, rss)
+        log.info("Built RSS")
+
     def _write_channeldata_index_html(self, channeldata):
         rendered_html = _make_channeldata_index_html(self.channel_name, channeldata)
         assert rendered_html
@@ -1009,9 +1023,10 @@ class ChannelIndex:
 
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
-        for _pkg, pkg_dict in channeldata.get("packages", {}).items():
-            if "commits" in pkg_dict:
-                del pkg_dict["commits"]
+        for pkg, pkg_dict in channeldata.get("packages", {}).items():
+            channeldata["packages"][pkg] = {
+                k: v for k, v in pkg_dict.items() if v is not None and k != "commits"
+            }
         channeldata_path = join(self.channel_root, "channeldata.json")
         content = json.dumps(channeldata, indent=2, sort_keys=True)
         self._maybe_write(channeldata_path, content, True)
