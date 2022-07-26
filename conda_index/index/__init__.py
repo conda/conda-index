@@ -1023,9 +1023,10 @@ class ChannelIndex:
 
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
-        for _pkg, pkg_dict in channeldata.get("packages", {}).items():
-            if "commits" in pkg_dict:
-                del pkg_dict["commits"]
+        for pkg, pkg_dict in channeldata.get("packages", {}).items():
+            channeldata["packages"][pkg] = {
+                k: v for k, v in pkg_dict.items() if v is not None and k != "commits"
+            }
         channeldata_path = join(self.channel_root, "channeldata.json")
         content = json.dumps(channeldata, indent=2, sort_keys=True)
         self._maybe_write(channeldata_path, content, True)

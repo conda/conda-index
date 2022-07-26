@@ -55,10 +55,7 @@ def _get_items(packages: list[tuple[str, dict]]):
             "pubDate": _iso822(__("timestamp")),
             "source": __("home"),  # URI
         }
-        empty_fields = [k for k, v in item.items() if not v]
-        for k in empty_fields:
-            del item[k]
-        items.append(item)
+        items.append({k: v for k, v in item.items() if v})
     return items
 
 
