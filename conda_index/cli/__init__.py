@@ -38,6 +38,12 @@ from conda_index.utils import DEFAULT_SUBDIRS
     show_default=True,
 )
 @click.option(
+    "--rss/--no-rss",
+    help="Write rss.xml? (Only if --channeldata is enabled)",
+    default=True,
+    show_default=True,
+)
+@click.option(
     "--bz2/--no-bz2",
     help="Write repodata.json.bz2?",
     default=False,
@@ -69,6 +75,7 @@ def cli(
     current_index_versions_file=None,
     channel_name=None,
     bz2=False,
+    rss=False,
 ):
     logutil.configure()
     if verbose:
@@ -93,4 +100,4 @@ def cli(
     )
 
     if channeldata:  # about 2 1/2 minutes for conda-forge
-        channel_index.update_channeldata()
+        channel_index.update_channeldata(rss=rss)

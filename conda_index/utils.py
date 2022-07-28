@@ -1,6 +1,5 @@
 import filecmp
 import hashlib
-import os
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 

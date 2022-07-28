@@ -631,7 +631,7 @@ class ChannelIndex:
 
         return subdir
 
-    def update_channeldata(self):
+    def update_channeldata(self, rss=False):
         """
         Update channeldata based on re-reading output `repodata.json` and existing
         `channeldata.json`. Call after index() if channeldata is needed.
@@ -660,7 +660,8 @@ class ChannelIndex:
             log.debug("%s channeldata finished", subdir)
 
         # Create and write the rss feed.
-        self._write_rss(channel_data)
+        if rss:
+            self._write_rss(channel_data)
 
         # Create and write channeldata.
         self._write_channeldata_index_html(channel_data)
