@@ -5,6 +5,7 @@ import logging
 import os.path
 
 import click
+import yaml
 
 from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 from conda_index.utils import DEFAULT_SUBDIRS
@@ -93,9 +94,14 @@ def cli(
         threads=threads,
     )
 
+    current_index_versions = None
+    if current_index_versions_file:
+        with open(current_index_versions_file) as f:
+            current_index_versions = yaml.safe_load(f)
+
     channel_index.index(
         patch_generator=patch_generator,  # or will use outdated .py patch functions
-        current_index_versions=current_index_versions_file,
+        current_index_versions=current_index_versions,
         progress=False,  # clone is a batch job
     )
 
