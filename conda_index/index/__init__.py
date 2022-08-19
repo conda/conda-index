@@ -11,7 +11,6 @@ import multiprocessing
 import os
 import sys
 import time
-from collections import OrderedDict
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from numbers import Number
@@ -829,7 +828,13 @@ class ChannelIndex:
         return write_result
 
     def _write_subdir_index_html(self, subdir, repodata):
-        repodata_packages = repodata["packages"]
+        repodata_legacy_packages = repodata["packages"]
+        repodata_conda_packages = repodata["packages.conda"]
+
+        repodata_packages = {}
+        repodata_packages.update(repodata_legacy_packages)
+        repodata_packages.update(repodata_conda_packages)
+
         subdir_path = join(self.channel_root, subdir)
 
         def _add_extra_path(extra_paths, path):
@@ -842,7 +847,7 @@ class ChannelIndex:
                     "md5": md5sum,
                 }
 
-        extra_paths = OrderedDict()
+        extra_paths = {}
         _add_extra_path(extra_paths, join(subdir_path, REPODATA_JSON_FN))
         if self.write_bz2:
             _add_extra_path(extra_paths, join(subdir_path, REPODATA_JSON_FN + ".bz2"))
