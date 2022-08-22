@@ -819,8 +819,10 @@ class ChannelIndex:
         write_result = self._maybe_write(
             repodata_json_path, new_repodata, write_newline_end=True
         )
-        if write_result:
-            repodata_bz2_path = repodata_json_path + ".bz2"
+        # write repodata.json.bz2 if it doesn't exist, even if repodata.json has
+        # not changed
+        repodata_bz2_path = repodata_json_path + ".bz2"
+        if write_result or not os.path.exists(repodata_bz2_path):
             if self.write_bz2:
                 bz2_content = bz2.compress(new_repodata.encode("utf-8"))
                 self._maybe_write(repodata_bz2_path, bz2_content)
