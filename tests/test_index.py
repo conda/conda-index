@@ -4,6 +4,7 @@ import shutil
 import tarfile
 from logging import getLogger
 from os.path import dirname, isdir, isfile, join
+from pathlib import Path
 
 import conda_package_handling.api
 import pytest
@@ -1093,6 +1094,17 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
         actual_repodata_json = json.loads(fh.read())
 
     assert actual_repodata_json == expected_repodata_json
+
+    # make sure .conda and .tar.bz2 exist in index.html
+    index_html = Path(testing_workdir, "osx-64", "index.html").read_text()
+    assert len(expected_repodata_json["packages"])
+    assert len(expected_repodata_json["packages.conda"])
+    expected_packages = {
+        *expected_repodata_json["packages"],
+        *expected_repodata_json["packages.conda"],
+    }
+    for package in expected_packages:
+        assert f'href="{package}"' in index_html
 
 
 def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
