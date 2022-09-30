@@ -32,6 +32,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
+    groupby_to_dict,
 )
 from . import rss, sqlitecache
 
@@ -76,16 +77,6 @@ if (
     MAX_THREADS_DEFAULT = min(48, MAX_THREADS_DEFAULT)
 LOCK_TIMEOUT_SECS = 3 * 3600
 LOCKFILE_NAME = ".lock"
-
-# TODO: this is to make sure that the index doesn't leak tokens.  It breaks use of private channels, though.
-# os.environ['CONDA_ADD_ANACONDA_TOKEN'] = "false"
-
-try:
-    # Cython implementation of the toolz package
-    # not itertools.groupby
-    from cytoolz.itertoolz import groupby  # type: ignore
-except ImportError:  # pragma: no cover
-    from conda._vendor.toolz.itertoolz import groupby  # NOQA
 
 # XXX conda-build calls its version of get_build_index. Appears to combine
 # remote and local packages, updating the local index based on mtime. Standalone
@@ -912,7 +903,9 @@ class ChannelIndex:
                 groups.append(candidate)
 
         groups = []
-        package_groups = groupby(lambda x: x[1]["name"], all_repodata_packages.items())
+        package_groups = groupby_to_dict(
+            lambda x: x[1]["name"], all_repodata_packages.items()
+        )
         for groupname, group in package_groups.items():
             # Pay special attention to groups that have run_exports - we
             # need to process each version group by version; take newest per
@@ -924,7 +917,7 @@ class ChannelIndex:
             # timestamp across all versions if no run_exports", unsatisfying
             # when old versions get new builds. When channeldata.json is not
             # being built from scratch the speed difference is not noticable.
-            for vgroup in groupby(lambda x: x[1]["version"], group).values():
+            for vgroup in groupby_to_dict(lambda x: x[1]["version"], group).values():
                 candidate = next(
                     iter(
                         sorted(

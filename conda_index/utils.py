@@ -1,5 +1,6 @@
 import filecmp
 import hashlib
+import itertools
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 
@@ -67,3 +68,16 @@ def file_contents_match(pathA, pathB):
     """
 
     return filecmp.cmp(pathA, pathB)
+
+
+def groupby_to_dict(keyfunc, sequence):
+    """
+    toolz-style groupby, returns a dictionary of { key: [group] } instead of
+    iterators.
+    """
+    result = {}
+    for key, group in itertools.groupby(sequence, keyfunc):
+        value = result.get(key, [])
+        value.extend(group)
+        result[key] = value
+    return result
