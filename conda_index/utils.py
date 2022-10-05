@@ -1,5 +1,7 @@
+import collections
 import filecmp
 import hashlib
+import itertools
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 

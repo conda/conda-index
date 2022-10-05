@@ -19,7 +19,6 @@ dependencies = [
     "jinja2",
     "more_itertools",
     "PyYAML >=6",
-    "zstandard >=0.15", # https://github.com/indygreg/python-zstandard
 ]
 
 [project.optional-dependencies]
@@ -42,8 +41,9 @@ Home = "https://github.com/conda-incubator/conda-index"
 [tool.pytest.ini_options]
 minversion = "7.0"
 # remove --cov when testing in the debugger
-addopts = "--cov=conda_index"
+addopts = "--cov"
 testpaths = ["tests"]
 
 [tool.coverage.run]
 concurrency = [ "multiprocessing", "thread" ]
+source = [ "conda_index" ]
