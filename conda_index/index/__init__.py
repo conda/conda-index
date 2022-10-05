@@ -902,32 +902,30 @@ class ChannelIndex:
             ):
                 groups.append(candidate)
 
-        groups = []
-        package_groups = groupby_to_dict(
-            lambda x: x[1]["name"], all_repodata_packages.items()
-        )
-        for groupname, group in package_groups.items():
-            # Pay special attention to groups that have run_exports - we
-            # need to process each version group by version; take newest per
-            # version group.  We handle groups that are not in the index at
-            # all yet similarly, because we can't check if they have any
-            # run_exports.
+        # Pay special attention to groups that have run_exports - we
+        # need to process each version group by version; take newest per
+        # version group.  We handle groups that are not in the index at
+        # all yet similarly, because we can't check if they have any
+        # run_exports.
 
-            # This is more deterministic than, but slower than the old "newest
-            # timestamp across all versions if no run_exports", unsatisfying
-            # when old versions get new builds. When channeldata.json is not
-            # being built from scratch the speed difference is not noticable.
-            for vgroup in groupby_to_dict(lambda x: x[1]["version"], group).values():
-                candidate = next(
-                    iter(
-                        sorted(
-                            vgroup,
-                            key=lambda x: x[1].get("timestamp", 0),
-                            reverse=True,
-                        )
-                    )
-                )
-                _append_group(groups, candidate)
+        # This is more deterministic than, but slower than the old "newest
+        # timestamp across all versions if no run_exports", unsatisfying
+        # when old versions get new builds. When channeldata.json is not
+        # being built from scratch the speed difference is not noticable.
+
+        def newest_by_name_and_version(all_repodata_packages):
+            namever = {}
+
+            for fn, package in all_repodata_packages.items():
+                key = (package["name"], package["version"])
+                timestamp = package.get("timestamp", 0)
+                existing = namever.get(key)
+                if not existing or existing[1].get("timestamp", 0) < timestamp:
+                    namever[key] = (fn, package)
+
+            return list(namever.values())
+
+        groups = newest_by_name_and_version(all_repodata_packages)
 
         def _replace_if_newer_and_present(pd, data, existing_record, data_newer, k):
             if data.get(k) and (data_newer or not existing_record.get(k)):
