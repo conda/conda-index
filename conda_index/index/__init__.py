@@ -32,7 +32,6 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    groupby_to_dict,
 )
 from . import rss, sqlitecache
 

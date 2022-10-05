@@ -69,14 +69,3 @@ def file_contents_match(pathA, pathB):
     """
 
     return filecmp.cmp(pathA, pathB)
-
-
-def groupby_to_dict(keyfunc, sequence):
-    """
-    toolz-style groupby, returns a dictionary of { key: [group] } instead of
-    iterators.
-    """
-    result = collections.defaultdict(lambda: [])
-    for key, group in itertools.groupby(sequence, keyfunc):
-        result[key].extend(group)
-    return dict(result)
