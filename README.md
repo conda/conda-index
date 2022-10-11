@@ -23,7 +23,7 @@ conda create -n conda-index "python >=3.9" conda conda-build pip
 # pip >=22 is required for pip install -e conda-index
 pip install --upgrade pip # if pip < 22
 # in a parent directory
-git clone https://github.com/conda-incubator/conda-index.git
+git clone https://github.com/conda/conda-index.git
 pip install -e conda-index[test]
 
 cd conda-index
