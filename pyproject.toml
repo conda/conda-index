@@ -36,7 +36,7 @@ test = [
 conda-index = "conda_index.cli:cli"
 
 [project.urls]
-Home = "https://github.com/conda-incubator/conda-index"
+Home = "https://github.com/conda/conda-index"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
