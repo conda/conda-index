@@ -1,3 +1,4 @@
+import bz2
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ from pathlib import Path
 
 import conda_package_handling.api
 import pytest
+import zstandard
 from conda_build.conda_interface import conda_47, context
 from conda_build.utils import copy_into, rm_rf
 
@@ -45,7 +47,9 @@ def test_index_on_single_subdir_1(testing_workdir):
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     download(test_package_url, test_package_path)
 
-    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+    conda_index.index.update_index(
+        testing_workdir, channel_name="test-channel", write_bz2=True, write_zst=True
+    )
 
     # #######################################
     # tests for osx-64 subdir
@@ -53,6 +57,34 @@ def test_index_on_single_subdir_1(testing_workdir):
     assert isfile(join(testing_workdir, "osx-64", "index.html"))
     assert isfile(join(testing_workdir, "osx-64", "repodata.json.bz2"))
     assert isfile(join(testing_workdir, "osx-64", "repodata_from_packages.json.bz2"))
+
+    assert isfile(join(testing_workdir, "osx-64", "repodata.json.zst"))
+    assert isfile(join(testing_workdir, "osx-64", "repodata_from_packages.json.zst"))
+
+    # compressed version must be byte-identical
+    def compare_zst(filename):
+        original_path = Path(testing_workdir, "osx-64", filename)
+        compressed_path = Path(testing_workdir, "osx-64", filename + ".zst")
+        assert original_path.read_bytes() == zstandard.decompress(
+            compressed_path.read_bytes()
+        )
+
+    compare_zst("repodata.json")
+    compare_zst("current_repodata.json")
+    compare_zst("repodata_from_packages.json")
+
+    # we should stop doing bz2 (conda dropped support in 2016) but it should
+    # work properly.
+    def compare_bz2(filename):
+        original_path = Path(testing_workdir, "osx-64", filename)
+        compressed_path = Path(testing_workdir, "osx-64", filename + ".bz2")
+        assert original_path.read_bytes() == bz2.decompress(
+            compressed_path.read_bytes()
+        )
+
+    compare_bz2("repodata.json")
+    compare_bz2("current_repodata.json")
+    compare_bz2("repodata_from_packages.json")
 
     with open(join(testing_workdir, "osx-64", "repodata.json")) as fh:
         actual_repodata_json = json.loads(fh.read())
