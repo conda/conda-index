@@ -18,6 +18,7 @@ from os.path import abspath, basename, getmtime, getsize, isfile, join
 from typing import NamedTuple
 from uuid import uuid4
 
+import zstandard
 from conda.base.context import context
 
 #  BAD BAD BAD - conda internals
@@ -36,6 +37,14 @@ from ..utils import (
 from . import rss, sqlitecache
 
 log = logging.getLogger(__name__)
+
+# zstd -T0 -b15 -e17 repodata.json
+# level 16 gives a nice jump in ratio and decompress speed
+# 15#repodata.json     : 229527083 ->  27834591 (x8.246),  112.3 MB/s, 2726.7 MB/s
+# 16#repodata.json     : 229527083 ->  24457586 (x9.385),   47.6 MB/s, 3797.3 MB/s
+# 17#repodata.json     : 229527083 ->  23358438 (x9.826),   30.2 MB/s, 3977.2 MB/s
+ZSTD_COMPRESS_LEVEL = 16
+ZSTD_COMPRESS_THREADS = -1  # automatic
 
 
 def logging_config():
@@ -113,6 +122,7 @@ def update_index(
     current_index_versions=None,
     debug=False,
     write_bz2=True,
+    write_zst=False,
 ):
     """
     If dir_path contains a directory named 'noarch', the path tree therein is treated
@@ -143,6 +153,7 @@ def update_index(
         debug=debug,
         output_root=output_dir,
         write_bz2=write_bz2,
+        write_zst=write_zst,
     )
 
     channel_index.index(
@@ -479,6 +490,7 @@ class ChannelIndex:
         output_root=None,  # write repodata.json etc. to separate folder?
         cache_class=sqlitecache.CondaIndexCache,
         write_bz2=False,
+        write_zst=False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -495,6 +507,7 @@ class ChannelIndex:
         self.debug = debug
         self.deep_integrity_check = deep_integrity_check
         self.write_bz2 = write_bz2
+        self.write_zst = write_zst
 
     def index(
         self,
@@ -800,23 +813,35 @@ class ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        new_repodata = json.dumps(
-            repodata,
-            indent=2,
-            sort_keys=True,
+        # add newline here (historic) so .bz2, .zst is identical to repodata.json
+        new_repodata = (
+            json.dumps(
+                repodata,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
         )
         write_result = self._maybe_write(
-            repodata_json_path, new_repodata, write_newline_end=True
+            repodata_json_path, new_repodata, write_newline_end=False
         )
         # write repodata.json.bz2 if it doesn't exist, even if repodata.json has
         # not changed
         repodata_bz2_path = repodata_json_path + ".bz2"
+        repodata_zst_path = repodata_json_path + ".zst"
         if write_result or not os.path.exists(repodata_bz2_path):
             if self.write_bz2:
                 bz2_content = bz2.compress(new_repodata.encode("utf-8"))
                 self._maybe_write(repodata_bz2_path, bz2_content)
             else:
                 self._maybe_remove(repodata_bz2_path)
+            if self.write_zst:
+                repodata_zst_content = zstandard.ZstdCompressor(
+                    level=ZSTD_COMPRESS_LEVEL, threads=ZSTD_COMPRESS_THREADS
+                ).compress(new_repodata.encode("utf-8"))
+                self._maybe_write(repodata_zst_path, repodata_zst_content)
+            else:
+                self._maybe_remove(repodata_zst_path)
         return write_result
 
     def _write_subdir_index_html(self, subdir, repodata):

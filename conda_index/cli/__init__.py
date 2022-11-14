@@ -51,6 +51,12 @@ from conda_index.utils import DEFAULT_SUBDIRS
     show_default=True,
 )
 @click.option(
+    "--zst/--no-zst",
+    help="Write repodata.json.zst?",
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--current-index-versions-file",
     "-m",
     help="""
@@ -76,6 +82,7 @@ def cli(
     current_index_versions_file=None,
     channel_name=None,
     bz2=False,
+    zst=False,
     rss=False,
 ):
     logutil.configure()
@@ -91,6 +98,7 @@ def cli(
         output_root=output,
         subdirs=subdir,
         write_bz2=bz2,
+        write_zst=zst,
         threads=threads,
     )
 
