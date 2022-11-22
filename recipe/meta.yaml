@@ -1,0 +1,62 @@
+{% set name = "conda-index" %}
+{% set version_match = load_file_regex(
+  load_file="conda_index/__init__.py",
+  regex_pattern='__version__ = "(.+)"') %}
+{% set version = version_match[1] %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  git_url: ../
+  # url: https://github.com/conda/conda-index/archive/refs/tags/{{ version }}.tar.gz
+  # sha256: ...
+
+build:
+  script: {{ PYTHON }} -m pip install --no-build-isolation . -vv
+  number: 0
+  noarch: python
+
+requirements:
+  host:
+    - flit-core
+    - python >=3.7
+    - pip
+  run:
+    - python >=3.7  # 3.9?
+    - click >=8
+    - conda >=4.12.0
+    - conda-package-streaming
+    - filelock
+    - jinja2
+    - more-itertools
+    - PyYAML >=6
+
+test:
+  requires:
+    - conda-build >=3.21.0
+    - conda-package-handling >=1.9.0
+    - coverage[toml]
+    - pytest >=7
+    - pytest-cov
+    - pytest-mock
+  commands:
+    - pytest --cov
+  imports:
+    - conda_index.index
+  source_files:
+    - tests
+
+about:
+  home: https://github.com/conda/conda-index
+  summary: Create `repodata.json` for collections of conda packages.
+  license: BSD-3-Clause
+  license_file: LICENSE
+  doc_url: https://conda.github.io/conda-index
+  dev_url: https://github.com/conda/conda-index
+
+extra:
+  recipe-maintainers:
+    - dholth
+
