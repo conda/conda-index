@@ -22,6 +22,7 @@ jobs:
           cache: "pip"
       - name: Build Documentation
         run: |
+          pip install -r docs/requirements.txt
           make html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
