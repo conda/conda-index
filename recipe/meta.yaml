@@ -42,7 +42,7 @@ test:
     - pytest-cov
     - pytest-mock
   commands:
-    - pytest --cov
+    - pytest -k test_index_on_single_subdir_1
   imports:
     - conda_index.index
   source_files:
