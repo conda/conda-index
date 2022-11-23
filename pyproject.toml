@@ -7,29 +7,30 @@ name = "conda_index"
 authors = [
     { name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io" },
 ]
-license = { "file" = "LICENSE" }
+license = { file = "LICENSE" }
 readme = "README.md"
 dynamic = ["version", "description"]
 requires-python = ">=3.9"
 dependencies = [
     "click >=8",
-    "conda >=4.12.0",
-    "conda_package_streaming",
+    "conda >=4.12.0",   # not available on pypi
+    "conda-package-streaming >=0.7.0",
     "filelock",
     "jinja2",
-    "more_itertools",
+    "more-itertools",
     "PyYAML >=6",
 ]
 
 [project.optional-dependencies]
 test = [
     "conda-build >=3.21.0",
-    "conda-package-handling >=1.7.3",
+    "conda-package-handling >=1.9.0",
     "coverage[toml]",
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
 ]
+docs = ["furo", "sphinx", "myst-parser", "mdit-py-plugins>=0.3.0"]
 
 [project.scripts]
 # conflicts with conda-build's conda-index... which script will win?
