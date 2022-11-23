@@ -68,4 +68,4 @@ def file_contents_match(pathA, pathB):
     Return True if pathA and pathB have identical contents.
     """
 
-    return filecmp.cmp(pathA, pathB)
+    return filecmp.cmp(pathA, pathB, shallow=False)
