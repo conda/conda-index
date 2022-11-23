@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "conda-index"
-copyright = "Anaconda, Inc."
-author = "Anaconda, Inc."
+copyright = "conda"
+author = "conda"
 
 
 # -- General configuration ---------------------------------------------------
