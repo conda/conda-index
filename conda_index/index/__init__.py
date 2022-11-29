@@ -1174,7 +1174,8 @@ class ChannelIndex:
             encoding = None
             newline = b"\n"
 
-        with open(output_temp_path, mode=mode, encoding=encoding) as fh:
+        # always use \n line separator
+        with open(output_temp_path, mode=mode, encoding=encoding, newline="\n") as fh:
             fh.write(content)
             if write_newline_end:
                 fh.write(newline)
