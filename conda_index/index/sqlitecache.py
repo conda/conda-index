@@ -99,7 +99,7 @@ class CondaIndexCache:
             os.mkdir(self.cache_dir)
 
         log.debug(
-            f"CondaIndexCache {channel_root=}, {subdir=} {self.db_filename=} {self.cache_is_brand_new=}"
+            f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
         )
 
     def __getstate__(self):
