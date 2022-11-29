@@ -1169,13 +1169,20 @@ class ChannelIndex:
             mode = "w"
             encoding = "utf-8"
             newline = "\n"
+            newline_option = "\n"
         else:
             mode = "wb"
             encoding = None
             newline = b"\n"
+            newline_option = None
 
         # always use \n line separator
-        with open(output_temp_path, mode=mode, encoding=encoding, newline="\n") as fh:
+        with open(
+            output_temp_path,
+            mode=mode,
+            encoding=encoding,
+            newline=newline_option,
+        ) as fh:
             fh.write(content)
             if write_newline_end:
                 fh.write(newline)
