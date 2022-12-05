@@ -12,13 +12,9 @@ from os.path import join
 from typing import Any
 from zipfile import BadZipFile
 
-import yaml
 from conda_package_streaming import package_streaming
-from yaml.constructor import ConstructorError
-from yaml.parser import ParserError
-from yaml.reader import ReaderError
-from yaml.scanner import ScannerError
 
+from .. import yaml
 from ..utils import CONDA_PACKAGE_EXTENSIONS, checksums
 from . import common, convert_cache
 
@@ -537,12 +533,7 @@ def _cache_post_install_details(paths_json_str):
 
 
 def _cache_recipe(recipe_reader):
-    recipe_json = {}
-
-    try:
-        recipe_json = yaml.safe_load(recipe_reader)
-    except (ConstructorError, ParserError, ScannerError, ReaderError):
-        pass
+    recipe_json = yaml.determined_load(recipe_reader)
 
     try:
         recipe_json_str = json.dumps(recipe_json)

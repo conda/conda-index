@@ -19,10 +19,10 @@ def update_index(
 ):
     import os
 
-    import yaml
-
     from conda_index.index import update_index
     from conda_index.utils import ensure_list
+
+    from . import yaml
 
     # we basically expect there to be one path now
     dir_paths = [os.path.abspath(path) for path in ensure_list(dir_paths)]

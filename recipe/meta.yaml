@@ -33,7 +33,7 @@ requirements:
     - filelock
     - jinja2
     - more-itertools
-    - PyYAML >=6
+    - ruamel.yaml
 
 test:
   requires:

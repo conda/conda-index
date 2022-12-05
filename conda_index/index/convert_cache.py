@@ -155,8 +155,10 @@ def remove_prefix(conn: sqlite3.Connection):
         return path.rsplit("/")[-1]
 
     try:
-        conn.create_function("migrate_basename", narg=1, func=basename, deterministic=True)
-    except TypeError: # Python < 3.8
+        conn.create_function(
+            "migrate_basename", narg=1, func=basename, deterministic=True
+        )
+    except TypeError:  # Python < 3.8
         conn.create_function("migrate_basename", narg=1, func=basename)
 
     for table in TABLE_NAMES + ["stat"]:
