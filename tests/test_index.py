@@ -948,10 +948,8 @@ def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
     not hasattr(context, "use_only_tar_bz2") or getattr(context, "use_only_tar_bz2"),
     reason="conda is set to auto-disable .conda for old conda-build.",
 )
-def test_current_index_reduces_space():
-    repodata = os.path.join(
-        os.path.dirname(__file__), "index_data", "time_cut", "repodata.json"
-    )
+def test_current_index_reduces_space(index_data):
+    repodata = Path(index_data, "time_cut", "repodata.json")
     with open(repodata) as f:
         repodata = json.load(f)
     assert len(repodata["packages"]) == 7
@@ -993,8 +991,8 @@ def test_current_index_reduces_space():
         }
 
 
-def test_current_index_version_keys_keep_older_packages(testing_workdir):
-    pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "packages")
+def test_current_index_version_keys_keep_older_packages(index_data):
+    pkg_dir = Path(index_data, "packages")
 
     # pass no version file
     conda_index.api.update_index(pkg_dir)
@@ -1021,8 +1019,11 @@ def test_current_index_version_keys_keep_older_packages(testing_workdir):
     assert list(repodata["packages"].values())[0]["version"] == "1.0"
 
 
-def test_channeldata_picks_up_all_versions_of_run_exports():
-    pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "packages")
+def test_channeldata_picks_up_all_versions_of_run_exports(index_data):
+    import pdb
+
+    pdb.set_trace()
+    pkg_dir = os.path.join(index_data, "packages")
     conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)
@@ -1032,8 +1033,8 @@ def test_channeldata_picks_up_all_versions_of_run_exports():
     assert "2.0" in run_exports
 
 
-def test_index_invalid_packages():
-    pkg_dir = os.path.join(os.path.dirname(__file__), "index_data", "corrupt")
+def test_index_invalid_packages(index_data):
+    pkg_dir = os.path.join(index_data, "corrupt")
     conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
         repodata = json.load(f)

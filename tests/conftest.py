@@ -1,6 +1,8 @@
 import os
+import shutil
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 import pytest
 from conda_build.config import (
@@ -22,7 +24,7 @@ from conda_build.variants import get_default_variant
 
 
 @pytest.fixture(scope="function")
-def testing_workdir(tmpdir, request):
+def testing_workdir(tmp_path: Path, request):
     """Create a workdir in a safe temporary folder; cd into dir above before test, cd out after
 
     :param tmpdir: py.test fixture, will be injected
@@ -31,22 +33,22 @@ def testing_workdir(tmpdir, request):
 
     saved_path = os.getcwd()
 
-    tmpdir.chdir()
+    os.chdir(tmp_path)
     # temporary folder for profiling output, if any
-    tmpdir.mkdir("prof")
+    (tmp_path / "prof").mkdir()
 
     def return_to_saved_path():
         if os.path.isdir(os.path.join(saved_path, "prof")):
-            profdir = tmpdir.join("prof")
-            files = profdir.listdir("*.prof") if profdir.isdir() else []
+            profdir = tmp_path / "prof"
+            files = profdir.glob("*.prof") if profdir.is_dir() else []
 
             for f in files:
-                copy_into(str(f), os.path.join(saved_path, "prof", f.basename))
+                copy_into(str(f), os.path.join(saved_path, "prof", f.name))
         os.chdir(saved_path)
 
     request.addfinalizer(return_to_saved_path)
 
-    return str(tmpdir)
+    return str(tmp_path)
 
 
 @pytest.fixture(scope="function")
@@ -179,3 +181,16 @@ def single_version():
 @pytest.fixture(scope="function")
 def no_numpy_version():
     return {"python": ["2.7.*", "3.5.*"]}
+
+
+@pytest.fixture()
+def index_data(tmp_path: Path):
+    """
+    Copy tests/index_data to avoid writing cache to repository.
+
+    Could be made session-scoped if we don't mind re-using the index cache
+    during tests.
+    """
+    index_data = Path(__file__).parents[0] / "index_data"
+    shutil.copytree(index_data, tmp_path / "index_data")
+    return tmp_path / "index_data"
