@@ -2,12 +2,20 @@
 Indirection to preferred yaml library.
 """
 
+import ruamel.yaml
 
-from conda.common.serialize import yaml_safe_load as safe_load
-from ruamel.yaml.constructor import ConstructorError
-from ruamel.yaml.parser import ParserError
-from ruamel.yaml.reader import ReaderError
-from ruamel.yaml.scanner import ScannerError
+# matches conda.common.serialize
+parser = ruamel.yaml.YAML(typ="safe", pure=True)
+
+
+def safe_load(string):
+    """
+    Examples:
+        >>> yaml_safe_load("key: value")
+        {'key': 'value'}
+
+    """
+    return parser.load(string)
 
 
 def determined_load(string):
@@ -17,10 +25,5 @@ def determined_load(string):
 
     try:
         return safe_load(string)
-    except (
-        ConstructorError,
-        ParserError,
-        ScannerError,
-        ReaderError,
-    ):
+    except ruamel.yaml.YAMLError:
         return {}
