@@ -1020,9 +1020,6 @@ def test_current_index_version_keys_keep_older_packages(index_data):
 
 
 def test_channeldata_picks_up_all_versions_of_run_exports(index_data):
-    import pdb
-
-    pdb.set_trace()
     pkg_dir = os.path.join(index_data, "packages")
     conda_index.api.update_index(pkg_dir)
     with open(os.path.join(pkg_dir, "channeldata.json")) as f:
