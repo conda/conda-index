@@ -5,10 +5,11 @@ import logging
 import os.path
 
 import click
-import yaml
 
 from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 from conda_index.utils import DEFAULT_SUBDIRS
+
+from .. import yaml
 
 
 @click.command()

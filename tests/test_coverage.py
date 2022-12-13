@@ -10,6 +10,7 @@ import pytest
 import conda_index.api
 import conda_index.index
 import conda_index.index.convert_cache
+import conda_index.yaml
 from conda_index.utils import _checksum
 
 PATCH_GENERATOR = os.path.join(os.path.dirname(__file__), "gen_patch.py")
@@ -93,3 +94,8 @@ def test_apply_instructions():
         },
         {"revoke": ["jim.tar.bz2"], "remove": ["bob.tar.bz2"]},
     )
+
+
+def test_bad_yaml():
+    # unclosed string
+    assert conda_index.yaml.determined_load("'not yaml") == {}
