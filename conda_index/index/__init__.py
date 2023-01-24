@@ -335,18 +335,16 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
 
     channel = Channel("https://conda.anaconda.org/dummy-channel/%s" % subdir)
     sd = SubdirData(channel)
-    try:
-        # the next version of conda >= 4.13.0
-        # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
-        repodata_copy = repodata.copy()
-        for group in ("packages", "packages.conda"):
-            repodata_copy[group] = {
-                key: value.copy() for key, value in repodata.get(group, {}).items()
-            }
-        # adds url, Channel objects to each repodata package
-        sd._process_raw_repodata(repodata_copy)  # type: ignore
-    except AttributeError:
-        sd._process_raw_repodata_str(json.dumps(repodata))
+
+    # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
+    repodata_copy = repodata.copy()
+    for group in ("packages", "packages.conda"):
+        repodata_copy[group] = {
+            key: value.copy() for key, value in repodata.get(group, {}).items()
+        }
+    # adds url, Channel objects to each repodata package
+    sd._process_raw_repodata(repodata_copy)
+
     sd._loaded = True
     SubdirData._cache_[channel.url(with_credentials=True)] = sd
 
