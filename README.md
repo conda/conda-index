@@ -1,6 +1,48 @@
+[miniconda3]: https://docs.conda.io/projects/continuumio-conda/en/latest/user-guide/install/index.html
+[anaconda]: https://docs.anaconda.com/anaconda/install/
+
 # conda-index
 conda index, formerly part of conda-build. Create `repodata.json` for
 collections of conda packages.
+
+## Getting started
+
+### Prerequisites
+If you don't have `conda` installed yet, please start by downloading
+the latest version of [anaconda] or [miniconda3].
+
+Also remember to initialize `conda` and activate a `conda` environment.
+
+```bash
+@barabo ➜ /workspaces/conda-index (main) $ conda init bash
+
+@barabo ➜ /workspaces/conda-index (main) $ conda activate
+
+@barabo ➜ /workspaces/conda-index (main) $ bash  # if prompted to restart bash
+(base) @barabo ➜ /workspaces/conda-index (main) $
+```
+
+In the example above, the default prompt has changed to show which `conda`
+environment I'm using `(base)`.
+
+### Using your local packages for testing
+Once you have `conda` installed and updated, you should find a collection of
+cached packages in your `conda` installation directory, which should also be
+set as an environment variable: `${CONDA_DIR}`.
+
+```sh
+(base) @barabo ➜ /workspaces/conda-index (main) $ ls -1 ${CONDA_DIR}/pkgs/*.conda | head
+/opt/conda/pkgs/ca-certificates-2023.01.10-h06a4308_0.conda
+/opt/conda/pkgs/certifi-2022.12.7-py310h06a4308_0.conda
+/opt/conda/pkgs/cffi-1.15.1-py310h5eee18b_3.conda
+/opt/conda/pkgs/conda-23.1.0-py310h06a4308_0.conda
+/opt/conda/pkgs/conda-package-handling-2.0.2-py310h06a4308_0.conda
+/opt/conda/pkgs/conda-package-streaming-0.7.0-py310h06a4308_0.conda
+/opt/conda/pkgs/cryptography-38.0.4-py310h9ce1e76_0.conda
+/opt/conda/pkgs/idna-3.4-py310h06a4308_0.conda
+/opt/conda/pkgs/ld_impl_linux-64-2.38-h1181459_1.conda
+/opt/conda/pkgs/libffi-3.4.2-h6a678d5_6.conda
+```
 
 ## Run normally
 
