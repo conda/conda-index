@@ -34,6 +34,12 @@ from .. import yaml
     "patch_instructions.json file for each subdir",
 )
 @click.option(
+    "--verbose/--no-verbose",
+    default=False,
+    show_default=True,
+    help="Enable debugging output",
+)
+@click.option(
     "--channeldata/--no-channeldata",
     help="Generate channeldata.json?",
     default=False,
