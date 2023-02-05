@@ -105,12 +105,14 @@ fs|conda-package-handling-2.0.2-py310h06a4308_0.conda|1675456864|273679||||
 python -m conda_index <path to channel directory>
 ```
 
-Note `conda index` may find legacy `conda-build index` instead.
+Favor `python -m conda_index` over `conda index`, because `conda index` may
+resolve to the legacy `conda-build index` instead, which is deprecated by
+this module.
 
 ## Run for debugging
 
 ```sh
-python -m conda_index --threads=1 <path to channel directory>
+python -m conda_index --verbose --threads=1 <path to channel directory>
 ```
 
 ## Contributing
