@@ -32,16 +32,71 @@ set as an environment variable: `${CONDA_DIR}`.
 
 ```sh
 (base) @barabo ➜ /workspaces/conda-index (main) $ ls -1 ${CONDA_DIR}/pkgs/*.conda | head
+/opt/conda/pkgs/bazel-5.2.0-h6a678d5_0.conda
+/opt/conda/pkgs/beautifulsoup4-4.11.1-py310h06a4308_0.conda
 /opt/conda/pkgs/ca-certificates-2023.01.10-h06a4308_0.conda
 /opt/conda/pkgs/certifi-2022.12.7-py310h06a4308_0.conda
 /opt/conda/pkgs/cffi-1.15.1-py310h5eee18b_3.conda
+/opt/conda/pkgs/chardet-4.0.0-py310h06a4308_1003.conda
 /opt/conda/pkgs/conda-23.1.0-py310h06a4308_0.conda
+/opt/conda/pkgs/conda-build-3.23.3-py310h06a4308_0.conda
 /opt/conda/pkgs/conda-package-handling-2.0.2-py310h06a4308_0.conda
 /opt/conda/pkgs/conda-package-streaming-0.7.0-py310h06a4308_0.conda
-/opt/conda/pkgs/cryptography-38.0.4-py310h9ce1e76_0.conda
-/opt/conda/pkgs/idna-3.4-py310h06a4308_0.conda
-/opt/conda/pkgs/ld_impl_linux-64-2.38-h1181459_1.conda
-/opt/conda/pkgs/libffi-3.4.2-h6a678d5_6.conda
+```
+
+To use these packages as a starting point, you can make your current working
+directory look like a channel by giving it a valid conda "subdir" such as
+`linux-64`, `win-64`, `osx-64`, or `noarch`.
+
+Symlink the `${CONDA_DIR}/pkgs -> ./noarch` to get started quickly.
+
+```sh
+(base) @barabo ➜ /workspaces/conda-index (main) $ ln -s ${CONDA_DIR}/pkgs ./noarch
+```
+
+Run `conda-index` locally to generate an index in `./channel`, which also
+creates a cache database in your `./noarch/.cache` directory.
+
+```sh
+(base) @barabo ➜ /workspaces/conda-index (main) $ python -m conda_index --output ./channel --channeldata --rss .
+2023-02-05T06:08:29 Migrate database
+2023-02-05T06:08:29 CONVERT .cache
+2023-02-05T06:08:29 Migrate database
+2023-02-05T06:08:32 noarch cached 462.6 MB from 70 packages at 134.8 MB/second
+2023-02-05T06:08:33 Subdir: noarch Gathering repodata
+2023-02-05T06:08:33 noarch Writing pre-patch repodata
+2023-02-05T06:08:33 noarch Applying patch instructions
+2023-02-05T06:08:33 noarch Writing patched repodata
+2023-02-05T06:08:33 noarch Building current_repodata subset
+2023-02-05T06:08:33 noarch Writing current_repodata subset
+2023-02-05T06:08:33 noarch Writing index HTML
+2023-02-05T06:08:33 Completed noarch
+2023-02-05T06:08:33 Channeldata subdir: noarch
+2023-02-05T06:08:33 Build RSS
+2023-02-05T06:08:33 Built RSS
+
+(base) @barabo ➜ /workspaces/conda-index (main) $ tree channel/
+channel/
+├── channeldata.json
+├── index.html
+├── noarch
+│   ├── current_repodata.json
+│   ├── index.html
+│   ├── repodata_from_packages.json
+│   └── repodata.json
+└── rss.xml
+
+(base) @barabo ➜ /workspaces/conda-index (main) $ sqlite3 ./noarch/.cache/cache.db 'select * from stat where stage = "fs" limit 10;'
+fs|_openmp_mutex-5.1-1_gnu.conda|1675456864|21315||||
+fs|bazel-5.2.0-h6a678d5_0.conda|1675576622|41517338||||
+fs|beautifulsoup4-4.11.1-py310h06a4308_0.conda|1675464564|192154||||
+fs|ca-certificates-2023.01.10-h06a4308_0.conda|1675456864|122761||||
+fs|certifi-2022.12.7-py310h06a4308_0.conda|1675456864|153593||||
+fs|cffi-1.15.1-py310h5eee18b_3.conda|1675456866|248975||||
+fs|chardet-4.0.0-py310h06a4308_1003.conda|1675464563|206485||||
+fs|conda-23.1.0-py310h06a4308_0.conda|1675456864|976062||||
+fs|conda-build-3.23.3-py310h06a4308_0.conda|1675464563|593969||||
+fs|conda-package-handling-2.0.2-py310h06a4308_0.conda|1675456864|273679||||
 ```
 
 ## Run normally
@@ -55,7 +110,7 @@ Note `conda index` may find legacy `conda-build index` instead.
 ## Run for debugging
 
 ```sh
-python -m conda_index --verbose --threads=1 <path to channel directory>
+python -m conda_index --threads=1 <path to channel directory>
 ```
 
 ## Contributing
