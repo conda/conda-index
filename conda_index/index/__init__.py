@@ -125,14 +125,14 @@ def update_index(
     write_zst=False,
 ):
     """
-    If dir_path contains a directory named 'noarch', the path tree therein is treated
-    as though it's a full channel, with a level of subdirs, each subdir having an update
-    to repodata.json.  The full channel will also have a channeldata.json file.
+    High-level interface to ``ChannelIndex``. Index all subdirs under
+    ``dir_path``. Output to `output_dir`, or, under the input directory if
+    `output_dir` is not given. Writes updated ``channeldata.json``.
 
-    If dir_path does not contain a directory named 'noarch', but instead contains at least
-    one '*.tar.bz2' file, the directory is assumed to be a standard subdir, and only repodata.json
-    information will be updated.
-
+    The input ``dir_path`` should at least contain a directory named ``noarch``.
+    The path tree therein is treated as a full channel, with a level of subdirs,
+    each subdir having an update to repodata.json. The full channel will also
+    have a channeldata.json file.
     """
     _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
@@ -142,7 +142,8 @@ def update_index(
                 "Please update your code to point it at the channel root, rather than a subdir. "
                 "Use -s=<subdir> to update a single subdir."
             )
-        raise SystemExit()
+        raise ValueError("Does not accept a single subdir, or a path named "
+                         "like one of the standard subdirs.")
 
     channel_index = ChannelIndex(
         dir_path,
@@ -477,6 +478,12 @@ def thread_executor_factory(debug, threads):
 
 
 class ChannelIndex:
+    """
+    Class implementing ``update_index``. Allows for more fine-grained control of
+    output.
+
+    See the implementation of ``conda_index.cli`` for usage.
+    """
     def __init__(
         self,
         channel_root,
@@ -514,6 +521,10 @@ class ChannelIndex:
         progress=False,
         current_index_versions=None,
     ):
+        """
+        Examine all changed packages under ``self.channel_root``, updating
+        ``index.html`` for each subdir.
+        """
         if verbose:
             level = logging.DEBUG
         else:
