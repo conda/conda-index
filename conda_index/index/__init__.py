@@ -343,7 +343,7 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
             key: value.copy() for key, value in repodata.get(group, {}).items()
         }
     # adds url, Channel objects to each repodata package
-    sd.process_raw_repodata(repodata_copy)
+    sd._process_raw_repodata(repodata_copy)
 
     sd._loaded = True
     SubdirData._cache_[channel.url(with_credentials=True)] = sd
