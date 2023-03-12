@@ -17,6 +17,7 @@ import tarfile
 from contextlib import closing
 
 from more_itertools import ichunked
+from conda_index.utils import DEFAULT_SUBDIRS
 
 from . import common
 
@@ -31,7 +32,8 @@ PATH_INFO = re.compile(
     (?P<subdir>[^/]*)/
     .cache/
     (?P<path>(stat.json|
-        (?P<kind>recipe|index|icon|about|recipe_log|run_exports|post_install)/(?P<basename>\S*?)(?P<ext>.\w+$))
+        (?P<kind>recipe|index|icon|about|recipe_log|run_exports|post_install)/(?P<basename>\S*?)
+        (?P<ext>.\w+$))
     )""",
     re.VERBOSE,
 )
@@ -73,7 +75,8 @@ def create(conn):
     # index is a sql keyword
     # generated columns pulling fields from index_json could be nice
     # has md5, shasum. older? packages do not include timestamp?
-    # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json from index_json
+    # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json
+    # FROM index_json
     conn.execute(
         "CREATE TABLE IF NOT EXISTS index_json (path TEXT PRIMARY KEY, index_json BLOB)"
     )
@@ -172,20 +175,20 @@ def extract_cache(path):
     Yield interesting (match, tar entry) members of tarball at path.
     """
     dirnames = set()
-    tf = tarfile.open(path)
+    tar_file = tarfile.open(path)
     last_len = len(dirnames)
     try:
-        for entry in tf:
+        for entry in tar_file:
             match = PATH_INFO.search(entry.name)
             if match:
-                yield match, tf.extractfile(entry)
+                yield match, tar_file.extractfile(entry)
             dirnames.add(os.path.dirname(entry.name))
             next_len = len(dirnames)
             if last_len < next_len:
-                log.info(f"CONVERT {os.path.dirname(entry.name)}")
+                log.info("CONVERT %s", os.path.dirname(entry.name))
             last_len = next_len
     except KeyboardInterrupt:
-        log.warn("Interrupted!")
+        log.warning("Interrupted!")
 
     log.info("%s", dirnames)
 
@@ -198,7 +201,7 @@ def extract_cache_filesystem(path):
     """
     assert str(path).endswith(".cache"), f"{path} must end with .cache"
     for root, _, files in os.walk(path):
-        log.info(f"CONVERT {os.path.basename(root)}")
+        log.info("CONVERT %s", os.path.basename(root))
         for file in files:
             fullpath = os.path.join(root, file)
             posixpath = "/".join(fullpath.split(os.sep))
@@ -207,8 +210,8 @@ def extract_cache_filesystem(path):
                 try:
                     with open(fullpath, "rb") as entry:
                         yield path_info, entry
-                except PermissionError as e:
-                    log.warn("Permission error: %s %s", fullpath, e)
+                except PermissionError as error:
+                    log.warning("Permission error: %s %s", fullpath, error)
 
 
 # regex excludes arbitrary names
@@ -217,7 +220,7 @@ TABLE_MAP = {"index": "index_json"}
 CHUNK_SIZE = 4096  # packages * cache folders = cache files
 
 
-def db_path(match, override_channel=None):
+def db_path(match):
     """
     Convert match to a database primary key. Retain the option to implement
     globally unique keys.
@@ -237,7 +240,7 @@ def convert_cache(conn, cache_generator):
     """
     # chunked must be as lazy as possible to prevent tar seeks
     for i, chunk in enumerate(ichunked(cache_generator, CHUNK_SIZE)):
-        log.info(f"BEGIN BATCH {i}")
+        log.info("BEGIN BATCH %d", i)
         with conn:  # transaction
             for match, member in chunk:
 
@@ -245,9 +248,10 @@ def convert_cache(conn, cache_generator):
                     conn.execute("DELETE FROM stat WHERE stage='indexed'")
                     for key, value in json.load(member).items():
                         value["path"] = key
-                        conn.execute(
-                            "INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, 'indexed')",
-                            value,
+                        conn.execute("""
+                            INSERT OR REPLACE INTO stat (path, mtime, size, stage)
+                            VALUES (:path, :mtime, :size, 'indexed')
+                            """, value,
                         )
 
                 elif match["ext"] == ".json":
@@ -267,8 +271,8 @@ def convert_cache(conn, cache_generator):
                                 "data": member.read(),
                             },
                         )
-                    except sqlite3.OperationalError as e:
-                        log.warn("SQL error. Not JSON? %s %s", match.groups(0), e)
+                    except sqlite3.OperationalError as error:
+                        log.warning("SQL error. Not JSON? %s %s", match.groups(0), error)
 
                 elif match["kind"] == "icon":
                     conn.execute(
@@ -283,7 +287,7 @@ def convert_cache(conn, cache_generator):
                     )
 
                 else:
-                    log.warn("Unhandled", match.groupdict())
+                    log.warning("Unhandled %s", match.groupdict())
 
 
 def merge_index_cache(channel_root, output_db="merged.db"):
@@ -291,10 +295,8 @@ def merge_index_cache(channel_root, output_db="merged.db"):
     Combine {channel_root}/*/.cache/cache.db databases into a single database.
     Useful for queries. Not used by any part of the indexing process.
     """
-    from conda_index.utils import DEFAULT_SUBDIRS
-
     channel_name = os.path.basename(channel_root)
-    log.info(f"Merge caches for channel {channel_name}")
+    log.info("Merge caches for channel %s", channel_name)
     combined_db = common.connect(output_db)
     with combined_db:
         create(combined_db)  # skip 'remove prefix' migration
@@ -304,7 +306,9 @@ def merge_index_cache(channel_root, output_db="merged.db"):
             continue
         channel_prefix = f"{channel_name}/{subdir}/"
         log.info(
-            f"Merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}"
+            "Merge %s as %s",
+            os.path.relpath(cache_db, os.path.dirname(channel_root)),
+            channel_prefix,
         )
         combined_db.execute("ATTACH DATABASE ? AS subdir", (cache_db,))
 
@@ -322,22 +326,22 @@ def merge_index_cache(channel_root, output_db="merged.db"):
             try:
                 with combined_db:
                     combined_db.execute(query, (channel_prefix,))
-            except sqlite3.OperationalError as e:
+            except sqlite3.OperationalError:
                 log.error("OperationalError on %s", query)
                 raise
 
         combined_db.execute("DETACH DATABASE subdir")
 
 
-def test_from_archive(archive_path):
+def _test_from_archive(archive_path):
     conn = common.connect("linux-64-cache.db")
     create(conn)
-    with closing(conn):
+    with closing(conn):  # type: ignore
         convert_cache(conn, extract_cache(archive_path))
         remove_prefix(conn)
 
 
-def test():
+def _test():
     for i, _ in enumerate(
         extract_cache_filesystem(os.path.expanduser("~/miniconda3/osx-64/.cache"))
     ):
@@ -349,11 +353,11 @@ if __name__ == "__main__":
     from . import logutil
 
     logutil.configure()
-    test()
+    _test()
     # email us if you're thinking about downloading conda-forge to
     # regenerate this 264MB file
     CACHE_ARCHIVE = os.path.expanduser("~/Downloads/linux-64-cache.tar.bz2")
-    test_from_archive(CACHE_ARCHIVE)
+    _test_from_archive(CACHE_ARCHIVE)
 
 
 # typically 600-10,000 MB

@@ -6,8 +6,7 @@ import os.path
 
 import click
 
-from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
-from conda_index.utils import DEFAULT_SUBDIRS
+from conda_index.index import MAX_THREADS_DEFAULT, _ChannelIndex, logutil
 
 from .. import yaml
 
@@ -78,8 +77,8 @@ from .. import yaml
         """,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
-def cli(
-    dir,
+def cli(  # pylint: disable=C0116:missing-function-docstring
+    dir,  # pylint: disable=W0622:redefined-builtin
     patch_generator=None,
     subdir=None,
     output=None,
@@ -99,7 +98,7 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
-    channel_index = ChannelIndex(
+    channel_index = _ChannelIndex(
         os.path.expanduser(dir),
         channel_name=channel_name,
         output_root=output,
@@ -111,8 +110,8 @@ def cli(
 
     current_index_versions = None
     if current_index_versions_file:
-        with open(current_index_versions_file) as f:
-            current_index_versions = yaml.safe_load(f)
+        with open(current_index_versions_file, encoding="utf-8") as file:
+            current_index_versions = yaml.safe_load(file)
 
     channel_index.index(
         patch_generator=patch_generator,  # or will use outdated .py patch functions
@@ -121,4 +120,4 @@ def cli(
     )
 
     if channeldata:  # about 2 1/2 minutes for conda-forge
-        channel_index.update_channeldata(rss=rss)
+        channel_index.update_channeldata(create_rss=rss)
