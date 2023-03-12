@@ -1,3 +1,4 @@
+"""Common functions for conda-index."""
 import sqlite3
 
 

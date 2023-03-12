@@ -346,7 +346,7 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
             key: value.copy() for key, value in repodata.get(group, {}).items()
         }
     # adds url, Channel objects to each repodata package
-    subdir_data.process_raw_repodata(repodata_copy)
+    subdir_data._process_raw_repodata(repodata_copy)  # pylint: disable=protected-access
 
     subdir_data._loaded = True  # pylint: disable=protected-access
     SubdirData._cache_[channel.url(with_credentials=True)] = subdir_data  # pylint: disable=protected-access
