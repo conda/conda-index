@@ -371,7 +371,7 @@ def _add_missing_deps(new_r, original_r):
                         expanded_groups[ms.name] = set(
                             expanded_groups.get(ms.name, [])
                         ) | set(
-                            original_r.find_matches(MatchSpec(target=f"{ms.name}={version}"))
+                            original_r.find_matches(MatchSpec(f"{ms.name}={version}"))
                         )
                 seen_specs.add(dep_spec)
     return [pkg for group in expanded_groups.values() for pkg in group]
@@ -419,11 +419,11 @@ def _shard_newest_packages(subdir, r, pins=None):
     for g_name, g_recs in r.groups.items():
         # always do the latest implicitly
         version = r.groups[g_name][0].version
-        matches = set(r.find_matches(MatchSpec(target=f"{g_name}={version}")))
+        matches = set(r.find_matches(MatchSpec(f"{g_name}={version}")))
         if g_name in pins:
             for pin_value in pins[g_name]:
-                version = r.find_matches(MatchSpec(target=f"{g_name}={pin_value}"))[0].version
-                matches.update(r.find_matches(MatchSpec(target=f"{g_name}={version}")))
+                version = r.find_matches(MatchSpec(f"{g_name}={pin_value}"))[0].version
+                matches.update(r.find_matches(MatchSpec(f"{g_name}={version}")))
         groups[g_name] = matches
 
     # add the deps of the stuff in the index
