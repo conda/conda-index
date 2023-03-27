@@ -126,7 +126,7 @@ def update_index(
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
-    ``dir_path``. Output to `output_dir`, or, under the input directory if
+    ``dir_path``. Output to `output_dir`, or under the input directory if
     `output_dir` is not given. Writes updated ``channeldata.json``.
 
     The input ``dir_path`` should at least contain a directory named ``noarch``.
