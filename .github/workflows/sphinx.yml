@@ -15,16 +15,29 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
+      - name: Cache conda packages
+        uses: actions/cache@v3
+        env:
+          # Increase this value to reset cache
+          CACHE_NUMBER: 1
+        with:
+          path: ~/conda_pkgs_dir
+          key:
+            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: "3.x"
           architecture: "x64"
           cache: "pip"
+      - name: Setup conda
+        run: |
+          cat "experimental: [jlap]" >> ~/.condarc
+          $CONDA/bin/conda init
+          $CONDA/bin/conda info
       - name: Build Documentation
         run: |
-          $CONDA/bin/conda init
-          $CONDA/bin/conda create -n conda-index pip conda
+          $CONDA/bin/conda create --quiet -n conda-index pip conda
           $CONDA/bin/conda activate conda-index
           $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
           $CONDA/bin/conda run -n conda-index make html
