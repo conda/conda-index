@@ -41,9 +41,6 @@ jobs:
         run: |
           $CONDA/bin/conda create --quiet -n conda-index pip conda
           source $CONDA/envs/conda-index/bin/activate
-          # $CONDA/bin/conda activate conda-index # if this worked, we wouldn't need "conda run"
-          # $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
-          # $CONDA/bin/conda run -n conda-index make html
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
