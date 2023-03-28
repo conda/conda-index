@@ -11,9 +11,6 @@ on:
 jobs:
   sphinx:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
       - name: Cache conda packages
@@ -23,8 +20,8 @@ jobs:
           CACHE_NUMBER: 1
         with:
           path: |
-            /usr/share/miniconda/pkgs
-            /home/runner/.conda/pkgs
+            /usr/share/miniconda/pkgs/*.conda
+            /home/runner/.conda/pkgs/*.conda
           key:
             ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
       - uses: actions/setup-python@v4
@@ -40,6 +37,7 @@ jobs:
       - name: Build Documentation
         shell: bash -l {0}
         run: |
+          source ~/.bashrc
           $CONDA/bin/conda create --quiet -n conda-index pip conda
           $CONDA/bin/conda activate conda-index # if this worked, we wouldn't need "conda run"
           $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
