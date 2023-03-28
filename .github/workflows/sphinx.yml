@@ -32,16 +32,18 @@ jobs:
       - name: Setup conda
         run: |
           echo "experimental: [jlap]" >> ~/.condarc
-          $CONDA/bin/conda init
           $CONDA/bin/conda info
+          # conda init doesn't do what we want here
       - name: Build Documentation
         shell: bash -l {0}
         run: |
-          source ~/.bashrc
           $CONDA/bin/conda create --quiet -n conda-index pip conda
-          $CONDA/bin/conda activate conda-index # if this worked, we wouldn't need "conda run"
-          $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
-          $CONDA/bin/conda run -n conda-index make html
+          source $CONDA/envs/conda-index/bin/activate
+          # $CONDA/bin/conda activate conda-index # if this worked, we wouldn't need "conda run"
+          # $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
+          # $CONDA/bin/conda run -n conda-index make html
+          pip install -e ".[docs]"
+          make html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
