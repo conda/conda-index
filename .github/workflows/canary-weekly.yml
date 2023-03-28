@@ -33,7 +33,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: ${{ matrix.python-version }}
-          channels: conda-canary defaults
+          channels: conda-canary/label/dev
           activate-environment: test_env
           auto-update-conda: true
           auto-activate-base: false
@@ -41,7 +41,7 @@ jobs:
 
       - name: Source Scripts
         run: |
-          conda install conda-build pip
+          conda install -c conda-canary/label/dev conda-build pip
           # pip >=22 is required for pip install -e conda-index
           pip install --upgrade pip
           pip install -e .[test]
