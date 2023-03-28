@@ -34,7 +34,7 @@ jobs:
           cache: "pip"
       - name: Setup conda
         run: |
-          cat "experimental: [jlap]" >> ~/.condarc
+          echo "experimental: [jlap]" >> ~/.condarc
           $CONDA/bin/conda init
           $CONDA/bin/conda info
       - name: Build Documentation
