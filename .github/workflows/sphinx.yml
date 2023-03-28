@@ -21,7 +21,9 @@ jobs:
         with:
           path: |
             /usr/share/miniconda/pkgs/*.conda
+            /usr/share/miniconda/pkgs/cache
             /home/runner/.conda/pkgs/*.conda
+            /home/runner/.conda/pkgs/cache
           key:
             ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
       - uses: actions/setup-python@v4
