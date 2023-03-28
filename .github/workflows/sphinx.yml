@@ -10,9 +10,10 @@ on:
 
 jobs:
   sphinx:
-
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        shell: bash -l {0}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -24,6 +25,7 @@ jobs:
         run: |
           $CONDA/bin/conda activate
           conda create -n conda-index pip conda
+          conda activate conda-index
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
