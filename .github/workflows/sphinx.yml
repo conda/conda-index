@@ -23,9 +23,9 @@ jobs:
           cache: "pip"
       - name: Build Documentation
         run: |
-          $CONDA/bin/conda activate
-          conda create -n conda-index pip conda
-          conda activate conda-index
+          $CONDA/bin/conda init
+          $CONDA/bin/conda create -n conda-index pip conda
+          $CONDA/bin/conda activate conda-index
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
