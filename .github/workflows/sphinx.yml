@@ -38,9 +38,10 @@ jobs:
           $CONDA/bin/conda init
           $CONDA/bin/conda info
       - name: Build Documentation
+        shell: bash -l {0}
         run: |
           $CONDA/bin/conda create --quiet -n conda-index pip conda
-          $CONDA/bin/conda activate conda-index
+          $CONDA/bin/conda activate conda-index # if this worked, we wouldn't need "conda run"
           $CONDA/bin/conda run -n conda-index pip install -e ".[docs]"
           $CONDA/bin/conda run -n conda-index make html
       - name: Upload artifact
