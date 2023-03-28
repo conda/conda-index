@@ -23,7 +23,7 @@ jobs:
       - name: Build Documentation
         run: |
           $CONDA/bin/conda activate
-          conda env create -c conda-index pip conda
+          conda create -n conda-index pip conda
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
