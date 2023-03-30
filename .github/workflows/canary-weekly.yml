@@ -12,8 +12,9 @@ concurrency:
 
 jobs:
   linux:
+    # Allow manually-triggered run on fork or scheduled run on main repository:
     if: >-
-        !github.event.repository.fork
+      github.event_name != 'schedule' || !github.event.repository.fork
     runs-on: ubuntu-latest
     defaults:
       run:
