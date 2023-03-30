@@ -42,9 +42,8 @@ jobs:
 
       - name: Source Scripts
         run: |
-          conda install -c conda-canary/label/dev conda-build pip
           # pip >=22 is required for pip install -e conda-index
-          pip install --upgrade pip
+          conda install -c conda-canary/label/dev conda-build "pip>=22"
           pip install -e .[test]
           conda info -a
           pytest
