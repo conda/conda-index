@@ -12,9 +12,22 @@ concurrency:
 
 jobs:
   linux:
-    # Allow manually-triggered run on fork or scheduled run on main repository:
+    # - this is a fork and manually-triggered, or
+    # - this is the main repo, and
+    # - we are on the main (or feature) branch
     if: >-
-      github.event_name != 'schedule' || !github.event.repository.fork
+      (
+        github.event.repository.fork
+        && github.event_name == 'workflow_dispatch'
+      )
+      || (
+        !github.event.repository.fork
+        && (
+          github.ref_name == 'main'
+          || startsWith(github.ref_name, 'feature/')
+        )
+      )
+
     runs-on: ubuntu-latest
     defaults:
       run:
