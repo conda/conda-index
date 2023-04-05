@@ -14,7 +14,7 @@ from .. import yaml
 
 @click.command()
 @click.argument("dir")
-@click.option("--output", help="Output repodata to given directory")
+@click.option("--output", help="Output repodata to given directory.")
 @click.option(
     "--subdir",
     multiple=True,
@@ -35,25 +35,25 @@ from .. import yaml
 )
 @click.option(
     "--channeldata/--no-channeldata",
-    help="Generate channeldata.json?",
+    help="Generate channeldata.json.",
     default=False,
     show_default=True,
 )
 @click.option(
     "--rss/--no-rss",
-    help="Write rss.xml? (Only if --channeldata is enabled)",
+    help="Write rss.xml (Only if --channeldata is enabled).",
     default=True,
     show_default=True,
 )
 @click.option(
     "--bz2/--no-bz2",
-    help="Write repodata.json.bz2?",
+    help="Write repodata.json.bz2.",
     default=False,
     show_default=True,
 )
 @click.option(
     "--zst/--no-zst",
-    help="Write repodata.json.zst?",
+    help="Write repodata.json.zst.",
     default=False,
     show_default=True,
 )

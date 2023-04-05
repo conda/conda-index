@@ -34,7 +34,7 @@ def test_ensure_valid_channel(testing_workdir):
 
 
 def test_bad_subdir(testing_workdir):
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError):
         conda_index.api.update_index(os.path.join(testing_workdir, "osx-64"))
 
 

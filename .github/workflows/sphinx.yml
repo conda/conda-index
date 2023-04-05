@@ -10,19 +10,38 @@ on:
 
 jobs:
   sphinx:
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
+      - name: Cache conda packages
+        uses: actions/cache@v3
+        env:
+          # Increase this value to reset cache
+          CACHE_NUMBER: 1
+        with:
+          path: |
+            /usr/share/miniconda/pkgs/*.conda
+            /usr/share/miniconda/pkgs/cache
+            /home/runner/.conda/pkgs/*.conda
+            /home/runner/.conda/pkgs/cache
+          key:
+            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
       - uses: actions/setup-python@v4
         with:
           python-version: "3.x"
           architecture: "x64"
           cache: "pip"
-      - name: Build Documentation
+      - name: Setup conda
         run: |
-          pip install -r docs/requirements.txt
+          echo "experimental: [jlap]" >> ~/.condarc
+          $CONDA/bin/conda info
+          # conda init doesn't do what we want here
+      - name: Build Documentation
+        shell: bash -l {0}
+        run: |
+          $CONDA/bin/conda create --quiet -n conda-index pip conda
+          source $CONDA/envs/conda-index/bin/activate
+          pip install -e ".[docs]"
           make html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
