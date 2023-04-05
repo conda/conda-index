@@ -2,6 +2,8 @@
 conda index, formerly part of conda-build. Create `repodata.json` for
 collections of conda packages.
 
+A channel directory is a directory with a `noarch` subdirectory and other subdirectories named for conda's supported platforms `linux-64`, `win-64`, `osx-64`, etc. Place packages into the same platform subdirectory each archive was built for. Conda-index extracts metadata from these packages to generate `index.html`, `repodata.json` etc. with summaries of the packages' metadata. Then conda uses the metadata to solve dependencies before doing an install.
+
 ## Run normally
 
 ```sh
