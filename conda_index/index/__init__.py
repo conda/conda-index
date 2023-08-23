@@ -123,6 +123,7 @@ def update_index(
     debug=False,
     write_bz2=True,
     write_zst=False,
+    write_run_exports=False,
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
@@ -155,6 +156,7 @@ def update_index(
         output_root=output_dir,
         write_bz2=write_bz2,
         write_zst=write_zst,
+        write_run_exports=write_run_exports,
     )
 
     channel_index.index(
@@ -181,8 +183,10 @@ def _make_seconds(timestamp):
 
 REPODATA_VERSION = 1
 CHANNELDATA_VERSION = 1
+RUN_EXPORTS_VERSION = 1
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
+RUN_EXPORTS_JSON_FN = "run_exports.json"
 CHANNELDATA_FIELDS = (
     "description",
     "dev_url",
@@ -496,6 +500,7 @@ class ChannelIndex:
         cache_class=sqlitecache.CondaIndexCache,
         write_bz2=False,
         write_zst=False,
+        write_run_exports=False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -513,6 +518,7 @@ class ChannelIndex:
         self.deep_integrity_check = deep_integrity_check
         self.write_bz2 = write_bz2
         self.write_zst = write_zst
+        self.write_run_exports = write_run_exports
 
     def index(
         self,
@@ -632,6 +638,17 @@ class ChannelIndex:
             current_repodata,
             json_filename="current_repodata.json",
         )
+
+        if self.write_run_exports:
+            log.info("%s Building run_exports data", subdir)
+            run_exports_data = self.build_run_exports_data(subdir)
+
+            log.info("%s Writing run_exports.json", subdir)
+            self._write_repodata(
+                subdir,
+                run_exports_data,
+                json_filename=RUN_EXPORTS_JSON_FN,
+            )
 
         log.info("%s Writing index HTML", subdir)
 
@@ -1062,6 +1079,52 @@ class ChannelIndex:
         channeldata_path = join(self.channel_root, "channeldata.json")
         content = json.dumps(channeldata, indent=2, sort_keys=True)
         self._maybe_write(channeldata_path, content, True)
+
+    def build_run_exports_data(self, subdir, verbose=False, progress=False):
+        """
+        Return repodata from the cache without reading old repodata.json
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
+        """
+        subdir_path = join(self.channel_root, subdir)
+
+        cache = self.cache_for_subdir(subdir)
+
+        if verbose:
+            log.info("Building run_exports for %s" % subdir_path)
+
+        run_exports_packages = {}
+        run_exports_conda_packages = {}
+
+        # load cached packages
+        for row in cache.db.execute(
+            """
+            SELECT path, run_exports FROM stat 
+            LEFT JOIN run_exports USING (path)
+            WHERE stat.stage = ?
+            ORDER BY path
+            """,
+            (cache.upstream_stage,),
+        ):  
+            path, run_exports_data = row
+            run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
+            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
+                run_exports_packages[path] = run_exports_data
+            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
+                run_exports_conda_packages[path] = run_exports_data
+            else:
+                log.warn("%s doesn't look like a conda package", path)
+
+        new_run_exports_data = {
+            "packages": run_exports_packages,
+            "packages.conda": run_exports_conda_packages,
+            "info": {
+                "subdir": subdir,
+                "version": RUN_EXPORTS_VERSION,
+            },
+        }
+
+        return new_run_exports_data
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
