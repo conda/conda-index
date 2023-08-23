@@ -1082,7 +1082,7 @@ class ChannelIndex:
 
     def build_run_exports_data(self, subdir, verbose=False, progress=False):
         """
-        Return repodata from the cache without reading old repodata.json
+        Return CEP-12 compliant run_exports metadata from the db cache.
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
