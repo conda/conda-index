@@ -1069,3 +1069,34 @@ def test_index_clears_changed_packages(testing_workdir):
         channel_root=testing_workdir, subdir="osx-64"
     )
     assert list(index_cache.changed_packages()) == []
+
+
+def test_compact_json(index_data):
+    """
+    conda-index should be able to write pretty-printed or compact json.
+    """
+    pkg_dir = Path(index_data)
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    channel_index.index(None)
+
+    assert not "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
+
+    # bloated json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir), None, write_bz2=False, write_zst=False, compact_json=False
+    )
+
+    (pkg_dir / "noarch" / "repodata.json").unlink()
+
+    channel_index.index(None)
+    assert "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()

@@ -48,7 +48,7 @@ Home = "https://github.com/conda/conda-index"
 [tool.pytest.ini_options]
 minversion = "7.0"
 # remove --cov when testing in the debugger
-addopts = "--cov"
+# addopts = "--cov"
 testpaths = ["tests"]
 
 [tool.coverage.run]

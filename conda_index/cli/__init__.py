@@ -72,6 +72,14 @@ from .. import yaml
         """,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
+@click.option(
+    "--verbose",
+    help="""
+        Enable debug logging.
+        """,
+    default=False,
+    is_flag=True,
+)
 def cli(
     dir,
     patch_generator=None,
