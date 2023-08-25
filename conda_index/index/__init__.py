@@ -827,11 +827,7 @@ class ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        if self.compact_json:
-            new_repodata = self.json_dumps(repodata)
-        else:
-            # add newline here (historic) so .bz2, .zst is identical to repodata.json
-            new_repodata = self.json_dumps(repodata) + "\n"
+        new_repodata = self.json_dumps(repodata)
         write_result = self._maybe_write(
             repodata_json_path, new_repodata, write_newline_end=False
         )
@@ -1061,7 +1057,7 @@ class ChannelIndex:
         if self.compact_json:
             return json.dumps(data, sort_keys=True, separators=(",", ":"))
         else:
-            return json.dumps(data, sort_keys=True, indent=2)
+            return json.dumps(data, sort_keys=True, indent=2) + "\n"
 
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
@@ -1070,9 +1066,7 @@ class ChannelIndex:
                 k: v for k, v in pkg_dict.items() if v is not None and k != "commits"
             }
         channeldata_path = join(self.channel_root, "channeldata.json")
-        content = json.dumps(
-            channeldata,
-        )
+        content = self.json_dumps(channeldata)
         self._maybe_write(channeldata_path, content, True)
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
