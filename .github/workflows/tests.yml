@@ -55,7 +55,7 @@ jobs:
           pip install --upgrade pip
           pip install -e .[test]
           conda info -a
-          pytest
+          pytest --cov
 
   analyze:
     name: Analyze test results

@@ -99,3 +99,11 @@ def test_apply_instructions():
 def test_bad_yaml():
     # unclosed string
     assert conda_index.yaml.determined_load("'not yaml") == {}
+
+
+def test_main():
+    """
+    Run module for coverage.
+    """
+    with pytest.raises(SystemExit):
+        import conda_index.__main__
