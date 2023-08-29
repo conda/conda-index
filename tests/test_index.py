@@ -712,7 +712,6 @@ def test_patch_from_tarball(testing_workdir):
 
 
 def test_index_of_removed_pkg(testing_metadata):
-
     archive_name = "test_index_of_removed_pkg-1.0-1.tar.bz2"
     archive_destination = os.path.join(
         testing_metadata.config.croot, TEST_SUBDIR, archive_name
@@ -1071,6 +1070,60 @@ def test_index_clears_changed_packages(testing_workdir):
     assert list(index_cache.changed_packages()) == []
 
 
+def test_no_run_exports(index_data):
+    pkg_dir = os.path.join(index_data, "packages")
+    conda_index.api.update_index(pkg_dir, write_run_exports=False)
+    for subdir in ("osx-64", "noarch"):
+        assert not os.path.isfile(os.path.join(pkg_dir, subdir, "run_exports.json"))
+
+
+def test_run_exports(index_data):
+    pkg_dir = os.path.join(index_data, "packages")
+    conda_index.api.update_index(pkg_dir, write_run_exports=True)
+
+    noarch_run_exports_path = os.path.join(pkg_dir, "noarch", "run_exports.json")
+    assert os.path.isfile(noarch_run_exports_path)
+    with open(noarch_run_exports_path) as f:
+        noarch_data = json.load(f)
+
+    # Test data defines two packages with run_exports in noarch
+    assert noarch_data["info"]["subdir"] == "noarch"
+    assert noarch_data["info"]["version"] == 1
+    assert "packages" in noarch_data
+    assert "packages.conda" in noarch_data
+    seen = 0
+    for pkg in noarch_data["packages"]:
+        if pkg.startswith("run_exports_versions-1.0-"):
+            assert noarch_data["packages"][pkg]["run_exports"] == {
+                "weak": ["run_exports_version 1.0"]
+            }
+            seen += 1
+        elif pkg.startswith("run_exports_versions-2.0-"):
+            assert noarch_data["packages"][pkg]["run_exports"] == {
+                "weak": ["run_exports_version 2.0"]
+            }
+            seen += 1
+    assert seen == 2
+
+    # In osx-64, there're two packages with no run_exports, but they should also be listed
+    # with an empty run_exports dict
+    osx64_run_exports_path = os.path.join(pkg_dir, "osx-64", "run_exports.json")
+    assert os.path.isfile(osx64_run_exports_path)
+    with open(osx64_run_exports_path) as f:
+        osx64_data = json.load(f)
+
+    assert osx64_data["info"]["subdir"] == "osx-64"
+    assert osx64_data["info"]["version"] == 1
+    assert "packages" in osx64_data
+    assert "packages.conda" in osx64_data
+    seen = 0
+    for pkg in osx64_data["packages"]:
+        if pkg.startswith("dummy-package-"):
+            assert osx64_data["packages"][pkg]["run_exports"] == {}
+            seen += 1
+    assert seen == 2
+
+ 
 def test_compact_json(index_data):
     """
     conda-index should be able to write pretty-printed or compact json.
