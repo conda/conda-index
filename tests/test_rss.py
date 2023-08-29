@@ -110,7 +110,22 @@ class rssTest(unittest.TestCase):
                     "timestamp": time.time() - 1 * _DAY,
                     "version": "123",
                 },
-            )
+            ),
+            (  # coverage for 'has no description or summary' fallback
+                "nondescript",
+                {
+                    "dev_url": None,
+                    "doc_source_url": None,
+                    "doc_url": "https://anaconda.org/anaconda/example1",
+                    "home": "http://example1.org/",
+                    "license": "LGPL",
+                    "source_git_url": None,
+                    "source_url": "http://example1.org/package_sources.zip/download",
+                    "subdirs": ["win-32", "win-64"],
+                    "timestamp": time.time() - 1 * _DAY,
+                    "version": "123",
+                },
+            ),
         ]
         actual = rss._get_items(packages)
         expected = [

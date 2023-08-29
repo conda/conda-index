@@ -82,7 +82,7 @@ MAX_THREADS_DEFAULT = os.cpu_count() or 1
 if (
     sys.platform == "win32"
 ):  # see https://github.com/python/cpython/commit/8ea0fd85bc67438f679491fae29dfe0a3961900a
-    MAX_THREADS_DEFAULT = min(48, MAX_THREADS_DEFAULT)
+    MAX_THREADS_DEFAULT = min(48, MAX_THREADS_DEFAULT)  # pragma: no cover
 LOCK_TIMEOUT_SECS = 3 * 3600
 LOCKFILE_NAME = ".lock"
 
@@ -143,8 +143,10 @@ def update_index(
                 "Please update your code to point it at the channel root, rather than a subdir. "
                 "Use -s=<subdir> to update a single subdir."
             )
-        raise ValueError("Does not accept a single subdir, or a path named "
-                         "like one of the standard subdirs.")
+        raise ValueError(
+            "Does not accept a single subdir, or a path named "
+            "like one of the standard subdirs."
+        )
 
     channel_index = ChannelIndex(
         dir_path,
@@ -488,6 +490,7 @@ class ChannelIndex:
 
     See the implementation of ``conda_index.cli`` for usage.
     """
+
     def __init__(
         self,
         channel_root,
@@ -501,6 +504,7 @@ class ChannelIndex:
         write_bz2=False,
         write_zst=False,
         write_run_exports=False,
+        compact_json=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -519,6 +523,7 @@ class ChannelIndex:
         self.write_bz2 = write_bz2
         self.write_zst = write_zst
         self.write_run_exports = write_run_exports
+        self.compact_json = compact_json
 
     def index(
         self,
@@ -839,15 +844,7 @@ class ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        # add newline here (historic) so .bz2, .zst is identical to repodata.json
-        new_repodata = (
-            json.dumps(
-                repodata,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
-        )
+        new_repodata = self.json_dumps(repodata)
         write_result = self._maybe_write(
             repodata_json_path, new_repodata, write_newline_end=False
         )
@@ -1070,6 +1067,15 @@ class ChannelIndex:
             }
         )
 
+    def json_dumps(self, data):
+        """
+        Format json based on class policy.
+        """
+        if self.compact_json:
+            return json.dumps(data, sort_keys=True, separators=(",", ":"))
+        else:
+            return json.dumps(data, sort_keys=True, indent=2) + "\n"
+
     def _write_channeldata(self, channeldata):
         # trim out commits, as they can take up a ton of space.  They're really only for the RSS feed.
         for pkg, pkg_dict in channeldata.get("packages", {}).items():
@@ -1077,7 +1083,7 @@ class ChannelIndex:
                 k: v for k, v in pkg_dict.items() if v is not None and k != "commits"
             }
         channeldata_path = join(self.channel_root, "channeldata.json")
-        content = json.dumps(channeldata, indent=2, sort_keys=True)
+        content = self.json_dumps(channeldata)
         self._maybe_write(channeldata_path, content, True)
 
     def build_run_exports_data(self, subdir, verbose=False, progress=False):
@@ -1171,7 +1177,7 @@ class ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
+        new_patch = self.json_dumps(instructions)
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )

@@ -1122,3 +1122,34 @@ def test_run_exports(index_data):
             assert osx64_data["packages"][pkg]["run_exports"] == {}
             seen += 1
     assert seen == 2
+
+ 
+def test_compact_json(index_data):
+    """
+    conda-index should be able to write pretty-printed or compact json.
+    """
+    pkg_dir = Path(index_data)
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    channel_index.index(None)
+
+    assert not "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
+
+    # bloated json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir), None, write_bz2=False, write_zst=False, compact_json=False
+    )
+
+    (pkg_dir / "noarch" / "repodata.json").unlink()
+
+    channel_index.index(None)
+    assert "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
