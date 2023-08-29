@@ -58,6 +58,12 @@ from .. import yaml
     show_default=True,
 )
 @click.option(
+    "--run-exports/--no-run-exports",
+    help="Write run_exports.json.",
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--current-index-versions-file",
     "-m",
     help="""
@@ -72,6 +78,14 @@ from .. import yaml
         """,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
+@click.option(
+    "--verbose",
+    help="""
+        Enable debug logging.
+        """,
+    default=False,
+    is_flag=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -85,6 +99,7 @@ def cli(
     bz2=False,
     zst=False,
     rss=False,
+    run_exports=False,
 ):
     logutil.configure()
     if verbose:
@@ -101,6 +116,7 @@ def cli(
         write_bz2=bz2,
         write_zst=zst,
         threads=threads,
+        write_run_exports=run_exports,
     )
 
     current_index_versions = None
