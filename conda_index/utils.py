@@ -1,15 +1,8 @@
-import collections
 import filecmp
 import hashlib
-import itertools
 from concurrent.futures.thread import ThreadPoolExecutor
 from contextlib import contextmanager
 
-from conda.base.constants import (
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-    CONDA_PACKAGE_EXTENSIONS,
-)
 from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
 
 DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
@@ -54,7 +47,7 @@ def checksums(fn, algorithms, buffersize=1 << 18):
     return [result.result() for result in results]
 
 
-from .utils_build import (
+from .utils_build import ( # noqa
     ensure_list,
     get_lock,
     merge_or_update_dict,

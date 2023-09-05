@@ -106,4 +106,4 @@ def test_main():
     Run module for coverage.
     """
     with pytest.raises(SystemExit):
-        import conda_index.__main__
+        __import__("conda_index.__main__")

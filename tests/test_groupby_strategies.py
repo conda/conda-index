@@ -2,7 +2,7 @@ import itertools
 import json
 import pathlib
 
-from conda_index.utils import CONDA_PACKAGE_EXTENSION_V1
+from conda.base.constants import CONDA_PACKAGE_EXTENSION_V1
 
 try:
     from tlz import groupby as toolz_groupby

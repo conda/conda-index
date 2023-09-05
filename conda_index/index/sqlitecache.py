@@ -12,10 +12,11 @@ from os.path import join
 from typing import Any
 from zipfile import BadZipFile
 
+from conda.base.constants import CONDA_PACKAGE_EXTENSIONS
 from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import CONDA_PACKAGE_EXTENSIONS, checksums
+from ..utils import checksums
 from . import common, convert_cache
 
 log = logging.getLogger(__name__)
@@ -267,7 +268,7 @@ class CondaIndexCache:
 
             if not wanted:  # we got what we wanted
                 package_stream.close()
-                log.debug(f"%s early close", fn)
+                log.debug("%s early close", fn)
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing

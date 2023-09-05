@@ -33,7 +33,7 @@ from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
 from .. import utils
-from ..utils import (
+from conda.base.constants import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
@@ -725,7 +725,7 @@ class ChannelIndex:
             self.subdirs = sorted(detected_subdirs | {"noarch"})
         else:
             self.subdirs = sorted(set(self._subdirs))
-            if not "noarch" in self.subdirs:
+            if "noarch" not in self.subdirs:
                 log.warning("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
 
