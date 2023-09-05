@@ -13,7 +13,7 @@ dynamic = ["version", "description"]
 requires-python = ">=3.7"
 dependencies = [
     "click >=8",
-    "conda >=4.14.0",   # not available on pypi
+    "conda >=4.14.0",                  # not available on pypi
     "conda-package-streaming >=0.7.0",
     "filelock",
     "jinja2",
@@ -30,7 +30,13 @@ test = [
     "pytest-cov",
     "pytest-mock",
 ]
-docs = ["furo", "sphinx", "myst-parser", "mdit-py-plugins>=0.3.0"]
+docs = [
+    "furo",
+    "sphinx",
+    "sphinx-click",
+    "myst-parser",
+    "mdit-py-plugins>=0.3.0",
+]
 
 [project.scripts]
 # conda-build also provides conda-index script.
@@ -41,10 +47,8 @@ Home = "https://github.com/conda/conda-index"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-# remove --cov when testing in the debugger
-addopts = "--cov"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-concurrency = [ "multiprocessing", "thread" ]
-source = [ "conda_index" ]
+concurrency = ["multiprocessing", "thread"]
+source = ["conda_index"]

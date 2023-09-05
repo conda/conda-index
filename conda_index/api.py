@@ -16,6 +16,7 @@ def update_index(
     verbose=False,
     progress=False,
     current_index_versions=None,
+    write_run_exports=False,
 ):
     import os
 
@@ -47,4 +48,5 @@ def update_index(
             progress=progress,
             subdirs=ensure_list(subdir),
             current_index_versions=current_index_versions,
+            write_run_exports=write_run_exports,
         )

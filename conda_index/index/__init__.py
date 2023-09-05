@@ -88,7 +88,7 @@ MAX_THREADS_DEFAULT = os.cpu_count() or 1
 if (
     sys.platform == "win32"
 ):  # see https://github.com/python/cpython/commit/8ea0fd85bc67438f679491fae29dfe0a3961900a
-    MAX_THREADS_DEFAULT = min(48, MAX_THREADS_DEFAULT)
+    MAX_THREADS_DEFAULT = min(48, MAX_THREADS_DEFAULT)  # pragma: no cover
 LOCK_TIMEOUT_SECS = 3 * 3600
 LOCKFILE_NAME = ".lock"
 
@@ -125,16 +125,17 @@ def update_index(
     debug=False,
     write_bz2=True,
     write_zst=False,
+    write_run_exports=False,
 ):
     """
-    If dir_path contains a directory named 'noarch', the path tree therein is treated
-    as though it's a full channel, with a level of subdirs, each subdir having an update
-    to repodata.json.  The full channel will also have a channeldata.json file.
+    High-level interface to ``ChannelIndex``. Index all subdirs under
+    ``dir_path``. Output to `output_dir`, or under the input directory if
+    `output_dir` is not given. Writes updated ``channeldata.json``.
 
-    If dir_path does not contain a directory named 'noarch', but instead contains at least
-    one '*.tar.bz2' file, the directory is assumed to be a standard subdir, and only repodata.json
-    information will be updated.
-
+    The input ``dir_path`` should at least contain a directory named ``noarch``.
+    The path tree therein is treated as a full channel, with a level of subdirs,
+    each subdir having an update to repodata.json. The full channel will also
+    have a channeldata.json file.
     """
     _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
@@ -145,7 +146,10 @@ def update_index(
                 "Please update your code to point it at the channel root, rather than a subdir.  "
                 "Use -s=<subdir> to update a single subdir."
             )
-        raise SystemExit()
+        raise ValueError(
+            "Does not accept a single subdir, or a path named "
+            "like one of the standard subdirs."
+        )
 
     channel_index = _ChannelIndex(
         dir_path,
@@ -157,6 +161,7 @@ def update_index(
         output_root=output_dir,
         write_bz2=write_bz2,
         write_zst=write_zst,
+        write_run_exports=write_run_exports,
     )
 
     channel_index.index(
@@ -183,8 +188,10 @@ def _make_seconds(timestamp):
 
 REPODATA_VERSION = 1
 CHANNELDATA_VERSION = 1
+RUN_EXPORTS_VERSION = 1
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
+RUN_EXPORTS_JSON_FN = "run_exports.json"
 CHANNELDATA_FIELDS = (
     "description",
     "dev_url",
@@ -481,7 +488,14 @@ def _thread_executor_factory(debug, threads):
     )  # "fork" start method may cause hangs even on Linux?
 
 
-class _ChannelIndex:
+class ChannelIndex:
+    """
+    Class implementing ``update_index``. Allows for more fine-grained control of
+    output.
+
+    See the implementation of ``conda_index.cli`` for usage.
+    """
+
     def __init__(
         self,
         channel_root,
@@ -494,6 +508,8 @@ class _ChannelIndex:
         cache_class=sqlitecache.CondaIndexCache,
         write_bz2=False,
         write_zst=False,
+        write_run_exports=False,
+        compact_json=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -512,6 +528,8 @@ class _ChannelIndex:
         self.deep_integrity_check = deep_integrity_check
         self.write_bz2 = write_bz2
         self.write_zst = write_zst
+        self.write_run_exports = write_run_exports
+        self.compact_json = compact_json
 
     def index(
         self,
@@ -520,7 +538,10 @@ class _ChannelIndex:
         progress=False,
         current_index_versions=None,
     ):
-        """Generate index artifacts."""
+        """
+        Examine all changed packages under ``self.channel_root``, updating
+        ``index.html`` for each subdir.
+        """
         level = verbose and logging.DEBUG or logging.ERROR
         logging_context = utils.LoggingContext(level, loggers=[__name__])
 
@@ -619,6 +640,17 @@ class _ChannelIndex:
             current_repodata,
             json_filename="current_repodata.json",
         )
+
+        if self.write_run_exports:
+            log.info("%s Building run_exports data", subdir)
+            run_exports_data = self.build_run_exports_data(subdir)
+
+            log.info("%s Writing run_exports.json", subdir)
+            self._write_repodata(
+                subdir,
+                run_exports_data,
+                json_filename=RUN_EXPORTS_JSON_FN,
+            )
 
         log.info("%s Writing index HTML", subdir)
 
@@ -810,15 +842,7 @@ class _ChannelIndex:
         Write repodata to :json_filename, but only if changed.
         """
         repodata_json_path = join(self.channel_root, subdir, json_filename)
-        # add newline here (historic) so .bz2, .zst is identical to repodata.json
-        new_repodata = (
-            json.dumps(
-                repodata,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n"
-        )
+        new_repodata = self.json_dumps(repodata)
         write_result = self._maybe_write(
             repodata_json_path, new_repodata, write_newline_end=False
         )
@@ -1042,6 +1066,15 @@ class _ChannelIndex:
             }
         )
 
+    def json_dumps(self, data):
+        """
+        Format json based on class policy.
+        """
+        if self.compact_json:
+            return json.dumps(data, sort_keys=True, separators=(",", ":"))
+        else:
+            return json.dumps(data, sort_keys=True, indent=2) + "\n"
+
     def _write_channeldata(self, channeldata):
         # Trim out commits, as they can take up a ton of space.  They're really only for the RSS.
         for pkg, pkg_dict in channeldata.get("packages", {}).items():
@@ -1049,8 +1082,54 @@ class _ChannelIndex:
                 k: v for k, v in pkg_dict.items() if v is not None and k != "commits"
             }
         channeldata_path = join(self.channel_root, "channeldata.json")
-        content = json.dumps(channeldata, indent=2, sort_keys=True)
+        content = self.json_dumps(channeldata)
         self._maybe_write(channeldata_path, content, True)
+
+    def build_run_exports_data(self, subdir, verbose=False, progress=False):
+        """
+        Return CEP-12 compliant run_exports metadata from the db cache.
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
+        """
+        subdir_path = join(self.channel_root, subdir)
+
+        cache = self.cache_for_subdir(subdir)
+
+        if verbose:
+            log.info("Building run_exports for %s" % subdir_path)
+
+        run_exports_packages = {}
+        run_exports_conda_packages = {}
+
+        # load cached packages
+        for row in cache.db.execute(
+            """
+            SELECT path, run_exports FROM stat
+            LEFT JOIN run_exports USING (path)
+            WHERE stat.stage = ?
+            ORDER BY path
+            """,
+            (cache.upstream_stage,),
+        ):
+            path, run_exports_data = row
+            run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
+            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
+                run_exports_packages[path] = run_exports_data
+            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
+                run_exports_conda_packages[path] = run_exports_data
+            else:
+                log.warn("%s doesn't look like a conda package", path)
+
+        new_run_exports_data = {
+            "packages": run_exports_packages,
+            "packages.conda": run_exports_conda_packages,
+            "info": {
+                "subdir": subdir,
+                "version": RUN_EXPORTS_VERSION,
+            },
+        }
+
+        return new_run_exports_data
 
     def _load_patch_instructions_tarball(self, subdir, patch_generator):
         instructions = {}
@@ -1096,7 +1175,7 @@ class _ChannelIndex:
             return {}
 
     def _write_patch_instructions(self, subdir, instructions):
-        new_patch = json.dumps(instructions, indent=2, sort_keys=True)
+        new_patch = self.json_dumps(instructions)
         patch_instructions_path = join(
             self.channel_root, subdir, "patch_instructions.json"
         )

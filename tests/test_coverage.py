@@ -34,7 +34,7 @@ def test_ensure_valid_channel(testing_workdir):
 
 
 def test_bad_subdir(testing_workdir):
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError):
         conda_index.api.update_index(os.path.join(testing_workdir, "osx-64"))
 
 
@@ -99,3 +99,11 @@ def test_apply_instructions():
 def test_bad_yaml():
     # unclosed string
     assert conda_index.yaml.determined_load("'not yaml") == {}
+
+
+def test_main():
+    """
+    Run module for coverage.
+    """
+    with pytest.raises(SystemExit):
+        import conda_index.__main__

@@ -31,6 +31,7 @@ author = "conda"
 extensions = [
     "sphinx.ext.autodoc",
     "myst_parser",
+    "sphinx_click",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

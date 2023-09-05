@@ -6,14 +6,14 @@ import os.path
 
 import click
 
-from conda_index.index import MAX_THREADS_DEFAULT, _ChannelIndex, logutil
+from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 from .. import yaml
 
 
 @click.command()
 @click.argument("dir")
-@click.option("--output", help="Output repodata to given directory")
+@click.option("--output", help="Output repodata to given directory.")
 @click.option(
     "--subdir",
     multiple=True,
@@ -40,25 +40,31 @@ from .. import yaml
 )
 @click.option(
     "--channeldata/--no-channeldata",
-    help="Generate channeldata.json?",
+    help="Generate channeldata.json.",
     default=False,
     show_default=True,
 )
 @click.option(
     "--rss/--no-rss",
-    help="Write rss.xml? (Only if --channeldata is enabled)",
+    help="Write rss.xml (Only if --channeldata is enabled).",
     default=True,
     show_default=True,
 )
 @click.option(
     "--bz2/--no-bz2",
-    help="Write repodata.json.bz2?",
+    help="Write repodata.json.bz2.",
     default=False,
     show_default=True,
 )
 @click.option(
     "--zst/--no-zst",
-    help="Write repodata.json.zst?",
+    help="Write repodata.json.zst.",
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--run-exports/--no-run-exports",
+    help="Write run_exports.json.",
     default=False,
     show_default=True,
 )
@@ -77,8 +83,16 @@ from .. import yaml
         """,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
-def cli(  # pylint: disable=C0116:missing-function-docstring
-    dir,  # pylint: disable=W0622:redefined-builtin
+@click.option(
+    "--verbose",
+    help="""
+        Enable debug logging.
+        """,
+    default=False,
+    is_flag=True,
+)
+def cli(
+    dir,
     patch_generator=None,
     subdir=None,
     output=None,
@@ -90,6 +104,7 @@ def cli(  # pylint: disable=C0116:missing-function-docstring
     bz2=False,
     zst=False,
     rss=False,
+    run_exports=False,
 ):
     logutil.configure()
     if verbose:
@@ -98,7 +113,7 @@ def cli(  # pylint: disable=C0116:missing-function-docstring
     if output:
         output = os.path.expanduser(output)
 
-    channel_index = _ChannelIndex(
+    channel_index = ChannelIndex(
         os.path.expanduser(dir),
         channel_name=channel_name,
         output_root=output,
@@ -106,6 +121,7 @@ def cli(  # pylint: disable=C0116:missing-function-docstring
         write_bz2=bz2,
         write_zst=zst,
         threads=threads,
+        write_run_exports=run_exports,
     )
 
     current_index_versions = None

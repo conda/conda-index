@@ -6,7 +6,9 @@
 ```{toctree}
 :caption: 'Contents:'
 :maxdepth: 2
+cli
 modules
+database
 ```
 
 # Indices and tables

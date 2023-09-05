@@ -10,7 +10,7 @@ from pathlib import Path
 import conda_package_handling.api
 import pytest
 import zstandard
-from conda_build.conda_interface import conda_47, context
+from conda_build.conda_interface import context
 from conda_build.utils import copy_into, rm_rf
 
 import conda_index.api
@@ -712,7 +712,6 @@ def test_patch_from_tarball(testing_workdir):
 
 
 def test_index_of_removed_pkg(testing_metadata):
-
     archive_name = "test_index_of_removed_pkg-1.0-1.tar.bz2"
     archive_destination = os.path.join(
         testing_metadata.config.croot, TEST_SUBDIR, archive_name
@@ -965,30 +964,25 @@ def test_current_index_reduces_space(index_data):
         "ancient-package-1.2.10-h7b6447c_3.tar.bz2",
         "one-gets-filtered-1.3.10-h7b6447c_3.tar.bz2",
     }
-    # conda 4.7 removes .tar.bz2 files in favor of .conda files
-    if conda_47:
-        tar_bz2_keys.remove("one-gets-filtered-1.3.10-h7b6447c_3.tar.bz2")
+    # conda 4.7+ removes .tar.bz2 files in favor of .conda files
+    tar_bz2_keys.remove("one-gets-filtered-1.3.10-h7b6447c_3.tar.bz2")
 
     # .conda files will replace .tar.bz2 files.  Older packages that are necessary for satisfiability will remain
     assert set(trimmed_repodata["packages"].keys()) == tar_bz2_keys
-    if conda_47:
-        assert set(trimmed_repodata["packages.conda"].keys()) == {
-            "one-gets-filtered-1.3.10-h7b6447c_3.conda"
-        }
+
+    assert set(trimmed_repodata["packages.conda"].keys()) == {
+        "one-gets-filtered-1.3.10-h7b6447c_3.conda"
+    }
 
     # we can keep more than one version series using a collection of keys
     trimmed_repodata = conda_index.index._build_current_repodata(
         "linux-64", repodata, {"one-gets-filtered": ["1.2", "1.3"]}
     )
-    if conda_47:
-        assert set(trimmed_repodata["packages.conda"].keys()) == {
-            "one-gets-filtered-1.2.11-h7b6447c_3.conda",
-            "one-gets-filtered-1.3.10-h7b6447c_3.conda",
-        }
-    else:
-        assert set(trimmed_repodata["packages"].keys()) == tar_bz2_keys | {
-            "one-gets-filtered-1.2.11-h7b6447c_3.tar.bz2"
-        }
+
+    assert set(trimmed_repodata["packages.conda"].keys()) == {
+        "one-gets-filtered-1.2.11-h7b6447c_3.conda",
+        "one-gets-filtered-1.3.10-h7b6447c_3.conda",
+    }
 
 
 def test_current_index_version_keys_keep_older_packages(index_data):
@@ -1074,3 +1068,88 @@ def test_index_clears_changed_packages(testing_workdir):
         channel_root=testing_workdir, subdir="osx-64"
     )
     assert list(index_cache.changed_packages()) == []
+
+
+def test_no_run_exports(index_data):
+    pkg_dir = os.path.join(index_data, "packages")
+    conda_index.api.update_index(pkg_dir, write_run_exports=False)
+    for subdir in ("osx-64", "noarch"):
+        assert not os.path.isfile(os.path.join(pkg_dir, subdir, "run_exports.json"))
+
+
+def test_run_exports(index_data):
+    pkg_dir = os.path.join(index_data, "packages")
+    conda_index.api.update_index(pkg_dir, write_run_exports=True)
+
+    noarch_run_exports_path = os.path.join(pkg_dir, "noarch", "run_exports.json")
+    assert os.path.isfile(noarch_run_exports_path)
+    with open(noarch_run_exports_path) as f:
+        noarch_data = json.load(f)
+
+    # Test data defines two packages with run_exports in noarch
+    assert noarch_data["info"]["subdir"] == "noarch"
+    assert noarch_data["info"]["version"] == 1
+    assert "packages" in noarch_data
+    assert "packages.conda" in noarch_data
+    seen = 0
+    for pkg in noarch_data["packages"]:
+        if pkg.startswith("run_exports_versions-1.0-"):
+            assert noarch_data["packages"][pkg]["run_exports"] == {
+                "weak": ["run_exports_version 1.0"]
+            }
+            seen += 1
+        elif pkg.startswith("run_exports_versions-2.0-"):
+            assert noarch_data["packages"][pkg]["run_exports"] == {
+                "weak": ["run_exports_version 2.0"]
+            }
+            seen += 1
+    assert seen == 2
+
+    # In osx-64, there're two packages with no run_exports, but they should also be listed
+    # with an empty run_exports dict
+    osx64_run_exports_path = os.path.join(pkg_dir, "osx-64", "run_exports.json")
+    assert os.path.isfile(osx64_run_exports_path)
+    with open(osx64_run_exports_path) as f:
+        osx64_data = json.load(f)
+
+    assert osx64_data["info"]["subdir"] == "osx-64"
+    assert osx64_data["info"]["version"] == 1
+    assert "packages" in osx64_data
+    assert "packages.conda" in osx64_data
+    seen = 0
+    for pkg in osx64_data["packages"]:
+        if pkg.startswith("dummy-package-"):
+            assert osx64_data["packages"][pkg]["run_exports"] == {}
+            seen += 1
+    assert seen == 2
+
+ 
+def test_compact_json(index_data):
+    """
+    conda-index should be able to write pretty-printed or compact json.
+    """
+    pkg_dir = Path(index_data)
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    channel_index.index(None)
+
+    assert not "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
+
+    # bloated json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir), None, write_bz2=False, write_zst=False, compact_json=False
+    )
+
+    (pkg_dir / "noarch" / "repodata.json").unlink()
+
+    channel_index.index(None)
+    assert "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
