@@ -1,6 +1,5 @@
-# pylint: disable=too-many-lines
 """
-Builds channel index artifacts.
+Build channel index artifacts.
 
 Copyright (C) 2018-2023 Anaconda, Inc
 """
@@ -20,7 +19,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from numbers import Number
 from os.path import abspath, basename, getmtime, getsize, isfile, join
-from typing import NamedTuple
+from typing import NamedTuple, Iterable
 from uuid import uuid4
 
 import zstandard
@@ -116,10 +115,10 @@ def update_index(
     check_md5=False,
     channel_name=None,
     patch_generator=None,
-    threads=MAX_THREADS_DEFAULT,
+    threads: int | None = MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
-    subdirs=None,
+    subdirs: Iterable[str] = (),
     warn=True,
     current_index_versions=None,
     debug=False,
@@ -255,16 +254,26 @@ def _apply_instructions(_, repodata, instructions):
 
     for filename in instructions.get("revoke", ()):
         for key in ("packages", "packages.conda"):
-            if filename.endswith(CONDA_PACKAGE_EXTENSION_V1) and key == "packages.conda":
-                filename = filename.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
+            if (
+                filename.endswith(CONDA_PACKAGE_EXTENSION_V1)
+                and key == "packages.conda"
+            ):
+                filename = filename.replace(
+                    CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
+                )
             if filename in repodata[key]:
                 repodata[key][filename]["revoked"] = True
                 repodata[key][filename]["depends"].append("package_has_been_revoked")
 
     for filename in instructions.get("remove", ()):
         for key in ("packages", "packages.conda"):
-            if filename.endswith(CONDA_PACKAGE_EXTENSION_V1) and key == "packages.conda":
-                filename = filename.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
+            if (
+                filename.endswith(CONDA_PACKAGE_EXTENSION_V1)
+                and key == "packages.conda"
+            ):
+                filename = filename.replace(
+                    CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
+                )
             popped = repodata[key].pop(filename, None)
             if popped:
                 repodata["removed"].append(filename)
@@ -356,9 +365,13 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
     subdir_data._process_raw_repodata(repodata_copy)  # pylint: disable=protected-access
 
     subdir_data._loaded = True  # pylint: disable=protected-access
-    SubdirData._cache_[channel.url(with_credentials=True)] = subdir_data  # pylint: disable=protected-access
+    SubdirData._cache_[
+        channel.url(with_credentials=True)
+    ] = subdir_data  # pylint: disable=protected-access
 
-    index = {prec: prec for prec in precs or subdir_data._package_records}  # pylint: disable=protected-access
+    index = {
+        prec: prec for prec in precs or subdir_data._package_records
+    }  # pylint: disable=protected-access
     return Resolve(index, channels=(channel,))
 
 
@@ -433,7 +446,9 @@ def _shard_newest_packages(subdir, r, pins=None):  # pylint: disable=invalid-nam
         matches = set(r.find_matches(MatchSpec(target=f"{g_name}={version}")))
         if g_name in pins:
             for pin_value in pins[g_name]:
-                version = r.find_matches(MatchSpec(target=f"{g_name}={pin_value}"))[0].version
+                version = r.find_matches(MatchSpec(target=f"{g_name}={pin_value}"))[
+                    0
+                ].version
                 matches.update(r.find_matches(MatchSpec(target=f"{g_name}={version}")))
         groups[g_name] = matches
 
@@ -500,7 +515,7 @@ class ChannelIndex:
         self,
         channel_root,
         channel_name,
-        subdirs=None,
+        subdirs: Iterable[str] | None = (),
         threads: (int | None) = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
@@ -519,7 +534,7 @@ class ChannelIndex:
         self.output_root = abspath(output_root) if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
         self._subdirs = subdirs
-        self.subdirs = None
+        self.subdirs = {}
         # no lambdas in pickleable
         self.thread_executor_factory = functools.partial(
             _thread_executor_factory, debug, threads
@@ -820,7 +835,8 @@ class ChannelIndex:
                         log.error(
                             "Package at %s did not contain valid index.json data.  Please"
                             " check the file and remove/redownload if necessary to obtain "
-                            "a valid package.", os.path.join(subdir_path, filename)
+                            "a valid package.",
+                            os.path.join(subdir_path, filename),
                         )
             end_time = time.time()
             try:
@@ -972,7 +988,9 @@ class ChannelIndex:
 
         groups = newest_by_name_and_version(all_repodata_packages)
 
-        def _replace_if_newer_and_present(package_data, data, existing_record, data_newer, k):
+        def _replace_if_newer_and_present(
+            package_data, data, existing_record, data_newer, k
+        ):
             if data.get(k) and (data_newer or not existing_record.get(k)):
                 package_data[k] = data[k]
             else:
@@ -1150,7 +1168,10 @@ class ChannelIndex:
             log.debug("using patch generator %s for %s", gen_patch_path, subdir)
 
             # https://stackoverflow.com/a/41595552/2127762
-            from importlib.util import module_from_spec, spec_from_file_location  # pylint: disable=import-outside-toplevel
+            from importlib.util import (
+                module_from_spec,
+                spec_from_file_location,
+            )  # pylint: disable=import-outside-toplevel
 
             spec = spec_from_file_location("a_b", gen_patch_path)
             if spec and spec.loader:
@@ -1159,7 +1180,9 @@ class ChannelIndex:
             else:
                 raise ImportError()
 
-            instructions = mod._patch_repodata(repodata, subdir)  # pylint: disable=protected-access
+            instructions = mod._patch_repodata(
+                repodata, subdir
+            )  # pylint: disable=protected-access
 
             if instructions.get("patch_instructions_version", 0) > 1:
                 raise RuntimeError("Incompatible patch instructions version")

@@ -248,10 +248,12 @@ def convert_cache(conn, cache_generator):
                     conn.execute("DELETE FROM stat WHERE stage='indexed'")
                     for key, value in json.load(member).items():
                         value["path"] = key
-                        conn.execute("""
+                        conn.execute(
+                            """
                             INSERT OR REPLACE INTO stat (path, mtime, size, stage)
                             VALUES (:path, :mtime, :size, 'indexed')
-                            """, value,
+                            """,
+                            value,
                         )
 
                 elif match["ext"] == ".json":
@@ -272,7 +274,9 @@ def convert_cache(conn, cache_generator):
                             },
                         )
                     except sqlite3.OperationalError as error:
-                        log.warning("SQL error. Not JSON? %s %s", match.groups(0), error)
+                        log.warning(
+                            "SQL error. Not JSON? %s %s", match.groups(0), error
+                        )
 
                 elif match["kind"] == "icon":
                     conn.execute(
