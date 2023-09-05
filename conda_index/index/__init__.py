@@ -60,19 +60,19 @@ def logging_config():
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
-class _DummyExecutor(Executor):
+class DummyExecutor(Executor):
     def map(self, func, *iterables):  # pylint: disable=arguments-differ
         for iterable in iterables:
             for thing in iterable:
                 yield func(thing)
 
     def submit(self, func, *args, **kwargs):  # pylint: disable=arguments-differ
-        class _Future:
+        class Future:
             def result(self):
                 """Passes args and kwargs to func."""
                 return func(*args, **kwargs)
 
-        return _Future()
+        return Future()
 
 
 LOCAL_INDEX_TIMESTAMP = 0
@@ -151,7 +151,7 @@ def update_index(
             "like one of the standard subdirs."
         )
 
-    channel_index = _ChannelIndex(
+    channel_index = ChannelIndex(
         dir_path,
         channel_name,
         subdirs=subdirs,
@@ -478,7 +478,7 @@ def _build_current_repodata(subdir, repodata, pins):
 
 def _thread_executor_factory(debug, threads):
     return (
-        _DummyExecutor()
+        DummyExecutor()
         if (debug or threads == 1)
         else ProcessPoolExecutor(
             threads,
@@ -546,7 +546,7 @@ class ChannelIndex:
         logging_context = utils.LoggingContext(level, loggers=[__name__])
 
         with logging_context:
-            subdirs = self._detect_subdirs()
+            subdirs = self.detect_subdirs()
 
             # Lock local channel.
             with utils.try_acquire_locks(
@@ -568,8 +568,8 @@ class ChannelIndex:
                     def extract_wrapper(args: tuple):
                         # runs in thread
                         subdir, _verbose, _progress, subdir_path = args
-                        cache = self._cache_for_subdir(subdir)
-                        return self._extract_subdir_to_cache(subdir, subdir_path, cache)
+                        cache = self.cache_for_subdir(subdir)
+                        return self.extract_subdir_to_cache(subdir, subdir_path, cache)
 
                     # map() gives results in order passed, not in order of
                     # completion. If using multiple threads, switch to
@@ -666,7 +666,7 @@ class ChannelIndex:
         Update channeldata based on re-reading output `repodata.json` and existing
         `channeldata.json`. Call after index() if channeldata is needed.
         """
-        subdirs = self._detect_subdirs()
+        subdirs = self.detect_subdirs()
 
         # Skip locking; only writes the channeldata.
 
@@ -699,7 +699,7 @@ class ChannelIndex:
         log.debug("write channeldata")
         self._write_channeldata(channel_data)
 
-    def _detect_subdirs(self):
+    def detect_subdirs(self):
         if not self._subdirs:
             detected_subdirs = {
                 subdir.name
@@ -726,7 +726,7 @@ class ChannelIndex:
         """
         subdir_path = join(self.channel_root, subdir)
 
-        cache = self._cache_for_subdir(subdir)
+        cache = self.cache_for_subdir(subdir)
 
         if verbose:
             log.info("Building repodata for %s", subdir_path)
@@ -764,7 +764,7 @@ class ChannelIndex:
 
         return new_repodata
 
-    def _cache_for_subdir(self, subdir):
+    def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
             channel_root=self.channel_root, subdir=subdir
         )
@@ -773,7 +773,7 @@ class ChannelIndex:
             cache.convert()
         return cache
 
-    def _extract_subdir_to_cache(
+    def extract_subdir_to_cache(
         self, subdir, subdir_path, cache: sqlitecache.CondaIndexCache
     ):
         """
@@ -918,7 +918,7 @@ class ChannelIndex:
 
     def _update_channeldata(self, channel_data, repodata, subdir):
 
-        cache = self._cache_for_subdir(subdir)
+        cache = self.cache_for_subdir(subdir)
 
         legacy_packages = repodata["packages"]
         conda_packages = repodata["packages.conda"]

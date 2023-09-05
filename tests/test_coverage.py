@@ -21,7 +21,7 @@ def test_coverage_1():
 
 
 def test_dummy_executor():
-    ex = conda_index.index._DummyExecutor()
+    ex = conda_index.index.DummyExecutor()
     assert list(ex.map(lambda x: x * 2, range(4))) == [0, 2, 4, 6]
 
     assert [ex.submit(lambda x: x * 2, n).result() for n in range(4)] == [0, 2, 4, 6]
