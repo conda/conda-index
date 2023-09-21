@@ -345,10 +345,7 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
 
     # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
     repodata_copy = json.loads(json.dumps(repodata))
-    for group in ("packages", "packages.conda"):
-        repodata_copy[group] = {
-            key: value.copy() for key, value in repodata.get(group, {}).items()
-        }
+
     # adds url, Channel objects to each repodata package
     sd._process_raw_repodata(repodata_copy)
 
