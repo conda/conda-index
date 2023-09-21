@@ -106,7 +106,7 @@ def cli(
     zst=False,
     rss=False,
     run_exports=False,
-    compact_json=True,
+    compact=True,
 ):
     logutil.configure()
     if verbose:
@@ -124,7 +124,7 @@ def cli(
         write_zst=zst,
         threads=threads,
         write_run_exports=run_exports,
-        compact_json=compact_json,
+        compact_json=compact,
     )
 
     current_index_versions = None
