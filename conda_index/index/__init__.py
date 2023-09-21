@@ -1111,7 +1111,7 @@ class ChannelIndex:
             ORDER BY path
             """,
             (cache.upstream_stage,),
-        ):  
+        ):
             path, run_exports_data = row
             run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):

@@ -1123,7 +1123,7 @@ def test_run_exports(index_data):
             seen += 1
     assert seen == 2
 
- 
+
 def test_compact_json(index_data):
     """
     conda-index should be able to write pretty-printed or compact json.

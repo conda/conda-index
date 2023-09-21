@@ -64,6 +64,12 @@ from .. import yaml
     show_default=True,
 )
 @click.option(
+    "--compact/--no-compact",
+    help="Output JSON as one line, or pretty-printed.",
+    default=True,
+    show_default=True,
+)
+@click.option(
     "--current-index-versions-file",
     "-m",
     help="""
@@ -100,6 +106,7 @@ def cli(
     zst=False,
     rss=False,
     run_exports=False,
+    compact_json=True,
 ):
     logutil.configure()
     if verbose:
@@ -117,6 +124,7 @@ def cli(
         write_zst=zst,
         threads=threads,
         write_run_exports=run_exports,
+        compact_json=compact_json,
     )
 
     current_index_versions = None
