@@ -591,7 +591,12 @@ class ChannelIndex:
                     log.info(f"Completed {result}")
 
     def index_prepared_subdir(
-        self, subdir: str, verbose: bool, progress: bool, patch_generator, current_index_versions
+        self,
+        subdir: str,
+        verbose: bool,
+        progress: bool,
+        patch_generator,
+        current_index_versions,
     ):
         """
         Create repodata_from_packages.json by calling index_subdir, then apply
@@ -729,26 +734,7 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s" % subdir_path)
 
-        new_repodata_packages = {}
-        new_repodata_conda_packages = {}
-
-        # load cached packages
-        for row in cache.db.execute(
-            """
-            SELECT path, index_json FROM stat JOIN index_json USING (path)
-            WHERE stat.stage = ?
-            ORDER BY path
-            """,
-            (cache.upstream_stage,),
-        ):
-            path, index_json = row
-            index_json = json.loads(index_json)
-            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                new_repodata_packages[path] = index_json
-            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                new_repodata_conda_packages[path] = index_json
-            else:
-                log.warn("%s doesn't look like a conda package", path)
+        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
 
         new_repodata = {
             "packages": new_repodata_packages,

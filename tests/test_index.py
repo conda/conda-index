@@ -1210,4 +1210,3 @@ def test_track_features(index_data):
     # channel_index.index(). index_prepared_subdir doesn't check which packages
     # exist.
     channel_index.index_prepared_subdir("noarch", False, False, None, None)
-
