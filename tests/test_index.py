@@ -1206,6 +1206,9 @@ def test_track_features(index_data):
             f"""INSERT INTO stat VALUES('fs','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
         )
 
+        # cover "run exports on .conda package" branch
+        conn.execute(f"""INSERT INTO run_exports VALUES('{features_pkg_2}','{{}}')""")
+
         # cover "check for unknown file extension" branch
         conn.execute(
             """INSERT INTO stat VALUES('fs','unexpected-filename',1652905054,2683,NULL,NULL,NULL,NULL)"""
@@ -1216,6 +1219,9 @@ def test_track_features(index_data):
     # channel_index.index(). index_prepared_subdir doesn't check which packages
     # exist.
     channel_index.index_prepared_subdir("noarch", False, False, None, None)
+
+    # complain about 'unexpected-filename'
+    channel_index.build_run_exports_data("noarch")
 
 
 def test_bad_patch_version(index_data):
