@@ -534,14 +534,15 @@ class ChannelIndex:
         ``index.html`` for each subdir.
         """
         if verbose:
-            log.debug("ChannelIndex.index(verbose=...) is a no-op. Alter log levels for %s to control verbosity.", __name__)
+            log.debug(
+                "ChannelIndex.index(verbose=...) is a no-op. Alter log levels for %s to control verbosity.",
+                __name__,
+            )
 
         subdirs = self.detect_subdirs()
 
         # Lock local channel.
-        with utils.try_acquire_locks(
-            [utils.get_lock(self.channel_root)], timeout=900
-        ):
+        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
             # begin non-stop "extract packages into cache";
             # extract_subdir_to_cache manages subprocesses. Keeps cores busy
             # during write/patch/update channeldata steps.
@@ -818,7 +819,7 @@ class ChannelIndex:
             end_time = time.time()
             try:
                 bytes_sec = size_processed / (end_time - start_time)
-            except ZeroDivisionError:
+            except ZeroDivisionError:  # pragma: no cover
                 bytes_sec = 0
         log.info(
             "%s cached %s from %s packages at %s/second",
@@ -924,21 +925,6 @@ class ChannelIndex:
             {k: legacy_packages[k] for k in use_these_legacy_keys}
         )
         package_data = channel_data.get("packages", {})
-
-        def _append_group(groups, candidate):
-            pkg_dict = candidate[1]
-            pkg_name = pkg_dict["name"]
-
-            run_exports = package_data.get(pkg_name, {}).get("run_exports", {})
-            if (
-                pkg_name not in package_data
-                or subdir not in package_data.get(pkg_name, {}).get("subdirs", [])
-                or package_data.get(pkg_name, {}).get("timestamp", 0)
-                < _make_seconds(pkg_dict.get("timestamp", 0))
-                or run_exports
-                and pkg_dict["version"] not in run_exports
-            ):
-                groups.append(candidate)
 
         # Pay special attention to groups that have run_exports - we
         # need to process each version group by version; take newest per
