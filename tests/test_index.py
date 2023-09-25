@@ -1206,7 +1206,37 @@ def test_track_features(index_data):
             f"""INSERT INTO stat VALUES('fs','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
         )
 
+        # cover "check for unknown file extension" branch
+        conn.execute(
+            """INSERT INTO stat VALUES('fs','unexpected-filename',1652905054,2683,NULL,NULL,NULL,NULL)"""
+        )
+        conn.execute("""INSERT INTO index_json VALUES('unexpected-filename','{}');""")
+
     # Call internal "write repodata.json" function normally called by
     # channel_index.index(). index_prepared_subdir doesn't check which packages
     # exist.
     channel_index.index_prepared_subdir("noarch", False, False, None, None)
+
+
+def test_bad_patch_version(index_data):
+    """
+    Test unsupported patches.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    instructions = Path(__file__).parents[1] / "tests" / "gen_patch_2.py"
+
+    with pytest.raises(RuntimeError, match="Incompatible"):
+        channel_index._create_patch_instructions(
+            "noarch", {"packages": {}}, patch_generator=str(instructions)
+        )
