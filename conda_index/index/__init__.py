@@ -534,65 +534,60 @@ class ChannelIndex:
         ``index.html`` for each subdir.
         """
         if verbose:
-            level = logging.DEBUG
-        else:
-            level = logging.ERROR
+            log.debug("ChannelIndex.index(verbose=...) is a no-op. Alter log levels for %s to control verbosity.", __name__)
 
-        logging_context = utils.LoggingContext(level, loggers=[__name__])
+        subdirs = self.detect_subdirs()
 
-        with logging_context:
-            subdirs = self.detect_subdirs()
+        # Lock local channel.
+        with utils.try_acquire_locks(
+            [utils.get_lock(self.channel_root)], timeout=900
+        ):
+            # begin non-stop "extract packages into cache";
+            # extract_subdir_to_cache manages subprocesses. Keeps cores busy
+            # during write/patch/update channeldata steps.
+            def extract_subdirs_to_cache():
+                executor = ThreadPoolExecutor(max_workers=1)
 
-            # Lock local channel.
-            with utils.try_acquire_locks(
-                [utils.get_lock(self.channel_root)], timeout=900
-            ):
-                # begin non-stop "extract packages into cache";
-                # extract_subdir_to_cache manages subprocesses. Keeps cores busy
-                # during write/patch/update channeldata steps.
-                def extract_subdirs_to_cache():
-                    executor = ThreadPoolExecutor(max_workers=1)
+                def extract_args():
+                    for subdir in subdirs:
+                        # .cache is currently in channel_root not output_root
+                        _ensure_valid_channel(self.channel_root, subdir)
+                        subdir_path = join(self.channel_root, subdir)
+                        yield (subdir, verbose, progress, subdir_path)
 
-                    def extract_args():
-                        for subdir in subdirs:
-                            # .cache is currently in channel_root not output_root
-                            _ensure_valid_channel(self.channel_root, subdir)
-                            subdir_path = join(self.channel_root, subdir)
-                            yield (subdir, verbose, progress, subdir_path)
+                def extract_wrapper(args: tuple):
+                    # runs in thread
+                    subdir, verbose, progress, subdir_path = args
+                    cache = self.cache_for_subdir(subdir)
+                    return self.extract_subdir_to_cache(
+                        subdir, verbose, progress, subdir_path, cache
+                    )
 
-                    def extract_wrapper(args: tuple):
-                        # runs in thread
-                        subdir, verbose, progress, subdir_path = args
-                        cache = self.cache_for_subdir(subdir)
-                        return self.extract_subdir_to_cache(
-                            subdir, verbose, progress, subdir_path, cache
+                # map() gives results in order passed, not in order of
+                # completion. If using multiple threads, switch to
+                # submit() / as_completed().
+                return executor.map(extract_wrapper, extract_args())
+
+            # Collect repodata from packages, save to
+            # REPODATA_FROM_PKGS_JSON_FN file
+            with self.thread_executor_factory() as index_process:
+                futures = [
+                    index_process.submit(
+                        functools.partial(
+                            self.index_prepared_subdir,
+                            subdir=subdir,
+                            verbose=verbose,
+                            progress=progress,
+                            patch_generator=patch_generator,
+                            current_index_versions=current_index_versions,
                         )
-
-                    # map() gives results in order passed, not in order of
-                    # completion. If using multiple threads, switch to
-                    # submit() / as_completed().
-                    return executor.map(extract_wrapper, extract_args())
-
-                # Collect repodata from packages, save to
-                # REPODATA_FROM_PKGS_JSON_FN file
-                with self.thread_executor_factory() as index_process:
-                    futures = [
-                        index_process.submit(
-                            functools.partial(
-                                self.index_prepared_subdir,
-                                subdir=subdir,
-                                verbose=verbose,
-                                progress=progress,
-                                patch_generator=patch_generator,
-                                current_index_versions=current_index_versions,
-                            )
-                        )
-                        for subdir in extract_subdirs_to_cache()
-                    ]
-                    # limited API to support DummyExecutor
-                    for future in futures:
-                        result = future.result()
-                        log.info(f"Completed {result}")
+                    )
+                    for subdir in extract_subdirs_to_cache()
+                ]
+                # limited API to support DummyExecutor
+                for future in futures:
+                    result = future.result()
+                    log.info(f"Completed {result}")
 
     def index_prepared_subdir(
         self, subdir, verbose, progress, patch_generator, current_index_versions
@@ -727,8 +722,7 @@ class ChannelIndex:
 
         cache = self.cache_for_subdir(subdir)
 
-        if verbose:
-            log.info("Building repodata for %s" % subdir_path)
+        log.debug("Building repodata for %s" % subdir_path)
 
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
@@ -1093,8 +1087,7 @@ class ChannelIndex:
 
         cache = self.cache_for_subdir(subdir)
 
-        if verbose:
-            log.info("Building run_exports for %s" % subdir_path)
+        log.debug("Building run_exports for %s" % subdir_path)
 
         run_exports_packages = {}
         run_exports_conda_packages = {}
