@@ -591,8 +591,12 @@ class ChannelIndex:
                     log.info(f"Completed {result}")
 
     def index_prepared_subdir(
-        self, subdir, verbose, progress, patch_generator, current_index_versions
+        self, subdir: str, verbose: bool, progress: bool, patch_generator, current_index_versions
     ):
+        """
+        Create repodata_from_packages.json by calling index_subdir, then apply
+        any patches to create repodata.json.
+        """
         log.info("Subdir: %s Gathering repodata", subdir)
 
         repodata_from_packages = self.index_subdir(

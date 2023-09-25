@@ -108,7 +108,7 @@ class CondaIndexCache:
         self.__dict__ = d
 
     @cacher
-    def db(self):
+    def db(self) -> sqlite3.Connection:
         """
         Connection to our sqlite3 database.
         """

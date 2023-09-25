@@ -1128,7 +1128,7 @@ def test_compact_json(index_data):
     """
     conda-index should be able to write pretty-printed or compact json.
     """
-    pkg_dir = Path(index_data)
+    pkg_dir = Path(index_data, "packages")
 
     # compact json
     channel_index = conda_index.index.ChannelIndex(
@@ -1153,3 +1153,61 @@ def test_compact_json(index_data):
 
     channel_index.index(None)
     assert "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
+
+
+def test_track_features(index_data):
+    """
+    Coverage testing for _add_prev_ver_for_features.
+
+    The features/track_features system is not often used but we want to cover it
+    in tests.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    # Add metadata for a package with features, without having to include it on
+    # the filesystem.
+    index_cache = channel_index.cache_for_subdir("noarch")
+    conn = index_cache.db
+
+    features_pkg_name = "features"
+    features_pkg = f"{features_pkg_name}-1.0.conda"
+    features_pkg_2 = f"{features_pkg_name}-0.9.conda"
+
+    # The function under test is looking for a package with features, and an
+    # older version of the same package without features.
+    with conn:  # transaction
+        conn.execute(
+            f"""INSERT INTO index_json VALUES('{features_pkg}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{features_pkg_name}","noarch":"generic","subdir":"noarch","timestamp":1561127261940,"version":"1.0","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683,"track_features":["jim"],"features":["jim"]}}');"""
+        )
+        conn.execute(
+            f"""INSERT INTO stat VALUES('indexed','{features_pkg}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+        )
+        conn.execute(
+            f"""INSERT INTO stat VALUES('fs','{features_pkg}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+        )
+
+        conn.execute(
+            f"""INSERT INTO index_json VALUES('{features_pkg_2}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{features_pkg_name}","noarch":"generic","subdir":"noarch","timestamp":1561127261940,"version":"0.9","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683}}');"""
+        )
+        conn.execute(
+            f"""INSERT INTO stat VALUES('indexed','{features_pkg_2}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+        )
+        conn.execute(
+            f"""INSERT INTO stat VALUES('fs','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+        )
+
+    # Call internal "write repodata.json" function normally called by
+    # channel_index.index(). index_prepared_subdir doesn't check which packages
+    # exist.
+    channel_index.index_prepared_subdir("noarch", False, False, None, None)
+
