@@ -344,11 +344,8 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
     sd = SubdirData(channel)
 
     # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
-    repodata_copy = repodata.copy()
-    for group in ("packages", "packages.conda"):
-        repodata_copy[group] = {
-            key: value.copy() for key, value in repodata.get(group, {}).items()
-        }
+    repodata_copy = json.loads(json.dumps(repodata))
+
     # adds url, Channel objects to each repodata package
     sd._process_raw_repodata(repodata_copy)
 
@@ -1105,13 +1102,13 @@ class ChannelIndex:
         # load cached packages
         for row in cache.db.execute(
             """
-            SELECT path, run_exports FROM stat 
+            SELECT path, run_exports FROM stat
             LEFT JOIN run_exports USING (path)
             WHERE stat.stage = ?
             ORDER BY path
             """,
             (cache.upstream_stage,),
-        ):  
+        ):
             path, run_exports_data = row
             run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
