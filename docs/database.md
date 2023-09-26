@@ -90,3 +90,20 @@ create `current_repodata.json` with only the latest versions of each package,
 are similar to pre-sqlite3 conda-index.
 
 The other cached metadata tables are used to create `channeldata.json`.
+
+
+## Sample queries
+
+Megabytes added per day:
+
+```sql
+select
+  date(mtime, 'unixepoch') as d,
+  printf('%0.2f', sum(size) / 1e6) as MB
+from
+  stat
+group by
+  date(mtime, 'unixepoch')
+order by
+  mtime desc
+```

@@ -1,0 +1,1 @@
+{"package": {"name": "dummy-package", "version": "1.0"}, "build": {"number": 0, "string": "0"}, "requirements": {"run": ["python=2.7"]}, "extra": {"copy_test_source_files": true, "final": true}}

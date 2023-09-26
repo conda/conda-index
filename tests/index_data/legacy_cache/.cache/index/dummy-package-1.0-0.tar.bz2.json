@@ -1,0 +1,1 @@
+{"build": "0", "build_number": 0, "depends": ["python 2.7.*"], "name": "dummy-package", "subdir": "osx-64", "timestamp": 1557771554052, "version": "1.0", "size": 2517, "md5": "fe3ca1adcd2b7799a5eba03cc774725d", "sha256": "c836fbdafcd615bdb4633264bf096ebc6c3c6977de1f9b2bf527ab6fc6415e01"}
