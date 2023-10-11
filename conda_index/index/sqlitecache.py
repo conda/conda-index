@@ -11,6 +11,10 @@ import sqlite3
 from os.path import join
 from typing import Any
 from zipfile import BadZipFile
+from ..utils import (
+    CONDA_PACKAGE_EXTENSION_V1,
+    CONDA_PACKAGE_EXTENSION_V2,
+)
 
 from conda_package_streaming import package_streaming
 
@@ -108,7 +112,7 @@ class CondaIndexCache:
         self.__dict__ = d
 
     @cacher
-    def db(self):
+    def db(self) -> sqlite3.Connection:
         """
         Connection to our sqlite3 database.
         """
@@ -487,6 +491,33 @@ class CondaIndexCache:
         )
 
         return query
+
+    def indexed_packages(self):
+        """
+        Return "packages" and "packages.conda" values from the cache.
+        """
+        new_repodata_packages = {}
+        new_repodata_conda_packages = {}
+
+        # load cached packages
+        for row in self.db.execute(
+            """
+            SELECT path, index_json FROM stat JOIN index_json USING (path)
+            WHERE stat.stage = ?
+            ORDER BY path
+            """,
+            (self.upstream_stage,),
+        ):
+            path, index_json = row
+            index_json = json.loads(index_json)
+            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
+                new_repodata_packages[path] = index_json
+            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
+                new_repodata_conda_packages[path] = index_json
+            else:
+                log.warn("%s doesn't look like a conda package", path)
+
+        return new_repodata_packages, new_repodata_conda_packages
 
     def store_index_json_stat(self, database_path, mtime, size, index_json):
         self.db.execute(

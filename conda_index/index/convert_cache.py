@@ -14,7 +14,6 @@ import os.path
 import re
 import sqlite3
 import tarfile
-from contextlib import closing
 
 from more_itertools import ichunked
 
@@ -167,29 +166,6 @@ def remove_prefix(conn: sqlite3.Connection):
         )
 
 
-def extract_cache(path):
-    """
-    Yield interesting (match, tar entry) members of tarball at path.
-    """
-    dirnames = set()
-    tf = tarfile.open(path)
-    last_len = len(dirnames)
-    try:
-        for entry in tf:
-            match = PATH_INFO.search(entry.name)
-            if match:
-                yield match, tf.extractfile(entry)
-            dirnames.add(os.path.dirname(entry.name))
-            next_len = len(dirnames)
-            if last_len < next_len:
-                log.info(f"CONVERT {os.path.dirname(entry.name)}")
-            last_len = next_len
-    except KeyboardInterrupt:
-        log.warn("Interrupted!")
-
-    log.info("%s", dirnames)
-
-
 def extract_cache_filesystem(path):
     """
     Yield interesting (match, <bytes>) members of filesystem at path.
@@ -207,7 +183,7 @@ def extract_cache_filesystem(path):
                 try:
                     with open(fullpath, "rb") as entry:
                         yield path_info, entry
-                except PermissionError as e:
+                except PermissionError as e:  # pragma: no cover
                     log.warn("Permission error: %s %s", fullpath, e)
 
 
@@ -282,7 +258,7 @@ def convert_cache(conn, cache_generator):
                         },
                     )
 
-                else:
+                else:  # pragma: no cover
                     log.warn("Unhandled", match.groupdict())
 
 
@@ -327,44 +303,3 @@ def merge_index_cache(channel_root, output_db="merged.db"):
                 raise
 
         combined_db.execute("DETACH DATABASE subdir")
-
-
-def test_from_archive(archive_path):
-    conn = common.connect("linux-64-cache.db")
-    create(conn)
-    with closing(conn):
-        convert_cache(conn, extract_cache(archive_path))
-        remove_prefix(conn)
-
-
-def test():
-    for i, _ in enumerate(
-        extract_cache_filesystem(os.path.expanduser("~/miniconda3/osx-64/.cache"))
-    ):
-        if i > 100:
-            break
-
-
-if __name__ == "__main__":
-    from . import logutil
-
-    logutil.configure()
-    test()
-    # email us if you're thinking about downloading conda-forge to
-    # regenerate this 264MB file
-    CACHE_ARCHIVE = os.path.expanduser("~/Downloads/linux-64-cache.tar.bz2")
-    test_from_archive(CACHE_ARCHIVE)
-
-
-# typically 600-10,000 MB
-MB_PER_DAY = """
-select
-  date(mtime, 'unixepoch') as d,
-  printf('%0.2f', sum(size) / 1e6) as MB
-from
-  stat
-group by
-  date(mtime, 'unixepoch')
-order by
-  mtime desc
-"""

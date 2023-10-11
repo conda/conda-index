@@ -1,0 +1,2 @@
+Contains .cache subdirectory with obsolete many-small-files style
+cache, as produced by old `conda-build index`.
