@@ -13,7 +13,6 @@ import os
 import os.path
 import re
 import sqlite3
-import tarfile
 
 from more_itertools import ichunked
 
@@ -259,7 +258,7 @@ def convert_cache(conn, cache_generator):
                     )
 
                 else:  # pragma: no cover
-                    log.warn("Unhandled", match.groupdict())
+                    log.warn("Unhandled %r", match.groupdict())
 
 
 def merge_index_cache(channel_root, output_db="merged.db"):
@@ -298,7 +297,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
             try:
                 with combined_db:
                     combined_db.execute(query, (channel_prefix,))
-            except sqlite3.OperationalError as e:
+            except sqlite3.OperationalError:
                 log.error("OperationalError on %s", query)
                 raise
 

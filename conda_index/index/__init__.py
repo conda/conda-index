@@ -340,7 +340,7 @@ def _get_resolve_object(subdir, precs=None, repodata=None):
             "packages.conda": conda_packages,
         }
 
-    channel = Channel("https://conda.anaconda.org/dummy-channel/%s" % subdir)
+    channel = Channel(f"https://conda.anaconda.org/dummy-channel/{subdir}")
     sd = SubdirData(channel)
 
     # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
@@ -683,7 +683,7 @@ class ChannelIndex:
                 channel_data = json.load(f)
 
         for subdir in subdirs:
-            log.info("Channeldata subdir: %s" % subdir)
+            log.info("Channeldata subdir: %s", subdir)
             log.debug("%s read repodata", subdir)
             with open(
                 os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
@@ -710,11 +710,11 @@ class ChannelIndex:
                 for subdir in os.scandir(self.channel_root)
                 if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
             }
-            log.debug("found subdirs %s" % detected_subdirs)
+            log.debug("found subdirs %s", detected_subdirs)
             self.subdirs = sorted(detected_subdirs | {"noarch"})
         else:
             self.subdirs = sorted(set(self._subdirs))
-            if not "noarch" in self.subdirs:
+            if "noarch" not in self.subdirs:
                 log.warn("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
 
@@ -732,7 +732,7 @@ class ChannelIndex:
 
         cache = self.cache_for_subdir(subdir)
 
-        log.debug("Building repodata for %s" % subdir_path)
+        log.debug("Building repodata for %s", subdir_path)
 
         new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
 
@@ -804,7 +804,8 @@ class ChannelIndex:
                         log.error(
                             "Package at %s did not contain valid index.json data.  Please"
                             " check the file and remove/redownload if necessary to obtain "
-                            "a valid package." % os.path.join(subdir_path, fn)
+                            "a valid package.",
+                            os.path.join(subdir_path, fn),
                         )
             end_time = time.time()
             try:
@@ -1063,7 +1064,7 @@ class ChannelIndex:
 
         cache = self.cache_for_subdir(subdir)
 
-        log.debug("Building run_exports for %s" % subdir_path)
+        log.debug("Building run_exports for %s", subdir_path)
 
         run_exports_packages = {}
         run_exports_conda_packages = {}
@@ -1154,7 +1155,7 @@ class ChannelIndex:
             self.channel_root, subdir, "patch_instructions.json"
         )
         if isfile(patch_instructions_path):
-            log.debug("using patch instructions %s" % patch_instructions_path)
+            log.debug("using patch instructions %s", patch_instructions_path)
             with open(patch_instructions_path) as fh:
                 instructions = json.load(fh)
                 if instructions.get("patch_instructions_version", 0) > 1:

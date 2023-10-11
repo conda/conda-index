@@ -38,7 +38,9 @@ def _get_items(packages: list[tuple[str, dict]]):
 
     items = []
     for name, package in packages:
-        __ = lambda x: package.get(x)
+
+        def __(x):
+            return package.get(x)
 
         def coalesce(*args, default="No description."):
             for arg in [a for a in args if __(a)]:
