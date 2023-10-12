@@ -1142,7 +1142,7 @@ def test_compact_json(index_data):
 
     channel_index.index(None)
 
-    assert not "\n" in (pkg_dir / "noarch" / "repodata.json").read_text()
+    assert "\n" not in (pkg_dir / "noarch" / "repodata.json").read_text()
 
     # bloated json
     channel_index = conda_index.index.ChannelIndex(

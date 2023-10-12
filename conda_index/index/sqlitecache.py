@@ -11,15 +11,16 @@ import sqlite3
 from os.path import join
 from typing import Any
 from zipfile import BadZipFile
-from ..utils import (
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-)
 
 from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import CONDA_PACKAGE_EXTENSIONS, checksums
+from ..utils import (
+    CONDA_PACKAGE_EXTENSION_V1,
+    CONDA_PACKAGE_EXTENSION_V2,
+    CONDA_PACKAGE_EXTENSIONS,
+    checksums,
+)
 from . import common, convert_cache
 
 log = logging.getLogger(__name__)
@@ -271,7 +272,7 @@ class CondaIndexCache:
 
             if not wanted:  # we got what we wanted
                 package_stream.close()
-                log.debug(f"%s early close", fn)
+                log.debug("%s early close", fn)
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
@@ -550,13 +551,13 @@ def _cache_post_install_details(paths_json_str):
             # check for any activate.d/deactivate.d scripts
             for k in ("activate.d", "deactivate.d"):
                 if not post_install_details_json.get(k) and f["_path"].startswith(
-                    "etc/conda/%s" % k
+                    f"etc/conda/{k}"
                 ):
                     post_install_details_json[k] = True
             # check for any link scripts
             for pat in ("pre-link", "post-link", "pre-unlink"):
                 if not post_install_details_json.get(pat) and fnmatch.fnmatch(
-                    f["_path"], "*/.*-%s.*" % pat
+                    f["_path"], f"*/.*-{pat}.*"
                 ):
                     post_install_details_json[pat.replace("-", "_")] = True
 
