@@ -450,7 +450,8 @@ class CondaIndexCache:
 
         log.debug("%s save fs state", self.subdir)
         with self.db:
-            # always stage='fs', not custom upstream_stage
+            # always stage='fs', not custom upstream_stage which would be
+            # handled in a subclass
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
                 {"path_like": path_like},
@@ -483,7 +484,7 @@ class CondaIndexCache:
             FROM fs LEFT JOIN cached USING (path)
 
             WHERE fs.path LIKE :path_like AND
-                (fs.mtime != cached.mtime OR cached.path IS NULL)
+                (fs.mtime != cached.mtime OR fs.size != cached.size OR cached.path IS NULL)
             """,
             {
                 "path_like": self.database_path_like,
