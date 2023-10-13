@@ -5,7 +5,7 @@
 ### Bug fixes
 
 * Check size in addition to mtime when deciding which packages to
-  index. (#129)
+  index. (#108)
 
 ### Deprecations
 
