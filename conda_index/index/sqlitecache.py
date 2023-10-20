@@ -2,6 +2,8 @@
 cache conda indexing metadata in sqlite.
 """
 
+from __future__ import annotations
+
 import fnmatch
 import json
 import logging
@@ -9,6 +11,7 @@ import os
 import os.path
 import sqlite3
 from os.path import join
+from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
 
@@ -22,6 +25,7 @@ from ..utils import (
     checksums,
 )
 from . import common, convert_cache
+from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -83,21 +87,37 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, subdir):
+    def __init__(
+        self,
+        channel_root,
+        subdir: str,
+        *,
+        cache_dir: Path | None = None,
+        fs: MinimalFS | None = None,
+    ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
+        cache_dir: If not set, Path(channel_root, subdir, ".cache")
+        fs: fsspec.spec.AbstractFileSystem implementation (optional)
         """
-        self.channel_root = channel_root
+        if fs and not cache_dir:
+            raise ValueError("Must pass explicit cache_dir if using custom fs")
+
+        self.fs = MinimalFS() if fs is None else fs
         self.subdir = subdir
+        self.channel_root = channel_root
+        self.subdir_path = self.fs.join(channel_root, subdir)
+        # if channel_root is a URL thene cache_dir neeeds to be provided
+        if cache_dir:
+            self.cache_dir = cache_dir
+        else:
+            self.cache_dir = self.fs.join(self.subdir_path, ".cache")
+        self.db_filename = self.fs.join(self.cache_dir, "cache.db")
+        self.cache_is_brand_new = not Path(self.db_filename).exists()
 
-        self.subdir_path = os.path.join(channel_root, subdir)
-        self.cache_dir = os.path.join(self.subdir_path, ".cache")
-        self.db_filename = os.path.join(self.cache_dir, "cache.db")
-        self.cache_is_brand_new = not os.path.exists(self.db_filename)
-
-        if not os.path.exists(self.cache_dir):
-            os.mkdir(self.cache_dir)
+        if not Path(self.cache_dir).exists():
+            Path(self.cache_dir).mkdir()
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -164,10 +184,8 @@ class CondaIndexCache:
                 self.db,
                 convert_cache.extract_cache_filesystem(self.cache_dir),
             )
-
             with self.db:
                 convert_cache.remove_prefix(self.db)
-
             # prepare to be sent to other thread
             self.close()
 
@@ -180,12 +198,11 @@ class CondaIndexCache:
         )
 
     def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        subdir_path = join(channel_root, subdir)
 
-        abs_fn = join(subdir_path, fn)
+        abs_fn = self.fs.join(self.subdir_path, fn)
 
         if stat_result is None:
-            stat_result = os.stat(abs_fn)
+            stat_result = self.fs.stat(abs_fn)
 
         size = stat_result.st_size
         mtime = stat_result.st_mtime
@@ -195,7 +212,11 @@ class CondaIndexCache:
         # extraction should preserve enough performance
         try:
             log.debug("cache %s/%s", subdir, fn)
-            index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
+
+            with self.fs.open(abs_fn, "rb"):
+                index_json = self.extract_to_cache_unconditional(
+                    fn, abs_fn, size, mtime
+                )
 
             retval = fn, mtime, size, index_json
         except (
@@ -206,7 +227,6 @@ class CondaIndexCache:
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
             log.exception("Error extracting %s", fn)
-
         return retval
 
     def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
@@ -227,7 +247,7 @@ class CondaIndexCache:
         }
 
         have = {}
-        package_stream = iter(package_streaming.stream_conda_info(abs_fn))
+        package_stream = iter(package_streaming.stream_conda_info(fn, abs_fn))
         for tar, member in package_stream:
             if member.name in wanted:
                 wanted.remove(member.name)
