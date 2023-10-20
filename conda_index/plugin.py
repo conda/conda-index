@@ -5,9 +5,9 @@ avoid clash with old "conda index" CLI.
 
 import conda.plugins
 
-def command(arguments: list[str]):
+def command(*args):
      import conda_index.cli
-     conda_index.cli.cli()
+     return conda_index.cli.cli()
 
 @conda.plugins.hookimpl
 def conda_subcommands():
