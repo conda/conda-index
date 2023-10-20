@@ -55,3 +55,6 @@ testpaths = ["tests"]
 [tool.coverage.run]
 concurrency = ["multiprocessing", "thread"]
 source = ["conda_index"]
+
+[tool.isort]
+profile = "black"

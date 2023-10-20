@@ -9,6 +9,7 @@ import os
 import os.path
 import sqlite3
 from os.path import join
+from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
 
@@ -83,21 +84,24 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, subdir):
+    def __init__(self, channel_root, subdir: str, *, cache_dir: Path | None = None):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
+        cache_dir: If not set, Path(channel_root, subdir, ".cache")
         """
-        self.channel_root = channel_root
+        self.channel_root = Path(channel_root)
         self.subdir = subdir
+        self.subdir_path = Path(channel_root, subdir)
+        if cache_dir:
+            self.cache_dir = cache_dir
+        else:
+            self.cache_dir = self.subdir_path / ".cache"
+        self.db_filename = self.cache_dir / "cache.db"
+        self.cache_is_brand_new = not self.db_filename.exists()
 
-        self.subdir_path = os.path.join(channel_root, subdir)
-        self.cache_dir = os.path.join(self.subdir_path, ".cache")
-        self.db_filename = os.path.join(self.cache_dir, "cache.db")
-        self.cache_is_brand_new = not os.path.exists(self.db_filename)
-
-        if not os.path.exists(self.cache_dir):
-            os.mkdir(self.cache_dir)
+        if not self.cache_dir.exists():
+            self.cache_dir.mkdir()
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
