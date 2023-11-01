@@ -7,7 +7,7 @@ import conda.plugins
 
 def command(*args):
      import conda_index.cli
-     return conda_index.cli.cli()
+     return conda_index.cli.cli(prog_name="conda reindex", args=args)
 
 @conda.plugins.hookimpl
 def conda_subcommands():
