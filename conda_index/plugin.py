@@ -5,7 +5,7 @@ avoid clash with old "conda index" CLI.
 
 import conda.plugins
 
-def command(*args):
+def command(args):
      import conda_index.cli
      return conda_index.cli.cli(prog_name="conda reindex", args=args)
 
