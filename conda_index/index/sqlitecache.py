@@ -180,7 +180,6 @@ class CondaIndexCache:
         )
 
     def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-
         subdir_path = join(channel_root, subdir)
 
         abs_fn = join(subdir_path, fn)
@@ -192,34 +191,13 @@ class CondaIndexCache:
         mtime = stat_result.st_mtime
         retval = fn, mtime, size, None
 
+        # we no longer re-use the .conda cache for .tar.bz2; faster conda
+        # extraction should preserve enough performance
         try:
-            # we no longer re-use the .conda cache for .tar.bz2; faster conda
-            # extraction should preserve enough performance
-            database_path = self.database_path(fn)
-
-            # None, or a tuple containing the row
-            cached_row = self.db.execute(
-                "SELECT index_json FROM index_json WHERE path = :path",
-                {"path": database_path},
-            ).fetchone()
-
-            if cached_row:
-                # log in caller?
-                log.debug("Found %s in cache" % fn)
-                index_json = json.loads(cached_row[0])
-
-                with self.db:
-                    # have to update stat or we will be asked to look up cached_row again
-                    self.store_index_json_stat(database_path, mtime, size, index_json)
-
-            else:
-                log.debug("cache %s/%s", subdir, fn)
-                index_json = self.extract_to_cache_unconditional(
-                    fn, abs_fn, size, mtime
-                )
+            log.debug("cache %s/%s", subdir, fn)
+            index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
 
             retval = fn, mtime, size, index_json
-
         except (
             KeyError,
             EOFError,
