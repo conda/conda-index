@@ -749,6 +749,54 @@ def test_index_of_removed_pkg(testing_metadata):
     assert not repodata["packages"]
 
 
+def test_index_of_updated_package(testing_workdir):
+    """
+    Test that package is re-indexed when its mtime changes.
+    """
+    _build_test_index(testing_workdir)
+
+    conda_index.index.update_index(
+        testing_workdir, subdirs=["osx-64"], verbose=True, threads=1
+    )
+
+    index_cache = conda_index.index.sqlitecache.CondaIndexCache(
+        channel_root=testing_workdir, subdir="osx-64"
+    )
+    assert list(index_cache.changed_packages()) == []
+
+    with index_cache.db as db:
+        db.execute("UPDATE index_json SET index_json='{}'")
+        assert all(
+            row["index_json"] == "{}"
+            for row in db.execute("SELECT index_json FROM index_json")
+        )
+        db.commit()
+
+    conda_index.index.update_index(
+        testing_workdir, subdirs=["osx-64"], verbose=True, threads=1
+    )
+
+    # indexed and fs mtime still match; index will not be changed.
+    with index_cache.db as db:
+        assert all(
+            row["index_json"] == "{}"
+            for row in db.execute("SELECT index_json FROM index_json")
+        )
+        db.execute("UPDATE stat SET mtime = mtime-1")
+        db.commit()
+
+    conda_index.index.update_index(
+        testing_workdir, subdirs=["osx-64"], verbose=True, threads=1
+    )
+
+    # indexed and fs mtime did not match; index wil be re-populated.
+    with index_cache.db as db:
+        assert not any(
+            row["index_json"] == "{}"
+            for row in db.execute("SELECT index_json FROM index_json")
+        )
+
+
 def test_patch_instructions_with_missing_subdir(testing_workdir):
     os.makedirs("linux-64")
     os.makedirs("zos-z")
