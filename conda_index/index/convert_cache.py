@@ -217,6 +217,8 @@ def convert_cache(conn, cache_generator):
             for match, member in chunk:
 
                 if match["path"] == "stat.json":
+                    # stat.json is one file with information on all the
+                    # packages, so we delete from stat.
                     conn.execute("DELETE FROM stat WHERE stage='indexed'")
                     for key, value in json.load(member).items():
                         value["path"] = key
