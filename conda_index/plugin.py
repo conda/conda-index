@@ -11,6 +11,17 @@ def command(args):
 
 @conda.plugins.hookimpl
 def conda_subcommands():
+    # only expose plugin if conda-build>=24.1.0
+    try:
+        import conda_build
+        from packaging.version import parse
+
+        if parse(conda_build.__version__) < parse("24.1.0"):
+            return
+    except ImportError:
+        # ImportError: conda-build is not installed
+        pass
+
     yield conda.plugins.CondaSubcommand(
         name="index",
         action=command,
