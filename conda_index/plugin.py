@@ -1,5 +1,5 @@
 """
-Conda command plugin, provide "conda reindex" command, renamed to
+Conda command plugin, provide "conda index" command, renamed to
 avoid clash with old "conda index" CLI.
 """
 
