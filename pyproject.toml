@@ -42,8 +42,8 @@ docs = [
 # conda-build also provides conda-index script.
 # require python -m conda_index for the moment to avoid the conflict.
 
-[project.entry-points."conda"]
-reindex = "conda_index.plugin"
+[project.entry-points.conda]
+index = "conda_index.plugin"
 
 [project.urls]
 Home = "https://github.com/conda/conda-index"

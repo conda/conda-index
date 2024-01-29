@@ -12,8 +12,8 @@ def command(args):
 @conda.plugins.hookimpl
 def conda_subcommands():
     yield conda.plugins.CondaSubcommand(
-        name="reindex",
+        name="index",
         action=command,
-        summary="Update package index metadata files.  Replaces `conda index`."
+        summary="Update package index metadata files."
     )
 
