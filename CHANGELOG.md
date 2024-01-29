@@ -1,10 +1,5 @@
 ## 0.4.0 (2024-01-29)
 
-### Bug fixes
-
-* Update cached index.json, not just stat values, for
-  changed packages that are already indexed. (#108)
-
 ### Enhancements
 
 * Add --compact-json/--no-compact-json option, default to compact. (#120)
@@ -13,6 +8,8 @@
 
 * Check size in addition to mtime when deciding which packages to
   index. (#108)
+* Update cached index.json, not just stat values, for
+  changed packages that are already indexed. (#108)
 
 ### Other
 
