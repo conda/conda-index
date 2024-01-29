@@ -1,3 +1,24 @@
+## 0.4.0 (2024-01-29)
+
+### Bug fixes
+
+* Update cached index.json, not just stat values, for
+  changed packages that are already indexed. (#108)
+
+### Enhancements
+
+* Add --compact-json/--no-compact-json option, default to compact. (#120)
+
+### Bug fixes
+
+* Check size in addition to mtime when deciding which packages to
+  index. (#108)
+
+### Other
+
+* Improve test coverage (#123)
+* Apply `ruff --fix`; reformat code; syntax cleanup (#128)
+
 ## 0.3.0 (2023-09-21)
 
 ### Enhancements
