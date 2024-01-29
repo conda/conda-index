@@ -11,7 +11,7 @@ def command(args):
 
 @conda.plugins.hookimpl
 def conda_subcommands():
-    # only expose plugin if conda-build>=24.1.0
+    # hide plugin if conda-build<24.1.0
     try:
         import conda_build
         from packaging.version import parse
