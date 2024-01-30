@@ -3,6 +3,10 @@
 ### Enhancements
 
 * Add --compact-json/--no-compact-json option, default to compact. (#120)
+* Add an `index` subcommand using conda's new subcommand plugin hook, allowing
+  `conda index` instead of `python -m conda_index`. Note the [CLI has
+  changed](https://conda.github.io/conda-index/cli.html) compared to old
+  `conda-index`. (#81 via #131)
 
 ### Bug fixes
 
