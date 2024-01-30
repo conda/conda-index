@@ -6,7 +6,8 @@
 * Add an `index` subcommand using conda's new subcommand plugin hook, allowing
   `conda index` instead of `python -m conda_index`. Note the [CLI has
   changed](https://conda.github.io/conda-index/cli.html) compared to old
-  `conda-index`. (#81 via #131)
+  `conda-index`. When `conda-build < 24.1.0` is installed, the older
+  `conda-index` code will still be used instead of this plugin. (#81 via #131)
 
 ### Bug fixes
 
