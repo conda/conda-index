@@ -29,6 +29,7 @@ test = [
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
+    "fsspec"
 ]
 docs = [
     "furo",
