@@ -12,7 +12,16 @@ operation it delegates everything to the wrapped filesystem."""
 # use urljoin or urlsplit or plain split('/')...
 # .. works for relative urls: urlparse.parse.urljoin("file:///spam/eggs/woo", "../bla") returns file:///spam/bla
 
-# urllib.request.pathname2url(pathname) may be useful
+# In [7]: fs.unstrip_protocol('foo/bar')
+# Out[7]: 'file:///base/path/conda-index/foo/bar'
+
+# In [9]: fsspec.core.url_to_fs("/spam/eggs")
+# Out[9]: (<fsspec.implementations.local.LocalFileSystem at 0x102a6cf40>, '/spam/eggs')
+
+import os
+import os.path
+from pathlib import Path
+
 
 def get_filesystem(url_or_path):
     if not "://" in url_or_path:
@@ -22,3 +31,18 @@ def get_filesystem(url_or_path):
     import fsspec.core
 
     return fsspec.core.url_to_fs("file:///")
+
+
+class MinimalFS:
+    """
+    Filesystem API as needed by conda-index, for fsspec compatibility.
+    """
+
+    def open(self, path: str | Path, mode: str = "r"):
+        return Path(path).open(mode)
+
+    def stat(self, path: str | Path):
+        return os.stat(path)
+
+    def join(self, *paths):
+        return os.path.join(*paths)

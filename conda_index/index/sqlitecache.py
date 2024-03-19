@@ -7,8 +7,6 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
-import os
-import os.path
 import sqlite3
 from os.path import join
 from pathlib import Path
@@ -25,6 +23,7 @@ from ..utils import (
     checksums,
 )
 from . import common, convert_cache
+from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -86,19 +85,31 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, subdir: str, *, cache_dir: Path | None = None, fs = None):
+    def __init__(
+        self,
+        channel_root,
+        subdir: str,
+        *,
+        cache_dir: Path | None = None,
+        fs: MinimalFS | None = None,
+    ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
         cache_dir: If not set, Path(channel_root, subdir, ".cache")
         fs: fsspec.spec.AbstractFileSystem implementation (optional)
         """
-        self.fs = fs
+        if fs and not cache_dir:
+            raise ValueError("Must pass explicit cache_dir if using custom fs")
+
+        self.fs = MinimalFS() if fs is None else fs
         self.subdir = subdir
-        self.subdir_path = Path(channel_root, subdir)
+        self.subdir_path = self.fs.join(channel_root, subdir)
+        # if channel_root is a URL thene cache_dir neeeds to be provided
         if cache_dir:
             self.cache_dir = cache_dir
         else:
+            # subdir_path might be Path or might be fsspec
             self.cache_dir = self.subdir_path / ".cache"
         self.db_filename = self.cache_dir / "cache.db"
         self.cache_is_brand_new = not self.db_filename.exists()
@@ -187,12 +198,11 @@ class CondaIndexCache:
         )
 
     def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        subdir_path = join(channel_root, subdir)
 
-        abs_fn = join(subdir_path, fn)
+        abs_fn = self.fs.join(self.subdir_path, fn)
 
         if stat_result is None:
-            stat_result = os.stat(abs_fn)
+            stat_result = self.fs.stat(abs_fn)
 
         size = stat_result.st_size
         mtime = stat_result.st_mtime
@@ -202,7 +212,11 @@ class CondaIndexCache:
         # extraction should preserve enough performance
         try:
             log.debug("cache %s/%s", subdir, fn)
-            index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
+
+            with self.fs.open(abs_fn, "rb"):
+                index_json = self.extract_to_cache_unconditional(
+                    fn, abs_fn, size, mtime
+                )
 
             retval = fn, mtime, size, index_json
         except (
@@ -234,7 +248,7 @@ class CondaIndexCache:
         }
 
         have = {}
-        package_stream = iter(package_streaming.stream_conda_info(abs_fn))
+        package_stream = iter(package_streaming.stream_conda_info(fn, abs_fn))
         for tar, member in package_stream:
             if member.name in wanted:
                 wanted.remove(member.name)
