@@ -86,13 +86,14 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, subdir: str, *, cache_dir: Path | None = None):
+    def __init__(self, channel_root, subdir: str, *, cache_dir: Path | None = None, fs = None):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
         cache_dir: If not set, Path(channel_root, subdir, ".cache")
+        fs: fsspec.spec.AbstractFileSystem implementation (optional)
         """
-        self.channel_root = Path(channel_root)
+        self.fs = fs
         self.subdir = subdir
         self.subdir_path = Path(channel_root, subdir)
         if cache_dir:

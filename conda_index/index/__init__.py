@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from numbers import Number
 from os.path import abspath, basename, getmtime, getsize, isfile, join
 from typing import NamedTuple
+from urllib.parse import urljoin, urlparse, urlsplit
 from uuid import uuid4
 
 import zstandard
@@ -34,7 +35,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-from . import rss, sqlitecache
+from . import rss, sqlitecache, fs
 
 log = logging.getLogger(__name__)
 
@@ -86,10 +87,6 @@ if (
 LOCK_TIMEOUT_SECS = 3 * 3600
 LOCKFILE_NAME = ".lock"
 
-# XXX conda-build calls its version of get_build_index. Appears to combine
-# remote and local packages, updating the local index based on mtime. Standalone
-# conda-index removes get_build_index() for now.
-
 
 def _ensure_valid_channel(local_folder, subdir):
     for folder in {subdir, "noarch"}:
@@ -114,7 +111,7 @@ def update_index(
     check_md5=False,
     channel_name=None,
     patch_generator=None,
-    threads: (int | None) = MAX_THREADS_DEFAULT,
+    threads: int | None = MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
     subdirs=None,
@@ -493,7 +490,7 @@ class ChannelIndex:
         channel_root,
         channel_name,
         subdirs=None,
-        threads: (int | None) = MAX_THREADS_DEFAULT,
+        threads: int | None = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
@@ -506,9 +503,10 @@ class ChannelIndex:
         if threads is None:
             threads = MAX_THREADS_DEFAULT
 
+        self.fs, self.channel_root = fs.get_filesystem(channel_root)
+
         self.cache_class = cache_class
-        self.channel_root = abspath(channel_root)
-        self.output_root = abspath(output_root) if output_root else self.channel_root
+        self.output_root = output_root if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
         self._subdirs = subdirs
         # no lambdas in pickleable
@@ -728,11 +726,10 @@ class ChannelIndex:
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
-        subdir_path = join(self.channel_root, subdir)
 
         cache = self.cache_for_subdir(subdir)
 
-        log.debug("Building repodata for %s", subdir_path)
+        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
         new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
 

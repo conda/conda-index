@@ -2,12 +2,12 @@
 Test ability to index off diverse filesystems using fsspec.
 """
 
-import os.path
 from conda_index.index import ChannelIndex
 
 
 def test_fsspec(tmp_path, http_package_server):
-    output = (tmp_path / "output").mkdir()
+    output = (tmp_path / "output")
+    output.mkdir()
 
     host, port = http_package_server.socket.getsockname()
     base = f"http://{host}:{port}/"

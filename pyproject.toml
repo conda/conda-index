@@ -30,7 +30,7 @@ test = [
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
-    "fsspec"
+    "fsspec[http]"
 ]
 docs = [
     "furo",
