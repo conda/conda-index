@@ -485,6 +485,8 @@ class ChannelIndex:
     See the implementation of ``conda_index.cli`` for usage.
     """
 
+    fs: fs.MinimalFS | None = None
+
     def __init__(
         self,
         channel_root,
@@ -499,10 +501,12 @@ class ChannelIndex:
         write_zst=False,
         write_run_exports=False,
         compact_json=True,
+        channel_url: str | None = None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
 
+        # instead, add a new channel_url that accepts fsspec URLs; keep channel_root for local?
         self.fs, self.channel_root = fs.get_filesystem(channel_root)
 
         self.cache_class = cache_class

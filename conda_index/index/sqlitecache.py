@@ -7,6 +7,8 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
+import os
+import os.path
 import sqlite3
 from os.path import join
 from pathlib import Path
@@ -104,18 +106,18 @@ class CondaIndexCache:
 
         self.fs = MinimalFS() if fs is None else fs
         self.subdir = subdir
+        self.channel_root = channel_root
         self.subdir_path = self.fs.join(channel_root, subdir)
         # if channel_root is a URL thene cache_dir neeeds to be provided
         if cache_dir:
             self.cache_dir = cache_dir
         else:
-            # subdir_path might be Path or might be fsspec
-            self.cache_dir = self.subdir_path / ".cache"
-        self.db_filename = self.cache_dir / "cache.db"
-        self.cache_is_brand_new = not self.db_filename.exists()
+            self.cache_dir = self.fs.join(self.subdir_path, ".cache")
+        self.db_filename = self.fs.join(self.cache_dir, "cache.db")
+        self.cache_is_brand_new = not Path(self.db_filename).exists()
 
-        if not self.cache_dir.exists():
-            self.cache_dir.mkdir()
+        if not Path(self.cache_dir).exists():
+            Path(self.cache_dir).mkdir()
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -182,10 +184,8 @@ class CondaIndexCache:
                 self.db,
                 convert_cache.extract_cache_filesystem(self.cache_dir),
             )
-
             with self.db:
                 convert_cache.remove_prefix(self.db)
-
             # prepare to be sent to other thread
             self.close()
 
@@ -227,7 +227,6 @@ class CondaIndexCache:
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
             log.exception("Error extracting %s", fn)
-
         return retval
 
     def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):

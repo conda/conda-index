@@ -18,8 +18,13 @@ operation it delegates everything to the wrapped filesystem."""
 # In [9]: fsspec.core.url_to_fs("/spam/eggs")
 # Out[9]: (<fsspec.implementations.local.LocalFileSystem at 0x102a6cf40>, '/spam/eggs')
 
-import os
-import os.path
+# See also https://conda.anaconda.org/<repo name>/noarch/ e.g. for smaller
+# channels; https://conda.anaconda.org/<repo name>/ parent will redirect
+# elsewhere
+
+# Note fsspec uses / as a path separator on all platforms
+
+import os, os.path
 from pathlib import Path
 
 
@@ -31,6 +36,7 @@ def get_filesystem(url_or_path):
     import fsspec.core
 
     return fsspec.core.url_to_fs("file:///")
+
 
 
 class MinimalFS:
