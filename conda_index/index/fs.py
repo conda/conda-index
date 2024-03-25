@@ -32,11 +32,12 @@ def get_filesystem(url_or_path):
     if not "://" in url_or_path:
         from fsspec.implementations.local import LocalFileSystem
 
+        # a place to put our doesn't-depend-on-fsspec implementation, unless we
+        # decide to switch modes in the class.
         return (LocalFileSystem(), url_or_path)
     import fsspec.core
 
-    return fsspec.core.url_to_fs("file:///")
-
+    return fsspec.core.url_to_fs(url_or_path)
 
 
 class MinimalFS:

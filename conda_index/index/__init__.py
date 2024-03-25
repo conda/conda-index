@@ -506,9 +506,11 @@ class ChannelIndex:
         if threads is None:
             threads = MAX_THREADS_DEFAULT
 
-        # instead, add a new channel_url that accepts fsspec URLs; keep channel_root for local?
-        self.fs, self.channel_root = fs.get_filesystem(channel_root)
+        if channel_url:
+            # do we need a way to pass fsspec options?
+            self.fs, self.channel_url = fs.get_filesystem(channel_url)
 
+        self.channel_root = channel_root
         self.cache_class = cache_class
         self.output_root = output_root if output_root else self.channel_root
         self.channel_name = channel_name or basename(channel_root.rstrip("/"))
