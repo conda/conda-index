@@ -215,7 +215,6 @@ def convert_cache(conn, cache_generator):
         log.info(f"BEGIN BATCH {i}")
         with conn:  # transaction
             for match, member in chunk:
-
                 if match["path"] == "stat.json":
                     # stat.json is one file with information on all the
                     # packages, so we delete from stat.

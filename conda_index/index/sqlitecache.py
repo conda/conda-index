@@ -430,7 +430,7 @@ class CondaIndexCache:
 
         return data
 
-    def save_fs_state(self, subdir_url: str | Path | None = None):
+    def save_fs_state(self, subdir_path: str | Path | None = None):
         """
         stat all files in subdir_path to compare against cached repodata.
 
@@ -457,8 +457,14 @@ class CondaIndexCache:
             if fn.endswith(CONDA_PACKAGE_EXTENSIONS)
         }
 
-        # put filesystem 'ground truth' into stat table
-        # will we eventually stat everything on fs, or can we shortcut for new?
+        # put filesystem 'ground truth' into stat table will we eventually stat
+        # everything on fs, or can we shortcut for new files?
+
+        # XXX skip "call HEAD on all files" by default if using a fsspec http
+        # filesystem; use listdir-with-details if possible; possible shortcut if
+        # file is not known to stat table where stage='index'. For example on a
+        # regular filesytem mtime is a separate stat call; on HTTP you get
+        # Last-Modified with GET request; difficult to map to generic fs API.
         def listdir_stat():
             for fn in fns_in_subdir:
                 abs_fn = self.fs.join(subdir_url, fn)

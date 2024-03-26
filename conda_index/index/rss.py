@@ -35,7 +35,6 @@ def _get_title(name, version, subdirs):
 
 
 def _get_items(packages: list[tuple[str, dict]]):
-
     items = []
     for name, package in packages:
 
