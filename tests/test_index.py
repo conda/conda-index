@@ -832,6 +832,7 @@ def test_stat_cache_used(testing_workdir, mocker):
     cph_extract.assert_not_called()
 
 
+@pytest.mark.skip(reason="No longer re-use cache between .tar.bz2 and .conda")
 def test_new_pkg_format_preferred(testing_workdir, mocker):
     """Test that in one pass, the .conda file is extracted before the .tar.bz2, and the .tar.bz2 uses the cache"""
     test_package_path = join(

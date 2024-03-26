@@ -22,10 +22,11 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
+    _checksum,
     checksums,
 )
 from . import common, convert_cache
-from .fs import MinimalFS
+from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -89,32 +90,28 @@ class CondaIndexCache:
 
     def __init__(
         self,
-        channel_root,
+        channel_root: Path | str,
         subdir: str,
         *,
-        cache_dir: Path | None = None,
         fs: MinimalFS | None = None,
+        channel_url: str | None = None,
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
-        cache_dir: If not set, Path(channel_root, subdir, ".cache")
         fs: fsspec.spec.AbstractFileSystem implementation (optional)
+        channel_url: base url if fs is used (optional)
         """
-        if fs and not cache_dir:
-            raise ValueError("Must pass explicit cache_dir if using custom fs")
 
-        self.fs = MinimalFS() if fs is None else fs
         self.subdir = subdir
-        self.channel_root = channel_root
-        self.subdir_path = self.fs.join(channel_root, subdir)
-        # if channel_root is a URL thene cache_dir neeeds to be provided
-        if cache_dir:
-            self.cache_dir = cache_dir
-        else:
-            self.cache_dir = self.fs.join(self.subdir_path, ".cache")
-        self.db_filename = self.fs.join(self.cache_dir, "cache.db")
+        self.channel_root = Path(channel_root)
+        self.subdir_path = Path(channel_root, subdir)
+        self.cache_dir = Path(channel_root, subdir, ".cache")
+        self.db_filename = self.cache_dir / "cache.db"
         self.cache_is_brand_new = not Path(self.db_filename).exists()
+
+        self.fs = fs or MinimalFS()
+        self.channel_url = channel_url or str(channel_root)
 
         if not Path(self.cache_dir).exists():
             Path(self.cache_dir).mkdir()
@@ -137,7 +134,7 @@ class CondaIndexCache:
         """
         Connection to our sqlite3 database.
         """
-        conn = common.connect(self.db_filename)
+        conn = common.connect(str(self.db_filename))
         with conn:
             convert_cache.create(conn)
             convert_cache.migrate(conn)
@@ -189,7 +186,7 @@ class CondaIndexCache:
             # prepare to be sent to other thread
             self.close()
 
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info):
+    def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
         """
@@ -198,14 +195,17 @@ class CondaIndexCache:
         )
 
     def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-
-        abs_fn = self.fs.join(self.subdir_path, fn)
-
         if stat_result is None:
-            stat_result = self.fs.stat(abs_fn)
-
-        size = stat_result.st_size
-        mtime = stat_result.st_mtime
+            # this code path is deprecated
+            abs_fn = self.fs.join(self.subdir_path, fn)
+            stat_dict = self.fs.stat(abs_fn)
+            size = stat_dict["size"]
+            mtime = stat_dict["mtime"]
+        else:
+            # XXX
+            abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
+            size = stat_result.st_size
+            mtime = stat_result.st_mtime
         retval = fn, mtime, size, None
 
         # we no longer re-use the .conda cache for .tar.bz2; faster conda
@@ -213,10 +213,7 @@ class CondaIndexCache:
         try:
             log.debug("cache %s/%s", subdir, fn)
 
-            with self.fs.open(abs_fn, "rb"):
-                index_json = self.extract_to_cache_unconditional(
-                    fn, abs_fn, size, mtime
-                )
+            index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
 
             retval = fn, mtime, size, index_json
         except (
@@ -247,30 +244,34 @@ class CondaIndexCache:
         }
 
         have = {}
-        package_stream = iter(package_streaming.stream_conda_info(fn, abs_fn))
-        for tar, member in package_stream:
-            if member.name in wanted:
-                wanted.remove(member.name)
-                reader = tar.extractfile(member)
-                if reader is None:
-                    log.warn(f"{abs_fn}/{member.name} was not a regular file")
-                    continue
-                have[member.name] = reader.read()
+        # second stream_conda_info "fileobj" parameter accepts Path or str
+        # inherited from ZipFile, bz2.open behavior, but we need to open the
+        # file ourselves.
+        with self.fs.open(abs_fn) as fileobj:
+            package_stream = iter(package_streaming.stream_conda_info(fn, fileobj))
+            for tar, member in package_stream:
+                if member.name in wanted:
+                    wanted.remove(member.name)
+                    reader = tar.extractfile(member)
+                    if reader is None:
+                        log.warn(f"{abs_fn}/{member.name} was not a regular file")
+                        continue
+                    have[member.name] = reader.read()
 
-                # immediately parse index.json, decide whether we need icon
-                if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                    index_json = json.loads(have[member.name])
-                    if index_json.get("icon") is None:
-                        wanted = wanted - {ICON_PATH}
+                    # immediately parse index.json, decide whether we need icon
+                    if member.name == INDEX_JSON_PATH:  # early exit when no icon
+                        index_json = json.loads(have[member.name])
+                        if index_json.get("icon") is None:
+                            wanted = wanted - {ICON_PATH}
 
-                if member.name in recipe_want_one:
-                    # convert yaml; don't look for any more recipe files
-                    have[member.name] = _cache_recipe(have[member.name])
-                    wanted = wanted - recipe_want_one
+                    if member.name in recipe_want_one:
+                        # convert yaml; don't look for any more recipe files
+                        have[member.name] = _cache_recipe(have[member.name])
+                        wanted = wanted - recipe_want_one
 
-            if not wanted:  # we got what we wanted
-                package_stream.close()
-                log.debug("%s early close", fn)
+                if not wanted:  # we got what we wanted
+                    package_stream.close()
+                    log.debug("%s early close", fn)
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
@@ -289,7 +290,16 @@ class CondaIndexCache:
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
 
         # calculate extra stuff to add to index.json cache, size, md5, sha256
-        md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
+        def checksums():
+            """
+            Use utility function that accepts open file instead of filename.
+            """
+            with self.fs.open(abs_fn) as fileobj:
+                for algorithm in "md5", "sha256":
+                    fileobj.seek(0)
+                    yield _checksum(fileobj, algorithm)
+
+        md5, sha256 = checksums()
 
         with self.db:
             for have_path in have:
@@ -420,17 +430,30 @@ class CondaIndexCache:
 
         return data
 
-    def save_fs_state(self, subdir_path):
+    def save_fs_state(self, subdir_url: str | Path | None = None):
         """
         stat all files in subdir_path to compare against cached repodata.
+
+        subdir_path: implied from self.subdir; not used.
         """
         path_like = self.database_path_like
 
+        # fsspec listdir+stat may not contain mtime
+        # (why doesn't this convert Last-Modified header to mtime?)
+        # In [7]: fs.stat(_[-1]['name'])
+        # Out[7]:
+        # {'name': 'http://localhost:8000/metayaml.db',
+        # 'size': 5403795456,
+        # 'type': 'file'}
+
+        subdir_url = self.fs.join(self.channel_url, self.subdir)
+
         # gather conda package filenames in subdir
         log.debug("%s listdir", self.subdir)
+        # fsspec returns absolute paths
         fns_in_subdir = {
-            fn
-            for fn in os.listdir(subdir_path)
+            fn.rsplit("/", 1)[-1]
+            for fn in self.fs.listdir(subdir_url)
             if fn.endswith(CONDA_PACKAGE_EXTENSIONS)
         }
 
@@ -438,12 +461,12 @@ class CondaIndexCache:
         # will we eventually stat everything on fs, or can we shortcut for new?
         def listdir_stat():
             for fn in fns_in_subdir:
-                abs_fn = os.path.join(subdir_path, fn)
-                stat = os.stat(abs_fn)
+                abs_fn = self.fs.join(subdir_url, fn)
+                stat = self.fs.stat(abs_fn)
                 yield {
                     "path": self.database_path(fn),
-                    "mtime": int(stat.st_mtime),
-                    "size": stat.st_size,
+                    "mtime": stat.get("mtime"),
+                    "size": stat.get("size"),
                 }
 
         log.debug("%s save fs state", self.subdir)

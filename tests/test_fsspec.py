@@ -2,6 +2,7 @@
 Test ability to index off diverse filesystems using fsspec.
 """
 
+import json
 from conda_index.index import ChannelIndex
 
 
@@ -9,8 +10,8 @@ def test_fsspec(tmp_path, http_package_server):
     """
     Test that conda-index can directly index remote files.
     """
-    channel = tmp_path / "channel"  # used for sqlite cache in this mode
-    channel.mkdir()
+    channel_root = tmp_path / "channel"  # used for sqlite cache in this mode
+    channel_root.mkdir()
     output = tmp_path / "output"  # default same as channel
     output.mkdir()
 
@@ -19,11 +20,13 @@ def test_fsspec(tmp_path, http_package_server):
 
     # e.g. http://127.0.0.1:54963/osx-64/
 
+    test_subdirs = ("noarch", "osx-64")
+
     channel_index = ChannelIndex(
-        channel,
+        channel_root,
         channel_name="fsspec-channel",
         output_root=output,
-        subdirs=("noarch", "linux-64"),
+        subdirs=test_subdirs,  # listdir('tests/index_data/packages')?
         write_bz2=False,
         write_zst=False,
         threads=1,
@@ -36,4 +39,6 @@ def test_fsspec(tmp_path, http_package_server):
         patch_generator=None, current_index_versions=None, progress=False
     )
 
-    print("Indexed")
+    for subdir in test_subdirs:
+        repodata = json.loads((output / subdir / "repodata.json").read_text())
+        assert len(repodata["packages"]) + len(repodata["packages.conda"])
