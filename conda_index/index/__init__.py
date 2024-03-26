@@ -14,9 +14,9 @@ import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from numbers import Number
-from os.path import abspath, basename, getmtime, getsize, isfile, join
-from typing import NamedTuple
-from urllib.parse import urljoin, urlparse, urlsplit
+from os.path import basename, getmtime, getsize, isfile, join
+from pathlib import Path
+from typing import NamedTuple, Iterable
 from uuid import uuid4
 
 import zstandard
@@ -35,7 +35,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-from . import rss, sqlitecache, fs
+from . import fs, rss, sqlitecache
 
 log = logging.getLogger(__name__)
 
@@ -93,16 +93,6 @@ def _ensure_valid_channel(local_folder, subdir):
         path = os.path.join(local_folder, folder)
         if not os.path.isdir(path):
             os.makedirs(path)
-
-
-class FileInfo(NamedTuple):
-    """
-    Filename and a bit of stat information.
-    """
-
-    fn: str
-    st_mtime: Number
-    st_size: Number
 
 
 def update_index(
@@ -483,15 +473,22 @@ class ChannelIndex:
     output.
 
     See the implementation of ``conda_index.cli`` for usage.
+
+    channel_root: Path to channel, or just the channel cache if channel_url is provided.
+    channel_name: Name of channel; defaults to last path segment of channel_root.
+    subdirs: subdirs to index.
+    output_root: Path to write repodata.json etc; defaults to channel_root.
+    channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
     """
 
     fs: fs.MinimalFS | None = None
+    channel_url: str | None = None
 
     def __init__(
         self,
-        channel_root,
-        channel_name,
-        subdirs=None,
+        channel_root: Path,
+        channel_name: str | None,
+        subdirs: Iterable[str] | None = None,
         threads: int | None = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
@@ -510,10 +507,10 @@ class ChannelIndex:
             # do we need a way to pass fsspec options?
             self.fs, self.channel_url = fs.get_filesystem(channel_url)
 
-        self.channel_root = channel_root
+        self.channel_root = Path(channel_root)
         self.cache_class = cache_class
-        self.output_root = output_root if output_root else self.channel_root
-        self.channel_name = channel_name or basename(channel_root.rstrip("/"))
+        self.output_root = Path(output_root) if output_root else self.channel_root
+        self.channel_name = channel_name or basename(str(channel_root).rstrip("/"))
         self._subdirs = subdirs
         # no lambdas in pickleable
         self.thread_executor_factory = functools.partial(
@@ -631,7 +628,6 @@ class ChannelIndex:
 
         log.info("%s Writing patched repodata", subdir)
 
-        log.debug("%s write patched repodata", subdir)
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
         log.info("%s Building current_repodata subset", subdir)
@@ -663,7 +659,6 @@ class ChannelIndex:
 
         log.info("%s Writing index HTML", subdir)
 
-        log.debug("%s write index.html", subdir)
         self._write_subdir_index_html(subdir, patched_repodata)
 
         log.debug("%s finish", subdir)
@@ -753,7 +748,10 @@ class ChannelIndex:
 
     def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root, subdir=subdir
+            channel_root=self.channel_root,
+            subdir=subdir,
+            fs=self.fs,
+            channel_url=self.channel_url,
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
@@ -776,7 +774,7 @@ class ChannelIndex:
 
         # list so tqdm can show progress
         extract = [
-            FileInfo(
+            fs.FileInfo(
                 fn=cache.plain_path(row["path"]),
                 st_mtime=row["mtime"],
                 st_size=row["size"],
@@ -905,7 +903,6 @@ class ChannelIndex:
         self._maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
-
         cache = self.cache_for_subdir(subdir)
 
         legacy_packages = repodata["packages"]
@@ -1139,10 +1136,9 @@ class ChannelIndex:
         else:
             if patch_generator:
                 raise ValueError(
-                    "Specified metadata patch file '{}' does not exist.  Please try an absolute "
-                    "path, or examine your relative path carefully with respect to your cwd.".format(
-                        patch_generator
-                    )
+                    f"Specified metadata patch file '{patch_generator}' does not exist. "
+                    "Please try an absolute path, or examine your relative path carefully "
+                    "with respect to your cwd."
                 )
             return {}
 
