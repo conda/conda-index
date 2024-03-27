@@ -1,8 +1,21 @@
 """
-fsspec as an optional dependency.
+Minimal (just what conda-index uses) filesystem abstraction.
+
+Allows `fsspec <https://filesystem-spec.readthedocs.io/>`_ to be used to index
+remote repositories, without making it a required dependency.
 """
 
 from __future__ import annotations
+
+import os
+import os.path
+import typing
+from dataclasses import dataclass
+from numbers import Number
+from pathlib import Path
+
+if typing.TYPE_CHECKING:
+    from fsspec import AbstractFileSystem
 
 # Maybe use this
 """The DirFileSystem is a filesystem-wrapper. It assumes every path it is
@@ -25,28 +38,6 @@ operation it delegates everything to the wrapped filesystem."""
 # elsewhere
 
 # Note fsspec uses / as a path separator on all platforms
-
-import os
-import os.path
-import typing
-from dataclasses import dataclass
-from pathlib import Path
-
-if typing.TYPE_CHECKING:
-    from fsspec import AbstractFileSystem
-
-
-def get_filesystem(url_or_path):
-    if not "://" in url_or_path:
-        from fsspec.implementations.local import LocalFileSystem
-
-        # a place to put our doesn't-depend-on-fsspec implementation, unless we
-        # decide to switch modes in the class.
-        return FsspecFS(LocalFileSystem()), url_or_path
-    import fsspec.core
-
-    fs, url = fsspec.core.url_to_fs(url_or_path)
-    return FsspecFS(fs), url
 
 
 @dataclass
@@ -97,10 +88,7 @@ class FsspecFS(MinimalFS):
 
     def join(self, *paths):
         # XXX
-        try:
-            return "/".join(p.rstrip("/") for p in paths)
-        except AttributeError:
-            pass
+        return "/".join(p.rstrip("/") for p in paths)
 
     def listdir(self, path: str):
         return [

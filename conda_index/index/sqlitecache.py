@@ -98,8 +98,8 @@ class CondaIndexCache:
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
-        fs: fsspec.spec.AbstractFileSystem implementation (optional)
-        channel_url: base url if fs is used (optional)
+        fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
+        channel_url: base url if fs is used; optional.
         """
 
         self.subdir = subdir
@@ -187,8 +187,9 @@ class CondaIndexCache:
 
     def open(self, fn: str):
         """
-        Given a package name "somepackage.conda", return an open, seekable file
-        object from our channel_url/subdir/fn suitable for reading that package.
+        Given a base package name "somepackage.conda", return an open, seekable
+        file object from our channel_url/subdir/fn suitable for reading that
+        package.
         """
         abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
         return self.fs.open(abs_fn)
@@ -280,6 +281,8 @@ class CondaIndexCache:
                     package_stream.close()
                     log.debug("%s early close", fn)
 
+            # XXX if we are reindexing a channel, provide a way to assert that
+            # checksums match the upstream stage.
             def checksums():
                 """
                 Use utility function that accepts open file instead of filename.
