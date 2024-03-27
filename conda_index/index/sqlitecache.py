@@ -23,7 +23,6 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
     _checksum,
-    checksums,
 )
 from . import common, convert_cache
 from .fs import FileInfo, MinimalFS
@@ -113,8 +112,8 @@ class CondaIndexCache:
         self.fs = fs or MinimalFS()
         self.channel_url = channel_url or str(channel_root)
 
-        if not Path(self.cache_dir).exists():
-            Path(self.cache_dir).mkdir()
+        if not self.cache_dir.exists():
+            self.cache_dir.mkdir()
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -186,6 +185,14 @@ class CondaIndexCache:
             # prepare to be sent to other thread
             self.close()
 
+    def open(self, fn: str):
+        """
+        Given a package name "somepackage.conda", return an open, seekable file
+        object from our channel_url/subdir/fn suitable for reading that package.
+        """
+        abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
+        return self.fs.open(abs_fn)
+
     def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
@@ -247,7 +254,7 @@ class CondaIndexCache:
         # second stream_conda_info "fileobj" parameter accepts Path or str
         # inherited from ZipFile, bz2.open behavior, but we need to open the
         # file ourselves.
-        with self.fs.open(abs_fn) as fileobj:
+        with self.open(fn) as fileobj:
             package_stream = iter(package_streaming.stream_conda_info(fn, fileobj))
             for tar, member in package_stream:
                 if member.name in wanted:
@@ -273,6 +280,16 @@ class CondaIndexCache:
                     package_stream.close()
                     log.debug("%s early close", fn)
 
+            def checksums():
+                """
+                Use utility function that accepts open file instead of filename.
+                """
+                for algorithm in "md5", "sha256":
+                    fileobj.seek(0)
+                    yield _checksum(fileobj, algorithm)
+
+            md5, sha256 = checksums()
+
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
             log.debug(f"{fn} missing {wanted} has {set(have.keys())}")
@@ -288,18 +305,6 @@ class CondaIndexCache:
         except KeyError:
             paths_str = ""
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
-
-        # calculate extra stuff to add to index.json cache, size, md5, sha256
-        def checksums():
-            """
-            Use utility function that accepts open file instead of filename.
-            """
-            with self.fs.open(abs_fn) as fileobj:
-                for algorithm in "md5", "sha256":
-                    fileobj.seek(0)
-                    yield _checksum(fileobj, algorithm)
-
-        md5, sha256 = checksums()
 
         with self.db:
             for have_path in have:

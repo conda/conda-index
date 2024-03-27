@@ -13,10 +13,9 @@ import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
-from numbers import Number
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
-from typing import NamedTuple, Iterable
+from typing import Iterable
 from uuid import uuid4
 
 import zstandard
