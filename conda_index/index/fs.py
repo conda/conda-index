@@ -17,25 +17,6 @@ from pathlib import Path
 if typing.TYPE_CHECKING:
     from fsspec import AbstractFileSystem
 
-# Maybe use this
-"""The DirFileSystem is a filesystem-wrapper. It assumes every path it is
-dealing with is relative to the path. After performing the necessary paths
-operation it delegates everything to the wrapped filesystem."""
-
-# use fsspec.core.url_to_fs("maybe::chained::http:///...")
-# returns (implementation, more_normal_url)
-# use urljoin or urlsplit or plain split('/')...
-# .. works for relative urls: urlparse.parse.urljoin("file:///spam/eggs/woo", "../bla") returns file:///spam/bla
-
-# In [7]: fs.unstrip_protocol('foo/bar')
-# Out[7]: 'file:///base/path/conda-index/foo/bar'
-
-# In [9]: fsspec.core.url_to_fs("/spam/eggs")
-# Out[9]: (<fsspec.implementations.local.LocalFileSystem at 0x102a6cf40>, '/spam/eggs')
-
-# See also https://conda.anaconda.org/<repo name>/noarch/ e.g. for smaller
-# channels; https://conda.anaconda.org/<repo name>/ parent will redirect
-# elsewhere
 
 # Note fsspec uses / as a path separator on all platforms
 
@@ -75,6 +56,9 @@ class MinimalFS:
 
 
 class FsspecFS(MinimalFS):
+    """
+    Wrap a fsspec filesystem to pass to :class:`ChannelIndex`
+    """
     fsspec_fs: AbstractFileSystem
 
     def __init__(self, fsspec_fs):
