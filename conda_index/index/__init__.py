@@ -34,7 +34,8 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
-from . import fs, rss, sqlitecache
+from . import rss, sqlitecache
+from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -478,6 +479,7 @@ class ChannelIndex:
     subdirs: subdirs to index.
     output_root: Path to write repodata.json etc; defaults to channel_root.
     channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
+    fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     """
 
     fs: fs.MinimalFS | None = None
@@ -498,13 +500,16 @@ class ChannelIndex:
         write_run_exports=False,
         compact_json=True,
         channel_url: str | None = None,
+        fs: MinimalFS | None = None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
 
-        if channel_url:
-            # do we need a way to pass fsspec options?
-            self.fs, self.channel_url = fs.get_filesystem(channel_url)
+        if (fs or channel_url) and not (fs and channel_url):
+            raise TypeError("Both or none of fs, channel_url must be provided.")
+
+        self.fs = fs
+        self.channel_url = channel_url
 
         self.channel_root = Path(channel_root)
         self.cache_class = cache_class

@@ -3,7 +3,11 @@ Test ability to index off diverse filesystems using fsspec.
 """
 
 import json
+
+import fsspec.core
+
 from conda_index.index import ChannelIndex
+from conda_index.index.fs import FsspecFS
 
 
 def test_fsspec(tmp_path, http_package_server):
@@ -22,6 +26,11 @@ def test_fsspec(tmp_path, http_package_server):
 
     test_subdirs = ("noarch", "osx-64")
 
+    fs, url = fsspec.core.url_to_fs(
+        f"simplecache::{channel_url}",
+        simplecache={"cache_storage": str(tmp_path / "fsspec-cache")},
+    )
+
     channel_index = ChannelIndex(
         channel_root,
         channel_name="fsspec-channel",
@@ -32,7 +41,8 @@ def test_fsspec(tmp_path, http_package_server):
         threads=1,
         write_run_exports=False,
         compact_json=True,
-        channel_url=channel_url,
+        channel_url=url,
+        fs=FsspecFS(fs),
     )
 
     channel_index.index(

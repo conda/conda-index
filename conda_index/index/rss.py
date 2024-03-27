@@ -1,6 +1,7 @@
 """
 Generate RSS feed from channeldata.
 """
+
 from __future__ import annotations
 
 import time

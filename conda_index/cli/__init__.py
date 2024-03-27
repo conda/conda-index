@@ -1,6 +1,7 @@
 """
 Updated command line interface for conda-index.
 """
+
 import logging
 import os.path
 
