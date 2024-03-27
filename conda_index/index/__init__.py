@@ -474,12 +474,12 @@ class ChannelIndex:
 
     See the implementation of ``conda_index.cli`` for usage.
 
-    channel_root: Path to channel, or just the channel cache if channel_url is provided.
-    channel_name: Name of channel; defaults to last path segment of channel_root.
-    subdirs: subdirs to index.
-    output_root: Path to write repodata.json etc; defaults to channel_root.
-    channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
-    fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
+    :param channel_root: Path to channel, or just the channel cache if channel_url is provided.
+    :param channel_name: Name of channel; defaults to last path segment of channel_root.
+    :param subdirs: subdirs to index.
+    :param output_root: Path to write repodata.json etc; defaults to channel_root.
+    :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
+    :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     """
 
     fs: fs.MinimalFS | None = None
