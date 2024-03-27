@@ -88,10 +88,7 @@ class FsspecFS(MinimalFS):
 
     def join(self, *paths):
         # XXX
-        try:
-            return "/".join(p.rstrip("/") for p in paths)
-        except AttributeError:
-            pass
+        return "/".join(p.rstrip("/") for p in paths)
 
     def listdir(self, path: str):
         return [
