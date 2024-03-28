@@ -102,6 +102,7 @@ def islist(arg, uniform=False, include_dict=True):
         except StopIteration:
             # StopIteration: list is empty, an empty list is still uniform
             return True
+
         # check for explicit type match, do not allow the ambiguity of isinstance
         def uniform(e):
             return type(e) == etype
@@ -444,7 +445,6 @@ def move_with_fallback(src, dst):
             copy_into(src, dst)
             os.unlink(src)
         except PermissionError:
-
             log.debug(
                 f"Failed to copy/remove path from {src} to {dst} due to permission error"
             )

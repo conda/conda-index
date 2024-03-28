@@ -73,7 +73,6 @@ def test_migrate_1():
 
 
 def test_unknown_hash_algorithm():
-
     with pytest.raises(AttributeError):
         _checksum("not-a-real-file.txt", "sha0")
 

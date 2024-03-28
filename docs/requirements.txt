@@ -1,6 +1,6 @@
 # docs
 furo
-sphinx
-myst-parser
+sphinx>7
+myst-parser>=2
 mdit-py-plugins>=0.3.0
 sphinx-click

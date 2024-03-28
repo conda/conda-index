@@ -19,6 +19,7 @@ dependencies = [
     "jinja2",
     "more-itertools",
     "ruamel.yaml",
+    "zstandard",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,7 @@ test = [
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
+    "fsspec[http]"
 ]
 docs = [
     "furo",
@@ -55,3 +57,6 @@ testpaths = ["tests"]
 [tool.coverage.run]
 concurrency = ["multiprocessing", "thread"]
 source = ["conda_index"]
+
+[tool.isort]
+profile = "black"
