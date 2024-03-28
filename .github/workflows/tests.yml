@@ -38,7 +38,6 @@ jobs:
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
-          auto-update-conda: true
           python-version: ${{ matrix.python-version }}
           channels: defaults
           activate-environment: test_env
