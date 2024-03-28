@@ -50,15 +50,21 @@ class MinimalFS:
     def join(self, *paths):
         return os.path.join(*paths)
 
-    def listdir(self, path):
-        # XXX change pathsep to / to mimic fsspec
-        return os.listdir(path)
+    def listdir(self, path) -> typing.Iterable[dict]:
+        for name in os.listdir(path):
+            stat_result = os.stat(os.path.join(path, name))
+            yield {
+                "name": name,
+                "mtime": stat_result.st_mtime,
+                "size": stat_result.st_size,
+            }
 
 
 class FsspecFS(MinimalFS):
     """
     Wrap a fsspec filesystem to pass to :class:`ChannelIndex`
     """
+
     fsspec_fs: AbstractFileSystem
 
     def __init__(self, fsspec_fs):
@@ -74,7 +80,5 @@ class FsspecFS(MinimalFS):
         # XXX
         return "/".join(p.rstrip("/") for p in paths)
 
-    def listdir(self, path: str):
-        return [
-            listing["name"] for listing in self.fsspec_fs.listdir(path, details=False)
-        ]
+    def listdir(self, path: str) -> list[dict]:
+        return self.fsspec_fs.listdir(path, details=True)
