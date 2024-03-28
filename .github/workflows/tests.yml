@@ -41,16 +41,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
           channels: defaults
           activate-environment: test_env
-          auto-update-conda: false
-          auto-activate-base: false
           show-channel-urls: true
           environment-file: tests/environment.yml
 
       - name: Source Scripts
         run: |
-          conda install conda-build pip
-          # pip >=22 is required for pip install -e conda-index
-          pip install --upgrade pip
+          conda info -a
           pip install -e .[test]
           conda info -a
           pytest --cov
