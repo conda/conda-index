@@ -44,6 +44,7 @@ jobs:
           auto-update-conda: false
           auto-activate-base: false
           show-channel-urls: true
+          environment-file: tests/environment.yml
 
       - name: Source Scripts
         run: |
