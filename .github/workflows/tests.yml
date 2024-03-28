@@ -40,15 +40,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           channels: defaults
-          activate-environment: test_env
           show-channel-urls: true
           environment-file: tests/environment.yml
+          activate-environment: test_env
 
       - name: Source Scripts
         run: |
-          conda info -a
+          conda install -n test_env conda-build pip
+          conda info
           pip install -e .[test]
-          conda info -a
+          conda info
           pytest --cov
 
   analyze:
