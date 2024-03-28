@@ -50,9 +50,6 @@ jobs:
       # issues here, since an older version will already be installed?
       - name: Source Scripts
         run: |
-          conda install -n test conda-build pip
-          conda activate test
-          conda info
           pip install -e .[test]
           conda info
           pytest --cov
