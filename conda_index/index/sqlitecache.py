@@ -444,52 +444,33 @@ class CondaIndexCache:
 
         subdir_path: implied from self.subdir; not used.
         """
-        path_like = self.database_path_like
-
-        # fsspec listdir+stat may not contain mtime
-        # (why doesn't this convert Last-Modified header to mtime?)
-        # In [7]: fs.stat(_[-1]['name'])
-        # Out[7]:
-        # {'name': 'http://localhost:8000/metayaml.db',
-        # 'size': 5403795456,
-        # 'type': 'file'}
-
         subdir_url = self.fs.join(self.channel_url, self.subdir)
 
-        # gather conda package filenames in subdir
         log.debug("%s listdir", self.subdir)
-        # fsspec returns absolute paths
-        fns_in_subdir = {
-            fn.rsplit("/", 1)[-1]
-            for fn in self.fs.listdir(subdir_url)
-            if fn.endswith(CONDA_PACKAGE_EXTENSIONS)
-        }
 
-        # put filesystem 'ground truth' into stat table will we eventually stat
+        # Put filesystem 'ground truth' into stat table. Will we eventually stat
         # everything on fs, or can we shortcut for new files?
 
-        # XXX skip "call HEAD on all files" by default if using a fsspec http
-        # filesystem; use listdir-with-details if possible; possible shortcut if
-        # file is not known to stat table where stage='index'. For example on a
-        # regular filesytem mtime is a separate stat call; on HTTP you get
-        # Last-Modified with GET request; difficult to map to generic fs API.
         def listdir_stat():
-            for fn in fns_in_subdir:
-                abs_fn = self.fs.join(subdir_url, fn)
-                stat = self.fs.stat(abs_fn)
+            # Gather conda package filenames in subdir
+            for entry in self.fs.listdir(subdir_url):
+                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
+                    continue
+                if "mtime" not in entry or "size" not in entry:
+                    entry.update(self.fs.stat(entry["name"]))
                 yield {
-                    "path": self.database_path(fn),
-                    "mtime": stat.get("mtime"),
-                    "size": stat.get("size"),
+                    "path": self.database_path(entry["name"].rsplit("/", 1)[-1]),
+                    "mtime": entry.get("mtime"),
+                    "size": entry["size"],
                 }
 
         log.debug("%s save fs state", self.subdir)
         with self.db:
-            # always stage='fs', not custom upstream_stage which would be
+            # Always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": path_like},
+                {"path_like": self.database_path_like},
             )
             self.db.executemany(
                 """
