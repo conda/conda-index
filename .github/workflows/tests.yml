@@ -42,11 +42,13 @@ jobs:
           channels: defaults
           show-channel-urls: true
           environment-file: tests/environment.yml
-          activate-environment: test_env
 
+      # does the fact that conda-index is now a conda-build dependency cause
+      # issues here, since an older version will already be installed?
       - name: Source Scripts
         run: |
-          conda install -n test_env conda-build pip
+          conda install -n test conda-build pip
+          conda activate test
           conda info
           pip install -e .[test]
           conda info
