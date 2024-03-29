@@ -466,7 +466,7 @@ class CondaIndexCache:
 
         log.debug("%s save fs state", self.subdir)
         with self.db:
-            # Always stage='fs', not custom upstream_stage which would be
+            # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
