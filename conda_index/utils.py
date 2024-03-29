@@ -1,7 +1,6 @@
 import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
-from contextlib import contextmanager
 
 from conda.base.constants import (  # noqa: F401
     CONDA_PACKAGE_EXTENSION_V1,
@@ -11,15 +10,6 @@ from conda.base.constants import (  # noqa: F401
 from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
 
 DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
-
-
-def LoggingContext(*args, **kwargs):
-    @contextmanager
-    def log_context():
-        """no-op logging context"""
-        yield
-
-    return log_context()
 
 
 # multithreaded checksums

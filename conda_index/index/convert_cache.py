@@ -148,7 +148,7 @@ def remove_prefix(conn: sqlite3.Connection):
     log.info("Migrate database")
 
     def basename(path):
-        if not isinstance(path, str):
+        if not isinstance(path, str):  # pragma: no cover
             return path
         return path.rsplit("/")[-1]
 
@@ -156,7 +156,7 @@ def remove_prefix(conn: sqlite3.Connection):
         conn.create_function(
             "migrate_basename", narg=1, func=basename, deterministic=True
         )
-    except TypeError:  # Python < 3.8
+    except TypeError:  # pragma: no cover; Python < 3.8
         conn.create_function("migrate_basename", narg=1, func=basename)
 
     for table in TABLE_NAMES + ["stat"]:
@@ -298,7 +298,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
             try:
                 with combined_db:
                     combined_db.execute(query, (channel_prefix,))
-            except sqlite3.OperationalError:
+            except sqlite3.OperationalError:  # pragma: no cover
                 log.error("OperationalError on %s", query)
                 raise
 
