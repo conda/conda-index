@@ -4,6 +4,7 @@ Tests primarily to increase coverage.
 
 import os.path
 import sqlite3
+import tarfile
 
 import pytest
 
@@ -106,3 +107,43 @@ def test_main():
     """
     with pytest.raises(SystemExit):
         import conda_index.__main__  # noqa: F401
+
+
+def test_patch_instructions_coverage(tmp_path):
+    """
+    Used to load patch instructions into conda-index.
+    """
+    (tmp_path / "noarch").mkdir()
+
+    index = conda_index.index.ChannelIndex(tmp_path, "noarch")
+
+    index._load_instructions("noarch")
+
+    patch = tmp_path / "noarch" / "patch_instructions.json"
+
+    patch.write_text("{}")
+
+    index._load_instructions("noarch")
+
+    patch_tarball = tmp_path / "patch.tar.bz2"
+    with tarfile.open(patch_tarball, "w:bz2") as tar:
+        tar.add(patch, arcname="noarch/patch_instructions.json")
+
+    index._load_patch_instructions_tarball("noarch", patch_tarball)
+
+    # non-importable path (would normally be a .py)
+    with pytest.raises(ImportError):
+        index._create_patch_instructions("noarch", {}, str(patch))
+
+    # unsupported patch version
+    patch.write_text('{"patch_instructions_version":42}')
+    with pytest.raises(RuntimeError):
+        index._load_instructions("noarch")
+
+    # unsupported patch version in tarball triggers separate RuntimeError check
+    patch_invalid = tmp_path / "patch_invalid.tar.bz2"
+    with tarfile.open(patch_invalid, "w:bz2") as tar:
+        tar.add(patch, arcname="noarch/patch_instructions.json")
+
+    with pytest.raises(RuntimeError):
+        index._patch_repodata("noarch", {}, str(patch_invalid))

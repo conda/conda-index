@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from numbers import Number
 from pathlib import Path
 
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     from fsspec import AbstractFileSystem
 
 
@@ -59,6 +59,9 @@ class MinimalFS:
                 "size": stat_result.st_size,
             }
 
+    def basename(self, path) -> str:
+        return os.path.basename(path)
+
 
 class FsspecFS(MinimalFS):
     """
@@ -82,3 +85,6 @@ class FsspecFS(MinimalFS):
 
     def listdir(self, path: str) -> list[dict]:
         return self.fsspec_fs.listdir(path, details=True)
+
+    def basename(self, path: str) -> str:
+        return path.rsplit("/", 1)[-1]

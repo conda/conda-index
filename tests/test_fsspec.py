@@ -5,6 +5,7 @@ Test ability to index off diverse filesystems using fsspec.
 import json
 
 import fsspec.core
+import pytest
 
 from conda_index.index import ChannelIndex
 from conda_index.index.fs import FsspecFS
@@ -30,6 +31,10 @@ def test_fsspec(tmp_path, http_package_server):
         f"simplecache::{channel_url}",
         simplecache={"cache_storage": str(tmp_path / "fsspec-cache")},
     )
+
+    # channel_url, fs both required
+    with pytest.raises(TypeError):
+        ChannelIndex(channel_root, "channel", channel_url="yes", fs=None)
 
     channel_index = ChannelIndex(
         channel_root,

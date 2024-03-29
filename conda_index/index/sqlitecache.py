@@ -459,7 +459,7 @@ class CondaIndexCache:
                 if "mtime" not in entry or "size" not in entry:
                     entry.update(self.fs.stat(entry["name"]))
                 yield {
-                    "path": self.database_path(entry["name"].rsplit("/", 1)[-1]),
+                    "path": self.database_path(self.fs.basename(entry["name"])),
                     "mtime": entry.get("mtime"),
                     "size": entry["size"],
                 }

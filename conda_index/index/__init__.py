@@ -35,7 +35,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .fs import MinimalFS
+from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -482,7 +482,7 @@ class ChannelIndex:
     :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     """
 
-    fs: fs.MinimalFS | None = None
+    fs: MinimalFS | None = None
     channel_url: str | None = None
 
     def __init__(
@@ -778,7 +778,7 @@ class ChannelIndex:
 
         # list so tqdm can show progress
         extract = [
-            fs.FileInfo(
+            FileInfo(
                 fn=cache.plain_path(row["path"]),
                 st_mtime=row["mtime"],
                 st_size=row["size"],
@@ -800,6 +800,9 @@ class ChannelIndex:
             for fn, mtime, size, index_json in thread_executor.map(
                 extract_func, extract
             ):
+                # XXX allow size to be None or get from "bytes sent through
+                # checksum algorithm" e.g. for fsspec where size may not be
+                # known in advance
                 size_processed += size  # even if processed incorrectly
                 # fn can be None if the file was corrupt or no longer there
                 if fn and mtime:
