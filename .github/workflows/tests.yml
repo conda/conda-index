@@ -22,44 +22,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  test:
+    name: conda-index (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
-        shell: bash -l {0}
+        shell: bash -el {0}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
           channels: defaults
-          activate-environment: test_env
-          auto-update-conda: false
-          auto-activate-base: false
           show-channel-urls: true
+          environment-file: tests/environment.yml
 
+      # does the fact that conda-index is now a conda-build dependency cause
+      # issues here, since an older version will already be installed?
       - name: Source Scripts
         run: |
-          conda install conda-build pip
-          # pip >=22 is required for pip install -e conda-index
-          pip install --upgrade pip
           pip install -e .[test]
-          conda info -a
+          conda info
           pytest --cov
 
   analyze:
     name: Analyze test results
-    needs: [linux]
+    needs: [test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -103,7 +100,7 @@ jobs:
     steps:
       # Clean checkout of specific git ref needed for package metadata version
       # which needs env vars GIT_DESCRIBE_TAG and GIT_BUILD_STR:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           clean: true
