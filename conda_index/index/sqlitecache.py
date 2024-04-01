@@ -332,12 +332,11 @@ class CondaIndexCache:
 
         try:
             # recent stat information must exist here...
-            stat = self.db.execute(
+            mtime = self.db.execute(
                 "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
                 {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
-            ).fetchone()
-            mtime = stat["mtime"]
-        except (KeyError, IndexError):
+            ).fetchone()[0]
+        except TypeError:  # .fetchone() was None
             log.warn("%s mtime not found in cache", fn)
             try:
                 mtime = os.stat(join(subdir_path, fn)).st_mtime
@@ -560,5 +559,10 @@ def _clear_newline_chars(record, field_name):
         try:
             record[field_name] = record[field_name].strip().replace("\n", " ")
         except AttributeError:
-            # sometimes description gets added as a list instead of just a string
-            record[field_name] = record[field_name][0].strip().replace("\n", " ")
+            try:
+                # sometimes description gets added as a list instead of just a string
+                record[field_name] = (
+                    ("".join(record[field_name])).strip().replace("\n", " ")
+                )
+            except TypeError:
+                log.warn("Could not _clear_newline_chars from field %s", field_name)

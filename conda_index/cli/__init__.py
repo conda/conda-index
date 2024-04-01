@@ -1,6 +1,7 @@
 """
 Updated command line interface for conda-index.
 """
+
 import logging
 import os.path
 
@@ -11,7 +12,7 @@ from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 from .. import yaml
 
 
-@click.command(context_settings={"help_option_names": ['-h', '--help']})
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("dir")
 @click.option("--output", help="Output repodata to given directory.")
 @click.option(

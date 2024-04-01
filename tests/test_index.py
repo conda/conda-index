@@ -6,15 +6,16 @@ import tarfile
 from logging import getLogger
 from os.path import dirname, isdir, isfile, join
 from pathlib import Path
+from shutil import rmtree
 
 import conda_package_handling.api
 import pytest
 import zstandard
-from conda_build.conda_interface import context
-from conda_build.utils import copy_into, rm_rf
+from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
+from conda_index.utils_build import copy_into
 
 from .utils import archive_dir
 
@@ -831,6 +832,7 @@ def test_stat_cache_used(testing_workdir, mocker):
     cph_extract.assert_not_called()
 
 
+@pytest.mark.skip(reason="No longer re-use cache between .tar.bz2 and .conda")
 def test_new_pkg_format_preferred(testing_workdir, mocker):
     """Test that in one pass, the .conda file is extracted before the .tar.bz2, and the .tar.bz2 uses the cache"""
     test_package_path = join(
@@ -906,7 +908,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     # bugs in the past, where the wrong cached file being loaded resulted in
     # incorrect hashes/sizes for either the .tar.bz2 or .conda, depending on
     # which of those 2 existed in the cache.
-    rm_rf(os.path.join(testing_workdir, "osx-64", "stat.json"))
+    rmtree(os.path.join(testing_workdir, "osx-64", "stat.json"))
     conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", verbose=True, debug=True
     )
