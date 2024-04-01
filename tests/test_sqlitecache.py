@@ -104,7 +104,8 @@ def test_cache_source_as_list(tmp_path):
         t.addfile(index, BytesIO(index_data))
     cache = CondaIndexCache(tmp_path, "noarch")
 
-    cache.save_fs_state()
+    # argument is unused now but was required previously
+    cache.save_fs_state(tmp_path / "noarch")
     cache._extract_to_cache(cache.channel_root, cache.subdir, tar.name)
 
     # test load_all_from_cache still works without local file, mtime saved in
