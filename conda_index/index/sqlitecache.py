@@ -332,12 +332,11 @@ class CondaIndexCache:
 
         try:
             # recent stat information must exist here...
-            stat = self.db.execute(
+            mtime = self.db.execute(
                 "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
                 {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
-            ).fetchone()
-            mtime = stat["mtime"]
-        except (KeyError, IndexError):
+            ).fetchone()[0]
+        except TypeError:  # .fetchone() was None
             log.warn("%s mtime not found in cache", fn)
             try:
                 mtime = os.stat(join(subdir_path, fn)).st_mtime
