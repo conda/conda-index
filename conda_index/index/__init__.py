@@ -902,7 +902,6 @@ class ChannelIndex:
         self._maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
-
         cache = self.cache_for_subdir(subdir)
 
         legacy_packages = repodata["packages"]
