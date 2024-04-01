@@ -16,4 +16,4 @@
 
 ### Other
 
-* Approach 100% code coverage in test suite (#145)
+* Approach 100% code coverage in test suite; reformat with ruff. (#145)
