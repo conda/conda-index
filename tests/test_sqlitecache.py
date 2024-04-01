@@ -2,6 +2,7 @@
 Test sqlitecache
 """
 
+import tarfile
 from pathlib import Path
 
 from conda_index.index.common import connect
@@ -22,7 +23,7 @@ def test_cache_extract_without_stat_result(index_data):
     """
     pkg_dir = Path(index_data, "packages")
 
-    CondaIndexCache.db # run a getter decorator
+    CondaIndexCache.db  # run a getter decorator
 
     cache = CondaIndexCache(pkg_dir, "noarch")
 
@@ -34,6 +35,25 @@ def test_cache_extract_without_stat_result(index_data):
         pkg_dir / "noarch" / "run_exports_versions-2.0-h39de5ba_0.tar.bz2",
         stat_result=None,
     )
+
+
+def test_cache_device(tmp_path):
+    """
+    Cover error when metadata happens to be a device file.
+    """
+
+    (tmp_path / "noarch").mkdir()
+    tar = tmp_path / "noarch" / "devicefile.tar.bz2"
+
+    with tarfile.open(tar, mode="w:bz2") as t:
+        tarinfo = tarfile.TarInfo(name="info/index.json")
+        tarinfo.type = tarfile.CHRTYPE
+        t.addfile(tarinfo)
+        t.close()
+
+    cache = CondaIndexCache(tmp_path, "noarch")
+
+    cache._extract_to_cache(cache.channel_root, cache.subdir, tar.name)
 
 
 def test_convert_legacy_cache(tmp_path):
