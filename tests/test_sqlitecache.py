@@ -77,7 +77,7 @@ def test_cache_unusual_files(tmp_path):
     cache = CondaIndexCache(tmp_path, "noarch")
 
     with pytest.raises(sqlite3.OperationalError):
-        # XXX a malformed about.json would currently halt index processing
+        # XXX a malformed about.json might halt index processing?
         cache._extract_to_cache(cache.channel_root, cache.subdir, tar.name)
 
     (tmp_path / "noarch" / "found").touch()
