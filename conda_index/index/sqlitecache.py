@@ -560,5 +560,10 @@ def _clear_newline_chars(record, field_name):
         try:
             record[field_name] = record[field_name].strip().replace("\n", " ")
         except AttributeError:
-            # sometimes description gets added as a list instead of just a string
-            record[field_name] = record[field_name][0].strip().replace("\n", " ")
+            try:
+                # sometimes description gets added as a list instead of just a string
+                record[field_name] = (
+                    ("".join(record[field_name])).strip().replace("\n", " ")
+                )
+            except TypeError:
+                log.warn("Could not _clear_newline_chars from field %s", field_name)
