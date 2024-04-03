@@ -106,8 +106,8 @@ class CondaIndexCache:
         self.channel_root = Path(channel_root)
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
-        self.db_filename = self.cache_dir / "cache.db"
-        self.cache_is_brand_new = not Path(self.db_filename).exists()
+        self.db_filename = Path(self.cache_dir, "cache.db")
+        self.cache_is_brand_new = not self.db_filename.exists()
 
         self.fs = fs or MinimalFS()
         self.channel_url = channel_url or str(channel_root)
