@@ -149,15 +149,13 @@ def remove_prefix(conn: sqlite3.Connection):
 
     def basename(path):
         if not isinstance(path, str):  # pragma: no cover
+            # if our custom sqlite function is passed a non-str field
             return path
         return path.rsplit("/")[-1]
 
-    try:
-        conn.create_function(
-            "migrate_basename", narg=1, func=basename, deterministic=True
-        )
-    except TypeError:  # pragma: no cover; Python < 3.8
-        conn.create_function("migrate_basename", narg=1, func=basename)
+    conn.create_function(
+        "migrate_basename", narg=1, func=basename, deterministic=True
+    )
 
     for table in TABLE_NAMES + ["stat"]:
         conn.execute(

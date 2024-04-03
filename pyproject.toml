@@ -10,7 +10,7 @@ authors = [
 license = { file = "LICENSE" }
 readme = "README.md"
 dynamic = ["version", "description"]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dependencies = [
     "click >=8",
     "conda >=4.14.0",                  # not available on pypi
