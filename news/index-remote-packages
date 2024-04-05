@@ -18,4 +18,4 @@
 
 ### Other
 
-* <news item>
+* Drop support for Python 3.7; support Python 3.8+ only. (#130)
