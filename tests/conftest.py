@@ -22,6 +22,8 @@ from conda_build.metadata import MetaData
 from conda_build.utils import check_call_env, copy_into, prepend_bin_path
 from conda_build.variants import get_default_variant
 
+from .http_test_server import run_test_server
+
 
 @pytest.fixture(scope="function")
 def testing_workdir(tmp_path: Path, request):
@@ -194,3 +196,14 @@ def index_data(tmp_path: Path):
     index_data = Path(__file__).parents[0] / "index_data"
     shutil.copytree(index_data, tmp_path / "index_data")
     return tmp_path / "index_data"
+
+
+@pytest.fixture(scope="session")
+def http_package_server():
+    """Open a local web server to test remote support files."""
+    base = Path(__file__).parents[0] / "index_data" / "packages"
+    http = run_test_server(str(base))
+    yield http
+    # shutdown is checked at a polling interval, or the daemon thread will shut
+    # down when the test suite exits.
+    http.shutdown()

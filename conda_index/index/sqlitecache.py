@@ -2,6 +2,8 @@
 cache conda indexing metadata in sqlite.
 """
 
+from __future__ import annotations
+
 import fnmatch
 import json
 import logging
@@ -9,6 +11,7 @@ import os
 import os.path
 import sqlite3
 from os.path import join
+from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
 
@@ -19,9 +22,10 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    checksums,
+    _checksum,
 )
 from . import common, convert_cache
+from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -83,21 +87,33 @@ class cacher:
 class CondaIndexCache:
     upstream_stage = "fs"
 
-    def __init__(self, channel_root, subdir):
+    def __init__(
+        self,
+        channel_root: Path | str,
+        subdir: str,
+        *,
+        fs: MinimalFS | None = None,
+        channel_url: str | None = None,
+    ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
+        fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
+        channel_url: base url if fs is used; optional.
         """
-        self.channel_root = channel_root
+
         self.subdir = subdir
+        self.channel_root = Path(channel_root)
+        self.subdir_path = Path(channel_root, subdir)
+        self.cache_dir = Path(channel_root, subdir, ".cache")
+        self.db_filename = Path(self.cache_dir, "cache.db")
+        self.cache_is_brand_new = not self.db_filename.exists()
 
-        self.subdir_path = os.path.join(channel_root, subdir)
-        self.cache_dir = os.path.join(self.subdir_path, ".cache")
-        self.db_filename = os.path.join(self.cache_dir, "cache.db")
-        self.cache_is_brand_new = not os.path.exists(self.db_filename)
+        self.fs = fs or MinimalFS()
+        self.channel_url = channel_url or str(channel_root)
 
-        if not os.path.exists(self.cache_dir):
-            os.mkdir(self.cache_dir)
+        if not self.cache_dir.exists():
+            self.cache_dir.mkdir()
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -117,7 +133,7 @@ class CondaIndexCache:
         """
         Connection to our sqlite3 database.
         """
-        conn = common.connect(self.db_filename)
+        conn = common.connect(str(self.db_filename))
         with conn:
             convert_cache.create(conn)
             convert_cache.migrate(conn)
@@ -164,14 +180,21 @@ class CondaIndexCache:
                 self.db,
                 convert_cache.extract_cache_filesystem(self.cache_dir),
             )
-
             with self.db:
                 convert_cache.remove_prefix(self.db)
-
             # prepare to be sent to other thread
             self.close()
 
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info):
+    def open(self, fn: str):
+        """
+        Given a base package name "somepackage.conda", return an open, seekable
+        file object from our channel_url/subdir/fn suitable for reading that
+        package.
+        """
+        abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
+        return self.fs.open(abs_fn)
+
+    def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
         """
         fn_info: object with .fn, .st_size, and .st_msize properties
         """
@@ -180,21 +203,24 @@ class CondaIndexCache:
         )
 
     def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        subdir_path = join(channel_root, subdir)
-
-        abs_fn = join(subdir_path, fn)
-
         if stat_result is None:
-            stat_result = os.stat(abs_fn)
-
-        size = stat_result.st_size
-        mtime = stat_result.st_mtime
+            # this code path is deprecated
+            abs_fn = self.fs.join(self.subdir_path, fn)
+            stat_dict = self.fs.stat(abs_fn)
+            size = stat_dict["size"]
+            mtime = stat_dict["mtime"]
+        else:
+            # XXX
+            abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
+            size = stat_result.st_size
+            mtime = stat_result.st_mtime
         retval = fn, mtime, size, None
 
         # we no longer re-use the .conda cache for .tar.bz2; faster conda
         # extraction should preserve enough performance
         try:
             log.debug("cache %s/%s", subdir, fn)
+
             index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
 
             retval = fn, mtime, size, index_json
@@ -206,7 +232,6 @@ class CondaIndexCache:
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
             log.exception("Error extracting %s", fn)
-
         return retval
 
     def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
@@ -227,30 +252,46 @@ class CondaIndexCache:
         }
 
         have = {}
-        package_stream = iter(package_streaming.stream_conda_info(abs_fn))
-        for tar, member in package_stream:
-            if member.name in wanted:
-                wanted.remove(member.name)
-                reader = tar.extractfile(member)
-                if reader is None:
-                    log.warn(f"{abs_fn}/{member.name} was not a regular file")
-                    continue
-                have[member.name] = reader.read()
+        # second stream_conda_info "fileobj" parameter accepts Path or str
+        # inherited from ZipFile, bz2.open behavior, but we need to open the
+        # file ourselves.
+        with self.open(fn) as fileobj:
+            package_stream = iter(package_streaming.stream_conda_info(fn, fileobj))
+            for tar, member in package_stream:
+                if member.name in wanted:
+                    wanted.remove(member.name)
+                    reader = tar.extractfile(member)
+                    if reader is None:
+                        log.warn(f"{abs_fn}/{member.name} was not a regular file")
+                        continue
+                    have[member.name] = reader.read()
 
-                # immediately parse index.json, decide whether we need icon
-                if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                    index_json = json.loads(have[member.name])
-                    if index_json.get("icon") is None:
-                        wanted = wanted - {ICON_PATH}
+                    # immediately parse index.json, decide whether we need icon
+                    if member.name == INDEX_JSON_PATH:  # early exit when no icon
+                        index_json = json.loads(have[member.name])
+                        if index_json.get("icon") is None:
+                            wanted = wanted - {ICON_PATH}
 
-                if member.name in recipe_want_one:
-                    # convert yaml; don't look for any more recipe files
-                    have[member.name] = _cache_recipe(have[member.name])
-                    wanted = wanted - recipe_want_one
+                    if member.name in recipe_want_one:
+                        # convert yaml; don't look for any more recipe files
+                        have[member.name] = _cache_recipe(have[member.name])
+                        wanted = wanted - recipe_want_one
 
-            if not wanted:  # we got what we wanted
-                package_stream.close()
-                log.debug("%s early close", fn)
+                if not wanted:  # we got what we wanted
+                    package_stream.close()
+                    log.debug("%s early close", fn)
+
+            # XXX if we are reindexing a channel, provide a way to assert that
+            # checksums match the upstream stage.
+            def checksums():
+                """
+                Use utility function that accepts open file instead of filename.
+                """
+                for algorithm in "md5", "sha256":
+                    fileobj.seek(0)
+                    yield _checksum(fileobj, algorithm)
+
+            md5, sha256 = checksums()
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
@@ -267,9 +308,6 @@ class CondaIndexCache:
         except KeyError:
             paths_str = ""
         have["info/post_install.json"] = _cache_post_install_details(paths_str)
-
-        # calculate extra stuff to add to index.json cache, size, md5, sha256
-        md5, sha256 = checksums(abs_fn, ("md5", "sha256"))
 
         with self.db:
             for have_path in have:
@@ -288,8 +326,7 @@ class CondaIndexCache:
                                 INSERT OR REPLACE INTO {table} (path, {table})
                                 VALUES (:path, json(:data))
                                 """
-                else:
-                    query = f"""DELETE FROM {table} WHERE path = :path"""
+                # Could delete from all metadata tables that we didn't just see.
                 try:
                     self.db.execute(query, parameters)
                 except sqlite3.OperationalError:  # e.g. malformed json.
@@ -399,30 +436,30 @@ class CondaIndexCache:
 
         return data
 
-    def save_fs_state(self, subdir_path):
+    def save_fs_state(self, subdir_path: str | Path | None = None):
         """
         stat all files in subdir_path to compare against cached repodata.
+
+        subdir_path: implied from self.subdir; not used.
         """
-        path_like = self.database_path_like
+        subdir_url = self.fs.join(self.channel_url, self.subdir)
 
-        # gather conda package filenames in subdir
         log.debug("%s listdir", self.subdir)
-        fns_in_subdir = {
-            fn
-            for fn in os.listdir(subdir_path)
-            if fn.endswith(CONDA_PACKAGE_EXTENSIONS)
-        }
 
-        # put filesystem 'ground truth' into stat table
-        # will we eventually stat everything on fs, or can we shortcut for new?
+        # Put filesystem 'ground truth' into stat table. Will we eventually stat
+        # everything on fs, or can we shortcut for new files?
+
         def listdir_stat():
-            for fn in fns_in_subdir:
-                abs_fn = os.path.join(subdir_path, fn)
-                stat = os.stat(abs_fn)
+            # Gather conda package filenames in subdir
+            for entry in self.fs.listdir(subdir_url):
+                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
+                    continue
+                if "mtime" not in entry or "size" not in entry:
+                    entry.update(self.fs.stat(entry["name"]))
                 yield {
-                    "path": self.database_path(fn),
-                    "mtime": int(stat.st_mtime),
-                    "size": stat.st_size,
+                    "path": self.database_path(self.fs.basename(entry["name"])),
+                    "mtime": entry.get("mtime"),
+                    "size": entry["size"],
                 }
 
         log.debug("%s save fs state", self.subdir)
@@ -431,7 +468,7 @@ class CondaIndexCache:
             # handled in a subclass
             self.db.execute(
                 "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": path_like},
+                {"path_like": self.database_path_like},
             )
             self.db.executemany(
                 """
@@ -562,7 +599,8 @@ def _clear_newline_chars(record, field_name):
             try:
                 # sometimes description gets added as a list instead of just a string
                 record[field_name] = (
-                    ("".join(record[field_name])).strip().replace("\n", " ")
+                    "".join(record[field_name]).strip().replace("\n", " ")
                 )
+
             except TypeError:
                 log.warn("Could not _clear_newline_chars from field %s", field_name)

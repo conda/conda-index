@@ -13,9 +13,9 @@ import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
-from numbers import Number
-from os.path import abspath, basename, getmtime, getsize, isfile, join
-from typing import NamedTuple
+from os.path import basename, getmtime, getsize, isfile, join
+from pathlib import Path
+from typing import Iterable
 from uuid import uuid4
 
 import zstandard
@@ -35,6 +35,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
+from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -86,10 +87,6 @@ if (
 LOCK_TIMEOUT_SECS = 3 * 3600
 LOCKFILE_NAME = ".lock"
 
-# XXX conda-build calls its version of get_build_index. Appears to combine
-# remote and local packages, updating the local index based on mtime. Standalone
-# conda-index removes get_build_index() for now.
-
 
 def _ensure_valid_channel(local_folder, subdir):
     for folder in {subdir, "noarch"}:
@@ -98,23 +95,13 @@ def _ensure_valid_channel(local_folder, subdir):
             os.makedirs(path)
 
 
-class FileInfo(NamedTuple):
-    """
-    Filename and a bit of stat information.
-    """
-
-    fn: str
-    st_mtime: Number
-    st_size: Number
-
-
 def update_index(
     dir_path,
     output_dir=None,
     check_md5=False,
     channel_name=None,
     patch_generator=None,
-    threads: (int | None) = MAX_THREADS_DEFAULT,
+    threads: int | None = MAX_THREADS_DEFAULT,
     verbose=False,
     progress=False,
     subdirs=None,
@@ -486,14 +473,24 @@ class ChannelIndex:
     output.
 
     See the implementation of ``conda_index.cli`` for usage.
+
+    :param channel_root: Path to channel, or just the channel cache if channel_url is provided.
+    :param channel_name: Name of channel; defaults to last path segment of channel_root.
+    :param subdirs: subdirs to index.
+    :param output_root: Path to write repodata.json etc; defaults to channel_root.
+    :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
+    :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     """
+
+    fs: MinimalFS | None = None
+    channel_url: str | None = None
 
     def __init__(
         self,
-        channel_root,
-        channel_name,
-        subdirs=None,
-        threads: (int | None) = MAX_THREADS_DEFAULT,
+        channel_root: Path,
+        channel_name: str | None,
+        subdirs: Iterable[str] | None = None,
+        threads: int | None = MAX_THREADS_DEFAULT,
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
@@ -502,14 +499,22 @@ class ChannelIndex:
         write_zst=False,
         write_run_exports=False,
         compact_json=True,
+        channel_url: str | None = None,
+        fs: MinimalFS | None = None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
 
+        if (fs or channel_url) and not (fs and channel_url):
+            raise TypeError("Both or none of fs, channel_url must be provided.")
+
+        self.fs = fs
+        self.channel_url = channel_url
+
+        self.channel_root = Path(channel_root)
         self.cache_class = cache_class
-        self.channel_root = abspath(channel_root)
-        self.output_root = abspath(output_root) if output_root else self.channel_root
-        self.channel_name = channel_name or basename(channel_root.rstrip("/"))
+        self.output_root = Path(output_root) if output_root else self.channel_root
+        self.channel_name = channel_name or basename(str(channel_root).rstrip("/"))
         self._subdirs = subdirs
         # no lambdas in pickleable
         self.thread_executor_factory = functools.partial(
@@ -627,7 +632,6 @@ class ChannelIndex:
 
         log.info("%s Writing patched repodata", subdir)
 
-        log.debug("%s write patched repodata", subdir)
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
         log.info("%s Building current_repodata subset", subdir)
@@ -659,7 +663,6 @@ class ChannelIndex:
 
         log.info("%s Writing index HTML", subdir)
 
-        log.debug("%s write index.html", subdir)
         self._write_subdir_index_html(subdir, patched_repodata)
 
         log.debug("%s finish", subdir)
@@ -728,11 +731,10 @@ class ChannelIndex:
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
-        subdir_path = join(self.channel_root, subdir)
 
         cache = self.cache_for_subdir(subdir)
 
-        log.debug("Building repodata for %s", subdir_path)
+        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
         new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
 
@@ -750,7 +752,10 @@ class ChannelIndex:
 
     def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root, subdir=subdir
+            channel_root=self.channel_root,
+            subdir=subdir,
+            fs=self.fs,
+            channel_url=self.channel_url,
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
@@ -795,6 +800,9 @@ class ChannelIndex:
             for fn, mtime, size, index_json in thread_executor.map(
                 extract_func, extract
             ):
+                # XXX allow size to be None or get from "bytes sent through
+                # checksum algorithm" e.g. for fsspec where size may not be
+                # known in advance
                 size_processed += size  # even if processed incorrectly
                 # fn can be None if the file was corrupt or no longer there
                 if fn and mtime:
@@ -1135,10 +1143,9 @@ class ChannelIndex:
         else:
             if patch_generator:
                 raise ValueError(
-                    "Specified metadata patch file '{}' does not exist.  Please try an absolute "
-                    "path, or examine your relative path carefully with respect to your cwd.".format(
-                        patch_generator
-                    )
+                    f"Specified metadata patch file '{patch_generator}' does not exist. "
+                    "Please try an absolute path, or examine your relative path carefully "
+                    "with respect to your cwd."
                 )
             return {}
 

@@ -51,7 +51,8 @@ Most of these tables store json-format metadata extracted from each package.
 
 ```sql
 select * from index_json where path = 'libcurl-7.88.1-h9049daf_0.conda';
-libcurl-7.88.1-h9049daf_0.conda|{"build":"h9049daf_0","build_number":0,"depends":["krb5 >=1.20.1,<1.21.0a0","libnghttp2 >=1.51.0,<2.0a0","libssh2 >=1.10.0,<2.0a0","libzlib >=1.2.13,<1.3.0a0","openssl >=3.0.8,<4.0a0"],"license":"curl","license_family":"MIT","name":"libcurl","subdir":"osx-arm64","timestamp":1676918523934,"version":"7.88.1","md5":"c86bbee944bb640609670ce722fba9a4","sha256":"37b8d58c05386ac55d1d8e196c90b92b0a63f3f1fe2fa916bf5ed3e1656d8e14","size":321706}
+'libcurl-7.88.1-h9049daf_0.conda'
+'{"build":"h9049daf_0",...,"sha256":"37b8d58c05386ac55d1d8e196c90b92b0a63f3f1fe2fa916bf5ed3e1656d8e14","size":321706}'
 ```
 
 To track whether a package is indexed in the cache or not, conda-index uses a
