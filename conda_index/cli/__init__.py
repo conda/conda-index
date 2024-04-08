@@ -83,6 +83,14 @@ from .. import yaml
         will keep python 3.8.X and 3.9.Y in the current_index.json, instead of only the very latest python version.
         """,
 )
+@click.option(
+    "--base-url",
+    help="""
+        If packages should be served separately from repodata.json, URL of the
+        directory tree holding packages. Generates repodata_version=2 which is
+        incompatible with existing versions of conda.
+        """,
+)
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
 @click.option(
     "--verbose",
@@ -107,6 +115,7 @@ def cli(
     rss=False,
     run_exports=False,
     compact=True,
+    base_url=None,
 ):
     logutil.configure()
     if verbose:
@@ -125,6 +134,7 @@ def cli(
         threads=threads,
         write_run_exports=run_exports,
         compact_json=compact,
+        base_url=base_url,
     )
 
     current_index_versions = None

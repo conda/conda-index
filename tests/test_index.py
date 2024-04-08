@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import tarfile
+import urllib.parse
 from logging import getLogger
 from os.path import dirname, isdir, isfile, join
 from pathlib import Path
@@ -1303,3 +1304,34 @@ def test_bad_patch_version(index_data):
         channel_index._create_patch_instructions(
             "noarch", {"packages": {}}, patch_generator=str(instructions)
         )
+
+
+def test_base_url(index_data):
+    """
+    conda-index should be able to add base_url to repodata.json.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        pkg_dir,
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+        base_url="https://example.org/somechannel/",
+    )
+
+    channel_index.index(None)
+
+    osx = json.loads((pkg_dir / "osx-64" / "repodata.json").read_text())
+    noarch = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
+
+    assert osx["repodata_version"] == 2
+
+    assert osx["info"]["base_url"] == "https://example.org/somechannel/osx-64/"
+    assert noarch["info"]["base_url"] == "https://example.org/somechannel/noarch/"
+
+    package_url = urllib.parse.urljoin(osx["info"]["base_url"], "package-1.0.conda")
+    assert package_url == "https://example.org/somechannel/osx-64/package-1.0.conda"
