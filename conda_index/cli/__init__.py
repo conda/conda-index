@@ -87,8 +87,8 @@ from .. import yaml
     "--base-url",
     help="""
         If packages should be served separately from repodata.json, URL of the
-        directory tree holding packages. Generates repodata_version=2 which is
-        incompatible with existing versions of conda.
+        directory tree holding packages. Generates repodata.json with
+        repodata_version=2 which is supported in conda 24.5.0 or later.
         """,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
