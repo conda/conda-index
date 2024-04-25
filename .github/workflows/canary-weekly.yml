@@ -1,4 +1,4 @@
-name: Periodic Canary Build
+name: Periodic Test Run
 
 on:
   workflow_dispatch:
