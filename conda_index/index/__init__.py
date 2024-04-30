@@ -480,6 +480,7 @@ class ChannelIndex:
     :param output_root: Path to write repodata.json etc; defaults to channel_root.
     :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
     :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
+    :param base_url: Add ``base_url/<subdir>`` to repodata.json to be able to host packages separate from repodata.json
     """
 
     fs: MinimalFS | None = None
@@ -487,7 +488,7 @@ class ChannelIndex:
 
     def __init__(
         self,
-        channel_root: Path,
+        channel_root: Path | str,
         channel_name: str | None,
         subdirs: Iterable[str] | None = None,
         threads: int | None = MAX_THREADS_DEFAULT,
@@ -499,8 +500,10 @@ class ChannelIndex:
         write_zst=False,
         write_run_exports=False,
         compact_json=True,
+        *,
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
+        base_url: str | None = None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -526,6 +529,7 @@ class ChannelIndex:
         self.write_zst = write_zst
         self.write_run_exports = write_run_exports
         self.compact_json = compact_json
+        self.base_url = base_url
 
     def index(
         self,
@@ -747,6 +751,11 @@ class ChannelIndex:
             "repodata_version": REPODATA_VERSION,
             "removed": [],  # can be added by patch/hotfix process
         }
+
+        if self.base_url:
+            # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
+            new_repodata["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
+            new_repodata["repodata_version"] = 2
 
         return new_repodata
 
