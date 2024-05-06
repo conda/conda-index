@@ -122,7 +122,7 @@ def json2jlap_one(cache: Path, repodata: Path, trim_high=0, trim_low=0):
 
         patches.terminate()
 
-        if patches[-1][0] > trim_high:
+        if trim_high > trim_low and patches[-1][0] > trim_high:
             patches = trim(patches, trim_low)
 
         patches.write(jlapfile)
