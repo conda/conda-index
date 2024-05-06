@@ -12,7 +12,7 @@ from conda_index.cli.json2jlap import json2jlap_one
 def test_json2jlap(tmp_path):
     cache_dir = tmp_path / "subdir" / ".cache"
     repodata = tmp_path / "subdir" / "repodata.json"
-    jlap_path = repodata.with_stem(".jlap")
+    jlap_path = repodata.with_suffix(".jlap")
     cache_dir.mkdir(parents=True)
     for n in range(4):
         repodata.write_text(json.dumps({"n": n}))

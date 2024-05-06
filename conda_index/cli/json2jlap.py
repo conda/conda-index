@@ -74,12 +74,10 @@ def json2jlap_one(cache: Path, repodata: Path):
     jlapfile = (repodata.parent / repodata.name).with_suffix(".jlap")
     if jlapfile.exists():
         patchfile = JLAP.from_path(jlapfile)
-        # omit final metadata line
-        patches = patchfile.body
+        # omit final metadata, checksum lines
+        patches = patchfile[:-2]
     else:
-        patches = JLAP.from_lines(
-            [DEFAULT_IV.hex().encode("utf-8")] * 2, iv=DEFAULT_IV, verify=True
-        )
+        patches = JLAP.from_lines([DEFAULT_IV.hex().encode("utf-8")] * 2, iv=DEFAULT_IV)
 
     if (
         previous_repodata.exists()
