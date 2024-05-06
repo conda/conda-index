@@ -26,20 +26,13 @@ from pathlib import Path
 
 import click
 import jsonpatch
-from conda.gateways.repodata.jlap.core import JLAP, DEFAULT_IV
+from conda.gateways.repodata.jlap.core import JLAP, DEFAULT_IV, DIGEST_SIZE
 
 log = logging.getLogger("__name__")
 
 # attempt to control individual patch size (will fall back to re-downloading
 # repodata.json) without serializing to bytes just to measure
 PATCH_STEPS_LIMIT = 8192
-
-
-DIGEST_SIZE = 32
-
-
-def trim_if_larger(*args):
-    raise NotImplementedError()
 
 
 def hfunc(data: bytes):
@@ -84,9 +77,13 @@ def json2jlap_one(cache: Path, repodata: Path):
             [DEFAULT_IV.hex().encode("utf-8")], iv=DEFAULT_IV, verify=False
         )
 
-    if (
-        previous_repodata.exists()
-        and repodata.stat().st_mtime_ns > previous_repodata.stat().st_mtime_ns
+    repodata_stat = repodata.stat()
+    if previous_repodata.exists():
+        previous_repodata_stat = previous_repodata.stat()
+
+    if previous_repodata.exists() and (
+        repodata_stat.st_mtime_ns > previous_repodata_stat.st_mtime_ns
+        or repodata_stat.st_size != previous_repodata_stat.st_size
     ):
         current, current_digest = hash_and_load(repodata)
         previous, previous_digest = hash_and_load(previous_repodata)
@@ -123,11 +120,47 @@ def json2jlap_one(cache: Path, repodata: Path):
         patches.terminate()
         patches.write(jlapfile)
 
-    if (
-        not previous_repodata.exists()
-        or repodata.stat().st_mtime > previous_repodata.stat().st_mtime
+    if not previous_repodata.exists() or (
+        repodata_stat.st_mtime_ns > previous_repodata_stat.st_mtime_ns
+        or repodata_stat.st_size != previous_repodata_stat.st_size
     ):
         shutil.copyfile(repodata, previous_repodata)
+
+
+def trim(jlap: JLAP, target_size: int, target_path: Path):
+    end_position = jlap[-1][0]
+
+    if end_position <= target_size:
+        return False  # write to target_path?
+
+    limit_position = end_position - target_size
+
+    jlap = JLAP([element for element in jlap if element[0] >= limit_position])
+    # replace first line with iv for second line.
+    # breaks if buffer is empty...
+    jlap[0] = (0, jlap[0][2], jlap[0][2])
+
+    # don't write degenerate .jlap
+    if len(jlap) < 2:
+        return False
+
+    jlap.write(target_path)
+
+    return True
+
+
+def trim_if_larger(high: int, low: int, jlap: Path):
+    """
+    Check the size of Path jlap.
+
+    If it is larger than high bytes, rewrite to be smaller than low bytes.
+
+    Return True if modified.
+    """
+    if jlap.stat().st_size > high:
+        print(f"trim {jlap.stat().st_size} \N{RIGHTWARDS ARROW} {low} {jlap}")
+        return trim(jlap, low, jlap)
+    return False
 
 
 @click.command()
