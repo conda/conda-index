@@ -69,6 +69,9 @@ def hash_and_load(path):
 
 
 def json2jlap_one(cache: Path, repodata: Path):
+    """
+    Update jlap patchset for a single json file.
+    """
     previous_repodata = cache / (repodata.name + ".last")
 
     jlapfile = (repodata.parent / repodata.name).with_suffix(".jlap")
@@ -77,7 +80,9 @@ def json2jlap_one(cache: Path, repodata: Path):
         # omit final metadata, checksum lines
         patches = patchfile[:-2]
     else:
-        patches = JLAP.from_lines([DEFAULT_IV.hex().encode("utf-8")] * 2, iv=DEFAULT_IV)
+        patches = JLAP.from_lines(
+            [DEFAULT_IV.hex().encode("utf-8")], iv=DEFAULT_IV, verify=False
+        )
 
     if (
         previous_repodata.exists()
