@@ -1,5 +1,5 @@
 """
-Simple json to jlap "*/repodata.json" -> "*/repodata.jlap tool.
+json to jlap "*/repodata.json" -> "*/repodata.jlap tool.
 
 Copy */repodata.json to */.cache/repodata.json.last
 
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import click
 import jsonpatch
-from conda.gateways.repodata.jlap.core import JLAP, DEFAULT_IV, DIGEST_SIZE
+from conda.gateways.repodata.jlap.core import DEFAULT_IV, DIGEST_SIZE, JLAP
 
 log = logging.getLogger("__name__")
 
@@ -61,9 +61,12 @@ def hash_and_load(path):
     return obj, h.hash.digest()
 
 
-def json2jlap_one(cache: Path, repodata: Path):
+def json2jlap_one(cache: Path, repodata: Path, trim_high=0, trim_low=0):
     """
     Update jlap patchset for a single json file.
+
+    If trim_high and trim_low are given, the file will be shortened to less than
+    trim_low bytes once it exceeds trim_high bytes.
     """
     previous_repodata = cache / (repodata.name + ".last")
 
@@ -118,6 +121,10 @@ def json2jlap_one(cache: Path, repodata: Path):
         )
 
         patches.terminate()
+
+        if patches[-1][0] > trim_high:
+            patches = trim(patches, trim_low)
+
         patches.write(jlapfile)
 
     if not previous_repodata.exists() or (
@@ -127,40 +134,33 @@ def json2jlap_one(cache: Path, repodata: Path):
         shutil.copyfile(repodata, previous_repodata)
 
 
-def trim(jlap: JLAP, target_size: int, target_path: Path):
+def trim(jlap: JLAP, target_size: int) -> JLAP:
+    """
+    Remove leading lines from jlap until it is below target_size, including a
+    new first line with correct iv. If target_size is impractically small,
+    return the last payload line, in other words the footer plus leading and
+    trailing checksums.
+
+    Input jlap must have at least 3 lines.
+    """
     end_position = jlap[-1][0]
 
     if end_position <= target_size:
-        return False  # write to target_path?
+        return jlap
 
     limit_position = end_position - target_size
 
-    jlap = JLAP([element for element in jlap if element[0] >= limit_position])
+    trimmed = JLAP([element for element in jlap if element[0] >= limit_position])
+
+    # avoid writing JLAP with just leading, trailing checksums when target_size is too small
+    if len(trimmed) < 3:
+        trimmed = JLAP(jlap[-3:])
+
     # replace first line with iv for second line.
     # breaks if buffer is empty...
-    jlap[0] = (0, jlap[0][2], jlap[0][2])
+    trimmed[0] = (0, trimmed[0][2], trimmed[0][2])
 
-    # don't write degenerate .jlap
-    if len(jlap) < 2:
-        return False
-
-    jlap.write(target_path)
-
-    return True
-
-
-def trim_if_larger(high: int, low: int, jlap: Path):
-    """
-    Check the size of Path jlap.
-
-    If it is larger than high bytes, rewrite to be smaller than low bytes.
-
-    Return True if modified.
-    """
-    if jlap.stat().st_size > high:
-        print(f"trim {jlap.stat().st_size} \N{RIGHTWARDS ARROW} {low} {jlap}")
-        return trim(jlap, low, jlap)
-    return False
+    return trimmed
 
 
 @click.command()
@@ -180,7 +180,7 @@ def trim_if_larger(high: int, low: int, jlap: Path):
     show_default=True,
     help="Trim if larger than size; 0 to disable.",
 )
-def json2jlap(cache, repodata, trim_low, trim_high):
+def json2jlap(cache, repodata, trim_high, trim_low):
     cache = Path(cache).expanduser()
     repodata = Path(repodata).expanduser()
     repodatas = itertools.chain(
@@ -191,12 +191,7 @@ def json2jlap(cache, repodata, trim_low, trim_high):
         cachedir = Path(cache, repodata.parent.name, ".cache")
         if not cachedir.is_dir():
             continue
-        json2jlap_one(cachedir, repodata)
-        if trim_high > trim_low:
-            repodata_jlap = repodata.with_suffix(".jlap")
-            if not repodata_jlap.exists():
-                continue
-            trim_if_larger(trim_high, trim_low, repodata_jlap)
+        json2jlap_one(cachedir, repodata, trim_high, trim_low)
 
 
 def go():
