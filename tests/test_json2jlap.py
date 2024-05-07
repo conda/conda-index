@@ -21,7 +21,8 @@ def test_json2jlap(tmp_path):
     jlap_path = repodata.with_suffix(".jlap")
     cache_dir.mkdir(parents=True)
     for n in range(4):
-        repodata.write_text(json.dumps({"n": n}))
+        # change size to avoid testing filesystem timestamp resolution
+        repodata.write_text(json.dumps({"n": "n" * n}))
 
         json2jlap_one(cache_dir, repodata)
 
