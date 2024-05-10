@@ -481,6 +481,7 @@ class ChannelIndex:
     :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
     :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     :param base_url: Add ``base_url/<subdir>`` to repodata.json to be able to host packages separate from repodata.json
+    :param save_fs_state: Pass False to use cached filesystem state instead of ``os.listdir(subdir)``
     """
 
     fs: MinimalFS | None = None
@@ -504,6 +505,7 @@ class ChannelIndex:
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
+        save_fs_state=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -530,6 +532,7 @@ class ChannelIndex:
         self.write_run_exports = write_run_exports
         self.compact_json = compact_json
         self.base_url = base_url
+        self.save_fs_state = save_fs_state
 
     def index(
         self,
@@ -569,6 +572,10 @@ class ChannelIndex:
                     # runs in thread
                     subdir, verbose, progress, subdir_path = args
                     cache = self.cache_for_subdir(subdir)
+                    # exactly these packages (unless they are un-indexable) will
+                    # be in the output repodata
+                    if self.save_fs_state:
+                        cache.save_fs_state(subdir_path)
                     return self.extract_subdir_to_cache(
                         subdir, verbose, progress, subdir_path, cache
                     )
@@ -772,17 +779,18 @@ class ChannelIndex:
         return cache
 
     def extract_subdir_to_cache(
-        self, subdir, verbose, progress, subdir_path, cache: sqlitecache.CondaIndexCache
-    ):
+        self,
+        subdir: str,
+        verbose,
+        progress,
+        subdir_path,
+        cache: sqlitecache.CondaIndexCache,
+    ) -> str:
         """
         Extract all changed packages into the subdir cache.
 
         Return name of subdir.
         """
-        # exactly these packages (unless they are un-indexable) will be in the
-        # output repodata
-        cache.save_fs_state(subdir_path)
-
         log.debug("%s find packages to extract", subdir)
 
         # list so tqdm can show progress
