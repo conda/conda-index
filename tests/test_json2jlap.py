@@ -9,7 +9,7 @@ import json
 import pytest
 from conda.gateways.repodata.jlap.core import DEFAULT_IV, JLAP
 
-from conda_index.cli.json2jlap import json2jlap_one
+from conda_index.json2jlap import json2jlap_one
 
 
 def test_json2jlap(tmp_path):
