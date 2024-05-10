@@ -88,68 +88,6 @@ class ChannelIndexShards(ChannelIndex):
     def __init__(self, *args, cache_class=ShardedIndexCache, **kwargs):
         super().__init__(*args, cache_class=cache_class, **kwargs)
 
-    def index(
-        self,
-        patch_generator,
-        verbose=False,
-        progress=False,
-        current_index_versions=None,
-    ):
-        """
-        Re-index all changed packages under ``self.channel_root``.
-        """
-
-        subdirs = self.detect_subdirs()
-
-        # Lock local channel.
-        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
-            # begin non-stop "extract packages into cache";
-            # extract_subdir_to_cache manages subprocesses. Keeps cores busy
-            # during write/patch/update channeldata steps.
-            def extract_subdirs_to_cache():
-                executor = ThreadPoolExecutor(max_workers=1)
-
-                def extract_args():
-                    for subdir in subdirs:
-                        # .cache is currently in channel_root not output_root
-                        _ensure_valid_channel(self.channel_root, subdir)
-                        subdir_path = join(self.channel_root, subdir)
-                        yield (subdir, verbose, progress, subdir_path)
-
-                def extract_wrapper(args: tuple):
-                    # runs in thread
-                    subdir, verbose, progress, subdir_path = args
-                    cache = self.cache_for_subdir(subdir)
-                    return self.extract_subdir_to_cache(
-                        subdir, verbose, progress, subdir_path, cache
-                    )
-
-                # map() gives results in order passed, not in order of
-                # completion. If using multiple threads, switch to
-                # submit() / as_completed().
-                return executor.map(extract_wrapper, extract_args())
-
-            # Collect repodata from packages, save to
-            # REPODATA_FROM_PKGS_JSON_FN file
-            with self.thread_executor_factory() as index_process:
-                futures = [
-                    index_process.submit(
-                        functools.partial(
-                            self.index_prepared_subdir,
-                            subdir=subdir,
-                            verbose=verbose,
-                            progress=progress,
-                            patch_generator=patch_generator,
-                            current_index_versions=current_index_versions,
-                        )
-                    )
-                    for subdir in extract_subdirs_to_cache()
-                ]
-                # limited API to support DummyExecutor
-                for future in futures:
-                    result = future.result()
-                    log.info(f"Completed {result}")
-
     def index_prepared_subdir(
         self,
         subdir: str,
