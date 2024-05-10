@@ -180,7 +180,7 @@ class ChannelIndexShards(ChannelIndex):
         for name, shard in cache.index_shards():
             shard_data = bytes(packb_typed(shard))
             reference_hash = hashlib.sha256(shard_data).hexdigest()
-            output_path = self.channel_root / subdir / f"{reference_hash}.msgpack.zst"
+            output_path = self.output_root / subdir / f"{reference_hash}.msgpack.zst"
             if not output_path.exists():
                 output_path.write_bytes(compressor.compress(shard_data))
 
