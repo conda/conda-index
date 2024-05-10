@@ -185,6 +185,8 @@ class ChannelIndexShards(ChannelIndex):
         # collection of small objects.
         compressor = zstandard.ZstdCompressor()
 
+        (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
+
         for name, shard in cache.index_shards():
             shard_data = bytes(packb_typed(shard))
             reference_hash = hashlib.sha256(shard_data).hexdigest()
