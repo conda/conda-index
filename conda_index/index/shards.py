@@ -130,8 +130,11 @@ class ChannelIndexShards(ChannelIndex):
         # Create associated index.html.
 
         log.info("%s Writing patched repodata", subdir)
-
-        pass  # XXX
+        # XXX use final names, write patched repodata shards index
+        for pkg, record in patched_repodata.items():
+            Path(self.output_root, subdir, f"{pkg}.msgpack").write_bytes(
+                packb_typed(record)
+            )
 
         log.info("%s Building current_repodata subset", subdir)
 
@@ -235,12 +238,32 @@ class ChannelIndexShards(ChannelIndex):
             raise RuntimeError("Incompatible patch instructions version")
 
         def per_shard_apply_instructions():
-            for pkg, reference in repodata_shards["shards"].items():
+            # XXX refactor
+            # otherwise _apply_instructions would repeat this work
+            new_pkg_fixes = {
+                k.replace(".tar.bz2", ".conda"): v
+                for k, v in instructions.get("packages", {}).items()
+            }
+
+            import time
+
+            begin = time.time()
+
+            for i, (pkg, reference) in enumerate(repodata_shards["shards"].items()):
                 shard_path = (
                     self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                 )
                 shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
-                yield (pkg, _apply_instructions(subdir, shard, instructions))
+                if (now := time.time()) - begin > 1:
+                    print(pkg)
+                    begin = now
+
+                yield (
+                    pkg,
+                    _apply_instructions(
+                        subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
+                    ),
+                )
 
         return dict(per_shard_apply_instructions()), instructions
 

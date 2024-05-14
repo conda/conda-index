@@ -174,7 +174,21 @@ def merge_or_update_dict(
     if base == new:
         return base
 
-    for key, value in new.items():
+    if not add_missing_keys:
+        # Examine fewer keys especially when base (a single package) is much
+        # smaller than new (patches for all packages)
+        if len(base) < len(new):
+            smaller = base
+            larger = new
+        else:
+            smaller = new
+            larger = base
+        keys = [key for key in smaller if key in larger]
+    else:
+        keys = new.keys()
+
+    for key in keys:
+        value = new[key]
         if key in base or add_missing_keys:
             base_value = base.get(key, value)
             if hasattr(value, "keys"):

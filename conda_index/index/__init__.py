@@ -209,7 +209,7 @@ CHANNELDATA_FIELDS = (
 )
 
 
-def _apply_instructions(subdir, repodata, instructions):
+def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
     repodata.setdefault("removed", [])
     # apply to .tar.bz2 packages
     utils.merge_or_update_dict(
@@ -218,12 +218,14 @@ def _apply_instructions(subdir, repodata, instructions):
         merge=False,
         add_missing_keys=False,
     )
-    # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
-    #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
-    new_pkg_fixes = {
-        k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
-        for k, v in instructions.get("packages", {}).items()
-    }
+
+    if new_pkg_fixes is None:
+        # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
+        #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
+        new_pkg_fixes = {
+            k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
+            for k, v in instructions.get("packages", {}).items()
+        }
 
     # apply .tar.bz2 fixes to packages.conda
     utils.merge_or_update_dict(
@@ -1246,6 +1248,8 @@ class ChannelIndex:
             encoding = None
             newline = b"\n"
             newline_option = None
+
+        # XXX could we avoid writing output_temp_path in some cases?
 
         # always use \n line separator
         with open(
