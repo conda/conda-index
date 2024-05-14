@@ -4,6 +4,7 @@ Updated command line interface for conda-index.
 
 import logging
 import os.path
+from pathlib import Path
 
 import click
 
@@ -141,6 +142,9 @@ def cli(
     if current_index_versions_file:
         with open(current_index_versions_file) as f:
             current_index_versions = yaml.safe_load(f)
+
+    if patch_generator:
+        patch_generator = str(Path(patch_generator).expanduser())
 
     channel_index.index(
         patch_generator=patch_generator,  # or will use outdated .py patch functions

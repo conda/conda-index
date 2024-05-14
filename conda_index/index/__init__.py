@@ -211,6 +211,7 @@ CHANNELDATA_FIELDS = (
 
 def _apply_instructions(subdir, repodata, instructions):
     repodata.setdefault("removed", [])
+    # apply to .tar.bz2 packages
     utils.merge_or_update_dict(
         repodata.get("packages", {}),
         instructions.get("packages", {}),
@@ -224,12 +225,14 @@ def _apply_instructions(subdir, repodata, instructions):
         for k, v in instructions.get("packages", {}).items()
     }
 
+    # apply .tar.bz2 fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         new_pkg_fixes,
         merge=False,
         add_missing_keys=False,
     )
+    # apply .conda-only fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         instructions.get("packages.conda", {}),

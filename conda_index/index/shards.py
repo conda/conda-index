@@ -121,7 +121,7 @@ class ChannelIndexShards(ChannelIndex):
 
         # Apply patch instructions.
         log.info("%s Applying patch instructions", subdir)
-        patched_repodata, _ = self._patch_repodata(
+        patched_repodata, _ = self._patch_repodata_shards(
             subdir, shards_from_packages, patch_generator
         )
 
@@ -214,8 +214,9 @@ class ChannelIndexShards(ChannelIndex):
 
             def per_shard_instructions():
                 for pkg, reference in repodata_shards["shards"].items():
+                    # XXX keep it all in RAM? only patch changed shards or, if patches change, all shards?
                     shard_path = (
-                        self.channel_root / subdir / f"{reference.hex()}.msgpack.zst"
+                        self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                     )
                     shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
                     yield (
@@ -236,7 +237,7 @@ class ChannelIndexShards(ChannelIndex):
         def per_shard_apply_instructions():
             for pkg, reference in repodata_shards["shards"].items():
                 shard_path = (
-                    self.channel_root / subdir / f"{reference.hex()}.msgpack.zst"
+                    self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                 )
                 shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
                 yield (pkg, _apply_instructions(subdir, shard, instructions))
@@ -407,6 +408,9 @@ def cli(
     if current_index_versions_file:
         with open(current_index_versions_file) as f:
             current_index_versions = yaml.safe_load(f)
+
+    if patch_generator:
+        patch_generator = str(Path(patch_generator).expanduser())
 
     channel_index.index(
         patch_generator=patch_generator,  # or will use outdated .py patch functions
