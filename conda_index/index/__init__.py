@@ -504,7 +504,7 @@ class ChannelIndex:
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
-        current_repodata=False,
+        current_repodata=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT

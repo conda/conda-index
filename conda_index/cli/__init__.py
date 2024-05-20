@@ -98,7 +98,7 @@ from .. import yaml
         versions of all packages and their dependencies, only used by the
         classic solver.
         """,
-    default=False,
+    default=True,
     show_default=True,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
@@ -126,7 +126,7 @@ def cli(
     run_exports=False,
     compact=True,
     base_url=None,
-    current_repodata=False,
+    current_repodata=True,
 ):
     logutil.configure()
     if verbose:
