@@ -139,3 +139,5 @@ dmypy.json
 # databases
 *.db
 *.db-*
+
+conda_index_db
