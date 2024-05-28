@@ -4,8 +4,8 @@
 
 ### Bug fixes
 
-* Move ``run_exports.json`` query into cache, instead of directly using SQL in
-  ``ChannelIndex``. (#163)
+* Move `run_exports.json` query into cache, instead of directly using SQL in
+  `ChannelIndex`. (#163)
 
 ### Deprecations
 
