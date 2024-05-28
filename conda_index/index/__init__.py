@@ -1086,15 +1086,7 @@ class ChannelIndex:
         run_exports_conda_packages = {}
 
         # load cached packages
-        for row in cache.db.execute(
-            """
-            SELECT path, run_exports FROM stat
-            LEFT JOIN run_exports USING (path)
-            WHERE stat.stage = ?
-            ORDER BY path
-            """,
-            (cache.upstream_stage,),
-        ):
+        for row in cache.run_exports():
             path, run_exports_data = row
             run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):

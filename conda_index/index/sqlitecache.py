@@ -542,6 +542,21 @@ class CondaIndexCache:
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 
+    def run_exports(self):
+        """
+        Query returning run_exports data, to be formatted by
+        ChannelIndex.build_run_exports_data()
+        """
+        return self.db.execute(
+            """
+            SELECT path, run_exports FROM stat
+            LEFT JOIN run_exports USING (path)
+            WHERE stat.stage = ?
+            ORDER BY path
+            """,
+            (self.upstream_stage,),
+        )
+
 
 def _cache_post_install_details(paths_json_str):
     post_install_details_json = {
