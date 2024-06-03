@@ -113,7 +113,7 @@ class CondaIndexCache:
         self.channel_url = channel_url or str(channel_root)
 
         if not self.cache_dir.exists():
-            self.cache_dir.mkdir()
+            self.cache_dir.mkdir(parents=True)
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
