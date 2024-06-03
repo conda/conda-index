@@ -190,8 +190,27 @@ class ChannelIndexShards(ChannelIndex):
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
+        # yield shards and combine tiny ones?
+
+        SMALL_SHARD = 1024  # if a shard is this small, it is a candidate for merge
+        MERGE_SHARD = 4096  # if the merged shards are bigger than this then spit them out
+        def merged_shards():
+            """
+            If a shard would be tiny, combine it with a few neighboring shards.
+            """
+            collected = {}
+            for name, shard in cache.index_shards():
+                shard_size = len(packb_typed(shard))
+                if shard_size > SMALL_SHARD:
+                    if collected:
+                        yield collected
+                    yield {name: shard}
+
+                collected[name] = shard
+
+
         for name, shard in cache.index_shards():
-            shard_data = bytes(packb_typed(shard))
+            shard_data = packb_typed(shard)
             reference_hash = hashlib.sha256(shard_data).hexdigest()
             output_path = self.output_root / subdir / f"{reference_hash}.msgpack.zst"
             if not output_path.exists():
@@ -216,6 +235,7 @@ class ChannelIndexShards(ChannelIndex):
         else:
 
             def per_shard_instructions():
+                # more difficult if some shards are duplicated...
                 for pkg, reference in repodata_shards["shards"].items():
                     # XXX keep it all in RAM? only patch changed shards or, if patches change, all shards?
                     shard_path = (
