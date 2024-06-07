@@ -17,6 +17,7 @@
 
 * Move `run_exports.json` query into cache, instead of directly using SQL in
   `ChannelIndex`. (#163)
+* Create parents of `<subdir>/.cache` in `CondaIndexCache`. (#170)
 
 ### Other
 
