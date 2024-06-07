@@ -10,7 +10,7 @@
   github: AndrewValette
 - name: Daniel Holth
   email: dholth@anaconda.com
-  num_commits: 87
+  num_commits: 85
   first_commit: 2022-05-18 19:49:18
   github: dholth
 - name: jaimergp
@@ -32,6 +32,6 @@
   github: jezdez
 - name: conda-bot
   email: 18747875+conda-bot@users.noreply.github.com
-  num_commits: 23
+  num_commits: 24
   first_commit: 2023-02-23 19:13:51
   github: conda-bot
