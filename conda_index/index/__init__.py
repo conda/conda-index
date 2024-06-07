@@ -239,7 +239,7 @@ def _apply_instructions(subdir, repodata, instructions):
 
     for fn in instructions.get("revoke", ()):
         for key in ("packages", "packages.conda"):
-            if fn.endswith(CONDA_PACKAGE_EXTENSION_V1) and key == "packages.conda":
+            if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
             if fn in repodata[key]:
                 repodata[key][fn]["revoked"] = True
@@ -247,7 +247,7 @@ def _apply_instructions(subdir, repodata, instructions):
 
     for fn in instructions.get("remove", ()):
         for key in ("packages", "packages.conda"):
-            if fn.endswith(CONDA_PACKAGE_EXTENSION_V1) and key == "packages.conda":
+            if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
             popped = repodata[key].pop(fn, None)
             if popped:
@@ -504,6 +504,7 @@ class ChannelIndex:
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
+        write_current_repodata=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -530,6 +531,7 @@ class ChannelIndex:
         self.write_run_exports = write_run_exports
         self.compact_json = compact_json
         self.base_url = base_url
+        self.write_current_repodata = write_current_repodata
 
     def index(
         self,
@@ -638,21 +640,22 @@ class ChannelIndex:
 
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
-        log.info("%s Building current_repodata subset", subdir)
+        if self.write_current_repodata:
+            log.info("%s Building current_repodata subset", subdir)
 
-        log.debug("%s build current_repodata", subdir)
-        current_repodata = _build_current_repodata(
-            subdir, patched_repodata, pins=current_index_versions
-        )
+            current_repodata = _build_current_repodata(
+                subdir, patched_repodata, pins=current_index_versions
+            )
 
-        log.info("%s Writing current_repodata subset", subdir)
+            log.info("%s Writing current_repodata subset", subdir)
 
-        log.debug("%s write current_repodata", subdir)
-        self._write_repodata(
-            subdir,
-            current_repodata,
-            json_filename="current_repodata.json",
-        )
+            self._write_repodata(
+                subdir,
+                current_repodata,
+                json_filename="current_repodata.json",
+            )
+        else:
+            self._remove_repodata(subdir, "current_repodata.json")
 
         if self.write_run_exports:
             log.info("%s Building run_exports data", subdir)
@@ -866,6 +869,17 @@ class ChannelIndex:
             else:
                 self._maybe_remove(repodata_zst_path)
         return write_result
+
+    def _remove_repodata(self, subdir, json_filename):
+        """
+        Remove json_filename and variants, to avoid keeping outdated repodata.
+        """
+        repodata_json_path = join(self.channel_root, subdir, json_filename)
+        repodata_bz2_path = repodata_json_path + ".bz2"
+        repodata_zst_path = repodata_json_path + ".zst"
+        self._maybe_remove(repodata_json_path)
+        self._maybe_remove(repodata_bz2_path)
+        self._maybe_remove(repodata_zst_path)
 
     def _write_subdir_index_html(self, subdir, repodata):
         repodata_legacy_packages = repodata["packages"]
