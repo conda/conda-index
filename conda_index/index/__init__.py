@@ -504,7 +504,7 @@ class ChannelIndex:
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
-        current_repodata=True,
+        write_current_repodata=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -531,7 +531,7 @@ class ChannelIndex:
         self.write_run_exports = write_run_exports
         self.compact_json = compact_json
         self.base_url = base_url
-        self.current_repodata = current_repodata
+        self.write_current_repodata = write_current_repodata
 
     def index(
         self,
@@ -640,7 +640,7 @@ class ChannelIndex:
 
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
-        if self.current_repodata:
+        if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
 
             current_repodata = _build_current_repodata(
@@ -655,8 +655,7 @@ class ChannelIndex:
                 json_filename="current_repodata.json",
             )
         else:
-            # XXX delete now-outdated current_repodata.json
-            pass
+            self._remove_repodata(subdir, "current_repodata.json")
 
         if self.write_run_exports:
             log.info("%s Building run_exports data", subdir)
@@ -870,6 +869,17 @@ class ChannelIndex:
             else:
                 self._maybe_remove(repodata_zst_path)
         return write_result
+
+    def _remove_repodata(self, subdir, json_filename):
+        """
+        Remove json_filename and variants, to avoid keeping outdated repodata.
+        """
+        repodata_json_path = join(self.channel_root, subdir, json_filename)
+        repodata_bz2_path = repodata_json_path + ".bz2"
+        repodata_zst_path = repodata_json_path + ".zst"
+        self._maybe_remove(repodata_json_path)
+        self._maybe_remove(repodata_bz2_path)
+        self._maybe_remove(repodata_zst_path)
 
     def _write_subdir_index_html(self, subdir, repodata):
         repodata_legacy_packages = repodata["packages"]

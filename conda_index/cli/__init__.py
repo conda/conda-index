@@ -146,7 +146,7 @@ def cli(
         write_run_exports=run_exports,
         compact_json=compact,
         base_url=base_url,
-        current_repodata=current_repodata,
+        write_current_repodata=current_repodata,
     )
 
     current_index_versions = None
