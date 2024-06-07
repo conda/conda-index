@@ -20,7 +20,6 @@
 
 ### Other
 
-* <news itme>
 * Approach 100% code coverage in test suite; reformat with ruff. (#145)
 * Update CI configuration to test on more platforms (#142)
 * Drop support for Python 3.7; support Python 3.8+ only. (#130)
