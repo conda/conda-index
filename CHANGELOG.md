@@ -1,3 +1,5 @@
+[//]: # (current developments)
+
 ## 0.4.0 (2024-01-29)
 
 ### Enhancements
