@@ -1,0 +1,20 @@
+### Enhancements
+
+* Add `--current-repodata/--no-current-repodata` flags to control whether
+  `current_repodata.json` is generated. (#139)
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
