@@ -1,5 +1,38 @@
 [//]: # (current developments)
 
+## 0.5.0 (2024-06-07)
+
+### Enhancements
+
+* Add experimental `python -m conda_index.json2jlap` script to run after
+  indexing, to create `repodata.jlap` patch sets for incremental repodata
+  downloads. (#125)
+* Add support for CEP-15 ``base_url`` to host packages separate from repodata.
+  (#150)
+* Support fsspec (in the API only) to index any fsspec-supported remote
+  filesystem. Also enables the input packages folder to be separate from the
+  cache and output folders. (#143)
+
+### Bug fixes
+
+* Move `run_exports.json` query into cache, instead of directly using SQL in
+  `ChannelIndex`. (#163)
+
+### Other
+
+* <news itme>
+* Approach 100% code coverage in test suite; reformat with ruff. (#145)
+* Update CI configuration to test on more platforms (#142)
+* Drop support for Python 3.7; support Python 3.8+ only. (#130)
+
+### Contributors
+
+* @dholth
+* @jezdez
+* @conda-bot
+
+
+
 ## 0.4.0 (2024-01-29)
 
 ### Enhancements
