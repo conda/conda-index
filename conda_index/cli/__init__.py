@@ -92,23 +92,6 @@ from .. import yaml
         """,
 )
 @click.option(
-    "--save-fs-state/--no-save-fs-state",
-    help="""
-        Skip using listdir() to refresh the set of available packages. Used to
-        generate complete repodata.json from cache only when packages are not on
-        disk.
-        """,
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--upstream-stage",
-    help="""
-    Set to 'clone' to generate example repodata from conda-forge test database.
-    """,
-    default="fs",
-)
-@click.option(
     "--current-repodata/--no-current-repodata",
     help="""
         Skip generating current_repodata.json, a file containing only the newest
@@ -143,8 +126,6 @@ def cli(
     run_exports=False,
     compact=True,
     base_url=None,
-    save_fs_state=False,
-    upstream_stage="fs",
     current_repodata=False,
 ):
     logutil.configure()
@@ -165,24 +146,8 @@ def cli(
         write_run_exports=run_exports,
         compact_json=compact,
         base_url=base_url,
-        save_fs_state=save_fs_state,
         current_repodata=current_repodata,
     )
-
-    if save_fs_state is False:
-        # We call listdir() in save_fs_state, or its remote fs equivalent; then
-        # we call changed_packages(); but the changed_packages query against a
-        # remote filesystem is different than the one we need for a local
-        # filesystem. How about skipping the extract packages stage entirely by
-        # returning no changed packages? Might fail if we use
-        # threads/multiprocessing.
-        def no_changed_packages(self, *args):
-            return []
-
-        channel_index.cache_class.changed_packages = no_changed_packages
-
-    # XXX this patch doesn't stick when using multiprocessing
-    channel_index.cache_class.upstream_stage = upstream_stage
 
     current_index_versions = None
     if current_index_versions_file:
