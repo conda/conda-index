@@ -125,7 +125,7 @@ def update_index(
     _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
         if warn:
-            log.warn(
+            log.warning(
                 "The update_index function has changed to index all subdirs at once.  You're pointing it at a single subdir.  "
                 "Please update your code to point it at the channel root, rather than a subdir. "
                 "Use -s=<subdir> to update a single subdir."
@@ -725,7 +725,7 @@ class ChannelIndex:
         else:
             self.subdirs = sorted(set(self._subdirs))
             if "noarch" not in self.subdirs:
-                log.warn("Indexing %s does not include 'noarch'", self.subdirs)
+                log.warning("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
 
     def channeldata_path(self):
@@ -1108,7 +1108,7 @@ class ChannelIndex:
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
                 run_exports_conda_packages[path] = run_exports_data
             else:
-                log.warn("%s doesn't look like a conda package", path)
+                log.warning("%s doesn't look like a conda package", path)
 
         new_run_exports_data = {
             "packages": run_exports_packages,
