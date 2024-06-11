@@ -95,9 +95,9 @@ def json2jlap_one(cache: Path, repodata: Path, trim_high=0, trim_low=0):
 
         # inconvenient to add bytes size limit here; limit number of steps?
         if previous_digest == current_digest:
-            log.warn("Skip identical %s", repodata)
+            log.warning("Skip identical %s", repodata)
         elif len(jpatch.patch) > PATCH_STEPS_LIMIT:
-            log.warn("Skip large %s-step patch", len(jpatch.patch))
+            log.warning("Skip large %s-step patch", len(jpatch.patch))
         else:
             patches.add(
                 json.dumps(
