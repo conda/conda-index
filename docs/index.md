@@ -9,6 +9,7 @@
 cli
 modules
 database
+changelog
 ```
 
 # Indices and tables
