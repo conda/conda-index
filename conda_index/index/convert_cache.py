@@ -73,7 +73,13 @@ def create(conn):
     # has md5, shasum. older? packages do not include timestamp?
     # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json from index_json
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS index_json (path TEXT PRIMARY KEY, index_json BLOB)"
+        """
+        CREATE TABLE IF NOT EXISTS index_json (
+            path TEXT PRIMARY KEY, index_json BLOB,
+            name AS (json_extract(index_json, '$.name')),
+            sha256 AS (json_extract(index_json, '$.sha256'))
+        )
+        """
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS recipe (path TEXT PRIMARY KEY, recipe BLOB)"
