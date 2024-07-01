@@ -209,27 +209,32 @@ CHANNELDATA_FIELDS = (
 )
 
 
-def _apply_instructions(subdir, repodata, instructions):
+def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
     repodata.setdefault("removed", [])
+    # apply to .tar.bz2 packages
     utils.merge_or_update_dict(
         repodata.get("packages", {}),
         instructions.get("packages", {}),
         merge=False,
         add_missing_keys=False,
     )
-    # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
-    #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
-    new_pkg_fixes = {
-        k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
-        for k, v in instructions.get("packages", {}).items()
-    }
 
+    if new_pkg_fixes is None:
+        # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
+        #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
+        new_pkg_fixes = {
+            k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
+            for k, v in instructions.get("packages", {}).items()
+        }
+
+    # apply .tar.bz2 fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         new_pkg_fixes,
         merge=False,
         add_missing_keys=False,
     )
+    # apply .conda-only fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         instructions.get("packages.conda", {}),
@@ -481,6 +486,7 @@ class ChannelIndex:
     :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
     :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     :param base_url: Add ``base_url/<subdir>`` to repodata.json to be able to host packages separate from repodata.json
+    :param save_fs_state: Pass False to use cached filesystem state instead of ``os.listdir(subdir)``
     """
 
     fs: MinimalFS | None = None
@@ -504,6 +510,7 @@ class ChannelIndex:
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
+        save_fs_state=True,
         write_current_repodata=True,
     ):
         if threads is None:
@@ -531,6 +538,7 @@ class ChannelIndex:
         self.write_run_exports = write_run_exports
         self.compact_json = compact_json
         self.base_url = base_url
+        self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
 
     def index(
@@ -571,6 +579,10 @@ class ChannelIndex:
                     # runs in thread
                     subdir, verbose, progress, subdir_path = args
                     cache = self.cache_for_subdir(subdir)
+                    # exactly these packages (unless they are un-indexable) will
+                    # be in the output repodata
+                    if self.save_fs_state:
+                        cache.save_fs_state(subdir_path)
                     return self.extract_subdir_to_cache(
                         subdir, verbose, progress, subdir_path, cache
                     )
@@ -775,17 +787,18 @@ class ChannelIndex:
         return cache
 
     def extract_subdir_to_cache(
-        self, subdir, verbose, progress, subdir_path, cache: sqlitecache.CondaIndexCache
-    ):
+        self,
+        subdir: str,
+        verbose,
+        progress,
+        subdir_path,
+        cache: sqlitecache.CondaIndexCache,
+    ) -> str:
         """
         Extract all changed packages into the subdir cache.
 
         Return name of subdir.
         """
-        # exactly these packages (unless they are un-indexable) will be in the
-        # output repodata
-        cache.save_fs_state(subdir_path)
-
         log.debug("%s find packages to extract", subdir)
 
         # list so tqdm can show progress
@@ -1241,6 +1254,8 @@ class ChannelIndex:
             encoding = None
             newline = b"\n"
             newline_option = None
+
+        # XXX could we avoid writing output_temp_path in some cases?
 
         # always use \n line separator
         with open(
