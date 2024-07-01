@@ -125,7 +125,7 @@ def update_index(
     _, dirname = os.path.split(dir_path)
     if dirname in utils.DEFAULT_SUBDIRS:
         if warn:
-            log.warn(
+            log.warning(
                 "The update_index function has changed to index all subdirs at once.  You're pointing it at a single subdir.  "
                 "Please update your code to point it at the channel root, rather than a subdir. "
                 "Use -s=<subdir> to update a single subdir."
@@ -511,7 +511,7 @@ class ChannelIndex:
         fs: MinimalFS | None = None,
         base_url: str | None = None,
         save_fs_state=True,
-        current_repodata=True,
+        write_current_repodata=True,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -539,7 +539,7 @@ class ChannelIndex:
         self.compact_json = compact_json
         self.base_url = base_url
         self.save_fs_state = save_fs_state
-        self.current_repodata = current_repodata
+        self.write_current_repodata = write_current_repodata
 
     def index(
         self,
@@ -652,7 +652,7 @@ class ChannelIndex:
 
         self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
 
-        if self.current_repodata:
+        if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
 
             current_repodata = _build_current_repodata(
@@ -667,8 +667,7 @@ class ChannelIndex:
                 json_filename="current_repodata.json",
             )
         else:
-            # XXX delete now-outdated current_repodata.json
-            pass
+            self._remove_repodata(subdir, "current_repodata.json")
 
         if self.write_run_exports:
             log.info("%s Building run_exports data", subdir)
@@ -738,7 +737,7 @@ class ChannelIndex:
         else:
             self.subdirs = sorted(set(self._subdirs))
             if "noarch" not in self.subdirs:
-                log.warn("Indexing %s does not include 'noarch'", self.subdirs)
+                log.warning("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
 
     def channeldata_path(self):
@@ -883,6 +882,17 @@ class ChannelIndex:
             else:
                 self._maybe_remove(repodata_zst_path)
         return write_result
+
+    def _remove_repodata(self, subdir, json_filename):
+        """
+        Remove json_filename and variants, to avoid keeping outdated repodata.
+        """
+        repodata_json_path = join(self.channel_root, subdir, json_filename)
+        repodata_bz2_path = repodata_json_path + ".bz2"
+        repodata_zst_path = repodata_json_path + ".zst"
+        self._maybe_remove(repodata_json_path)
+        self._maybe_remove(repodata_bz2_path)
+        self._maybe_remove(repodata_zst_path)
 
     def _write_subdir_index_html(self, subdir, repodata):
         repodata_legacy_packages = repodata["packages"]
@@ -1111,7 +1121,7 @@ class ChannelIndex:
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
                 run_exports_conda_packages[path] = run_exports_data
             else:
-                log.warn("%s doesn't look like a conda package", path)
+                log.warning("%s doesn't look like a conda package", path)
 
         new_run_exports_data = {
             "packages": run_exports_packages,

@@ -429,7 +429,7 @@ def copy_into(
                 src_folder = os.getcwd()
 
         if os.path.islink(src) and not os.path.exists(os.path.realpath(src)):
-            log.warn("path %s is a broken symlink - ignoring copy", src)
+            log.warning("path %s is a broken symlink - ignoring copy", src)
             return
 
         if not lock and locking:

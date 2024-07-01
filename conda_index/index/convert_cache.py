@@ -201,7 +201,7 @@ def extract_cache_filesystem(path):
                     with open(fullpath, "rb") as entry:
                         yield path_info, entry
                 except PermissionError as e:  # pragma: no cover
-                    log.warn("Permission error: %s %s", fullpath, e)
+                    log.warning("Permission error: %s %s", fullpath, e)
 
 
 # regex excludes arbitrary names
@@ -262,7 +262,7 @@ def convert_cache(conn, cache_generator):
                             },
                         )
                     except sqlite3.OperationalError as e:
-                        log.warn("SQL error. Not JSON? %s %s", match.groups(0), e)
+                        log.warning("SQL error. Not JSON? %s %s", match.groups(0), e)
 
                 elif match["kind"] == "icon":
                     conn.execute(
@@ -277,7 +277,7 @@ def convert_cache(conn, cache_generator):
                     )
 
                 else:  # pragma: no cover
-                    log.warn("Unhandled %r", match.groupdict())
+                    log.warning("Unhandled %r", match.groupdict())
 
 
 def merge_index_cache(channel_root, output_db="merged.db"):
