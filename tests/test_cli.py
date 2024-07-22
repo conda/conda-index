@@ -1,8 +1,10 @@
+import pytest
 from click.testing import CliRunner
 
 from conda_index.cli import cli
 
 
+@pytest.mark.skip(reason="causes many other tests to fail")
 def test_cli(tmp_path):
     """
     Coverage testing for the click cli.
