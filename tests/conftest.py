@@ -113,7 +113,6 @@ def testing_config(testing_workdir):
         exit_on_verify_error=exit_on_verify_error_default,
         conda_pkg_format=conda_pkg_format_default,
     )
-    assert result.no_rewrite_stdout_env is False
     assert result._src_cache_root is None
     assert result.src_cache_root == testing_workdir
     return result
