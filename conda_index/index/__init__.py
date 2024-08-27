@@ -512,6 +512,7 @@ class ChannelIndex:
         base_url: str | None = None,
         save_fs_state=True,
         write_current_repodata=True,
+        upstream_stage: str = "fs",
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -540,6 +541,7 @@ class ChannelIndex:
         self.base_url = base_url
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
+        self.upstream_stage = upstream_stage
 
     def index(
         self,
@@ -780,6 +782,7 @@ class ChannelIndex:
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
+            upstream_stage=self.upstream_stage,
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?

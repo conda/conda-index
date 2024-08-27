@@ -11,6 +11,8 @@ import click
 from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 from .. import yaml
+from ..index.shards import ChannelIndexShards, ShardedIndexCache
+from ..index.sqlitecache import CondaIndexCache
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -128,6 +130,14 @@ from .. import yaml
     default=False,
     is_flag=True,
 )
+@click.option(
+    "--sharded",
+    help="""
+        Write index using shards
+        """,
+    default=False,
+    is_flag=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -147,6 +157,7 @@ def cli(
     save_fs_state=False,
     upstream_stage="fs",
     current_repodata=True,
+    sharded=False,
 ):
     logutil.configure()
     if verbose:
@@ -155,7 +166,10 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
-    channel_index = ChannelIndex(
+    channel_index_class = ChannelIndexShards if sharded else ChannelIndex
+    cache_class = ShardedIndexCache if sharded else CondaIndexCache
+
+    channel_index = channel_index_class(
         os.path.expanduser(dir),
         channel_name=channel_name,
         output_root=output,
@@ -168,6 +182,8 @@ def cli(
         base_url=base_url,
         save_fs_state=save_fs_state,
         write_current_repodata=current_repodata,
+        cache_class=cache_class,
+        upstream_stage=upstream_stage
     )
 
     if save_fs_state is False:
@@ -181,9 +197,6 @@ def cli(
             return []
 
         channel_index.cache_class.changed_packages = no_changed_packages
-
-    # XXX this patch doesn't stick when using multiprocessing
-    channel_index.cache_class.upstream_stage = upstream_stage
 
     current_index_versions = None
     if current_index_versions_file:
