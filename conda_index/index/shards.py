@@ -2,6 +2,8 @@
 Sharded repodata.
 """
 
+from __future__ import annotations
+
 import hashlib
 import itertools
 import json
@@ -192,7 +194,10 @@ class ChannelIndexShards(ChannelIndex):
         # yield shards and combine tiny ones?
 
         SMALL_SHARD = 1024  # if a shard is this small, it is a candidate for merge
-        MERGE_SHARD = 4096  # if the merged shards are bigger than this then spit them out
+        MERGE_SHARD = (
+            4096  # if the merged shards are bigger than this then spit them out
+        )
+
         def merged_shards():
             """
             If a shard would be tiny, combine it with a few neighboring shards.
@@ -206,7 +211,6 @@ class ChannelIndexShards(ChannelIndex):
                     yield {name: shard}
 
                 collected[name] = shard
-
 
         for name, shard in cache.index_shards():
             shard_data = packb_typed(shard)

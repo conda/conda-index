@@ -183,7 +183,7 @@ def cli(
         save_fs_state=save_fs_state,
         write_current_repodata=current_repodata,
         cache_class=cache_class,
-        upstream_stage=upstream_stage
+        upstream_stage=upstream_stage,
     )
 
     if save_fs_state is False:
