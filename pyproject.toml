@@ -18,6 +18,7 @@ dependencies = [
     "filelock",
     "jinja2",
     "more-itertools",
+    "msgpack",
     "ruamel.yaml",
     "zstandard",
 ]
