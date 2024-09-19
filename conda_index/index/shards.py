@@ -80,7 +80,7 @@ class ShardedIndexCache(CondaIndexCache):
 
 class ChannelIndexShards(ChannelIndex):
     """
-    Sharded repodata per CEP proposal.
+    Sharded repodata per CEP-16 proposal.
     """
 
     def __init__(
