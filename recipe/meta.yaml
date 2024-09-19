@@ -30,7 +30,6 @@ requirements:
     - conda-package-streaming
     - filelock
     - jinja2
-    - more-itertools
     - ruamel.yaml
 
 test:

@@ -13,8 +13,7 @@ import os
 import os.path
 import re
 import sqlite3
-
-from more_itertools import ichunked
+from itertools import chain, islice
 
 from . import common
 
@@ -216,6 +215,17 @@ def db_path(match, override_channel=None):
     globally unique keys.
     """
     return f"{match['basename']}"
+
+
+def ichunked(iterable, n):
+    """
+    Break iterable into n-item iterables.
+
+    Lazier than Python 3.12 batched().
+    """
+    source = iter(iterable)
+    for item in source:
+        yield islice(chain([item], source), n)
 
 
 def convert_cache(conn, cache_generator):
