@@ -2,3 +2,4 @@ name: test
 dependencies:
   - conda-build
   - pip >=22
+  - msgpack-python

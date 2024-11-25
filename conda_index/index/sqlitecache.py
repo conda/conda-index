@@ -85,8 +85,6 @@ class cacher:
 
 
 class CondaIndexCache:
-    upstream_stage = "fs"
-
     def __init__(
         self,
         channel_root: Path | str,
@@ -94,12 +92,14 @@ class CondaIndexCache:
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
+        upstream_stage: str = "fs",
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
         subdir: platform subdir, e.g. 'linux-64'
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
+        upstream_stage: type of index record it is; defaults to "fs"
         """
 
         self.subdir = subdir
@@ -108,6 +108,7 @@ class CondaIndexCache:
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.db_filename = Path(self.cache_dir, "cache.db")
         self.cache_is_brand_new = not self.db_filename.exists()
+        self.upstream_stage = upstream_stage
 
         self.fs = fs or MinimalFS()
         self.channel_url = channel_url or str(channel_root)
