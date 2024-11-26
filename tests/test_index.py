@@ -1271,7 +1271,7 @@ def test_track_features(index_data):
         conn.execute(
             """INSERT INTO stat VALUES('fs','unexpected-filename',1652905054,2683,NULL,NULL,NULL,NULL)"""
         )
-        conn.execute("""INSERT INTO index_json VALUES('unexpected-filename','{}');""")
+        conn.execute("""INSERT INTO index_json VALUES('unexpected-filename','{}');""")\
 
     # Call internal "write repodata.json" function normally called by
     # channel_index.index(). index_prepared_subdir doesn't check which packages
@@ -1280,6 +1280,81 @@ def test_track_features(index_data):
 
     # complain about 'unexpected-filename'
     channel_index.build_run_exports_data("noarch")
+
+
+def test_filter_arch(index_data):
+    """
+    Test that we remove arch, subdir, platform from records.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        subdirs=("linux-64", "noarch"),
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+    )
+
+    assert channel_index._subdirs is not None
+    for subdir in channel_index._subdirs:
+        # Add metadata for a package with features, without having to include it on
+        # the filesystem.
+        index_cache = channel_index.cache_for_subdir(subdir)
+        conn = index_cache.db
+
+        pkg_name = "features"
+        pkg = f"{pkg_name}-1.0.conda"
+        pkg_2 = f"{pkg_name}-0.9.conda"
+
+        # The function under test is looking for a package with features, and an
+        # older version of the same package without features.
+        with conn:  # transaction
+            conn.execute(
+                f"""INSERT INTO index_json VALUES('{pkg}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{pkg_name}","noarch":"generic","subdir":"{subdir}","platform":"linux","arch":"x86_64","timestamp":1561127261940,"version":"1.0","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683,"track_features":["jim"],"features":["jim"]}}');"""
+            )
+            conn.execute(
+                f"""INSERT INTO stat VALUES('indexed','{pkg}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+            )
+            conn.execute(
+                f"""INSERT INTO stat VALUES('fs','{pkg}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+            )
+
+            conn.execute(
+                f"""INSERT INTO index_json VALUES('{pkg_2}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{pkg_name}","noarch":"generic","subdir":"bogus-subdir","platform":"linux","arch":"x86_64","timestamp":1561127261940,"version":"0.9","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683}}');"""
+            )
+            conn.execute(
+                f"""INSERT INTO stat VALUES('indexed','{pkg_2}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+            )
+            conn.execute(
+                f"""INSERT INTO stat VALUES('fs','{pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+            )
+
+            # cover "run exports on .conda package" branch
+            conn.execute(f"""INSERT INTO run_exports VALUES('{pkg_2}','{{}}')""")
+
+            # cover "check for unknown file extension" branch
+            conn.execute(
+                """INSERT INTO stat VALUES('fs','unexpected-filename',1652905054,2683,NULL,NULL,NULL,NULL)"""
+            )
+            conn.execute(
+                """INSERT INTO index_json VALUES('unexpected-filename','{}');"""
+            )
+
+        # Call internal "write repodata.json" function normally called by
+        # channel_index.index(). index_prepared_subdir doesn't check which packages
+        # exist.
+        repodata = channel_index.index_subdir(subdir)
+        packages = repodata["packages.conda"]
+        assert len(packages) == 2
+        for package in packages.values():
+            assert isinstance(package, dict)
+            assert "subdir" not in package or package["subdir"] != subdir
+            assert "arch" not in package
+            assert "platform" not in package
 
 
 def test_bad_patch_version(index_data):

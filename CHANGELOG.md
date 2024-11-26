@@ -1,5 +1,10 @@
 [//]: # (current developments)
 
+### Enhancements
+
+* Remove subdir, platform, arch from package records to reduce size, these are
+  redundant or implied by `"info":{"subdir":...}` (#132)
+
 ### Other
 
 * Remove [WAL mode](https://www.sqlite.org/wal.html) from database create
