@@ -34,8 +34,8 @@ requirements:
 
 test:
   requires:
-    - conda-build >=3.21.0
-    - conda-package-handling >=1.9.0
+    - conda-build >=24
+    - conda-package-handling >=2.2.0
     - coverage
     - fsspec
     - pytest >=7
