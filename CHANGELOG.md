@@ -1,5 +1,12 @@
 [//]: # (current developments)
 
+### Other
+
+* Remove [WAL mode](https://www.sqlite.org/wal.html) from database create
+  script, in case `conda-index` is used on a network file system. Note WAL mode
+  is persistent, `PRAGMA journal_mode=DELETE` can be used to convert a WAL
+  database back to a rollback journal mode. (#177)
+
 ## 0.5.0 (2024-06-07)
 
 ### Enhancements
