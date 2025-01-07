@@ -20,7 +20,7 @@ from . import common
 log = logging.getLogger(__name__)
 
 # maximum 'PRAGMA user_version' we support
-USER_VERSION = 1
+USER_VERSION = 2
 
 PATH_INFO = re.compile(
     r"""
@@ -72,7 +72,13 @@ def create(conn):
     # has md5, shasum. older? packages do not include timestamp?
     # SELECT path, datetime(json_extract(index_json, '$.timestamp'), 'unixepoch'), index_json from index_json
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS index_json (path TEXT PRIMARY KEY, index_json BLOB)"
+        """
+        CREATE TABLE IF NOT EXISTS index_json (
+            path TEXT PRIMARY KEY, index_json BLOB,
+            name AS (json_extract(index_json, '$.name')),
+            sha256 AS (json_extract(index_json, '$.sha256'))
+        )
+        """
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS recipe (path TEXT PRIMARY KEY, recipe BLOB)"
@@ -126,13 +132,14 @@ def migrate(conn):
             "conda-index cache is too new: version {user_version} > {USER_VERSION}"
         )
 
-    if user_version > 0:
-        return
+    if user_version < 1:
+        remove_prefix(conn)
+        # PRAGMA can't accept ?-substitution
+        conn.execute("PRAGMA user_version=1")
 
-    remove_prefix(conn)
-
-    # PRAGMA can't accept ?-substitution
-    conn.execute("PRAGMA user_version=1")
+    if user_version < 2:
+        add_computed_name(conn)
+        conn.execute("PRAGMA user_version=2")
 
 
 def remove_prefix(conn: sqlite3.Connection):
@@ -157,6 +164,21 @@ def remove_prefix(conn: sqlite3.Connection):
     for table in TABLE_NAMES + ["stat"]:
         conn.execute(
             f"UPDATE OR IGNORE {table} SET path=migrate_basename(path) WHERE INSTR(path, '/')"
+        )
+
+
+def add_computed_name(db: sqlite3.Connection):
+    """
+    Add helpful computed columns to index_json.
+    """
+    columns = set(row[1] for row in db.execute("PRAGMA table_xinfo(index_json)"))
+    if "name" not in columns:
+        db.execute(
+            "ALTER TABLE index_json ADD COLUMN name AS (json_extract(index_json, '$.name'))"
+        )
+    if "sha256" not in columns:
+        db.execute(
+            "ALTER TABLE index_json ADD COLUMN sha256 AS (json_extract(index_json, '$.sha256'))"
         )
 
 
