@@ -12,7 +12,7 @@ import os.path
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -508,12 +508,24 @@ class CondaIndexCache:
 
         return query
 
-    def indexed_packages(self):
+    def indexed_packages(self, filter: Callable[[dict], dict] | None = None):
         """
         Return "packages" and "packages.conda" values from the cache.
+
+        Args:
+            filter: called with individual package records, return filtered record.
         """
         new_repodata_packages = {}
         new_repodata_conda_packages = {}
+
+        def load(str):
+            return json.loads(str)
+
+        if filter:
+            def load_and_filter(str):
+                return filter(json.loads(str))
+
+            load = load_and_filter
 
         # load cached packages
         for row in self.db.execute(
@@ -525,7 +537,7 @@ class CondaIndexCache:
             (self.upstream_stage,),
         ):
             path, index_json = row
-            index_json = json.loads(index_json)
+            index_json = load(index_json)
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 new_repodata_packages[path] = index_json
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
