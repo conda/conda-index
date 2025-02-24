@@ -9,7 +9,5 @@ def connect(dburi="cache.db"):
     """
     conn = sqlite3.connect(dburi, uri=True)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA synchronous = 1")  # less fsync, good for WAL mode
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
