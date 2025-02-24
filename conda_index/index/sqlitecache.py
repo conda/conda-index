@@ -536,6 +536,29 @@ class CondaIndexCache:
 
         return new_repodata_packages, new_repodata_conda_packages
 
+    def index_shards(self, desired: set | None = None):
+        """
+        Yield (package name, all packages with that name) from database ordered
+        by name, path i.o.w. filename.
+
+        Default implementation that calls indexed_packages().
+
+        :desired: If not None, set of desired package names.
+        """
+
+        packages, conda_packages = self.indexed_packages()
+
+        # wrong
+        packages_by_name = {value["name"]: path for path, value in packages.items()}
+        conda_packages_by_name = {
+            value["name"]: path for path, value in conda_packages.items()
+        }
+
+        for name in sorted(set((*packages_by_name, *conda_packages_by_name))):
+            if not desired or name in desired:
+                shard = {}
+                yield (name, shard)
+
     def store_index_json_stat(self, database_path, mtime, size, index_json):
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
