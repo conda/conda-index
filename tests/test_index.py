@@ -1362,3 +1362,28 @@ def test_write_current_repodata(index_data):
     channel_index.index(None)
 
     assert not list(pkg_dir.glob(pattern))
+
+
+def test_write_rss(index_data):
+    """
+    Test writing RSS through the update_channeldata(rss=True) code path.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=True,
+        write_zst=True,
+        compact_json=True,
+        threads=1,
+    )
+
+    rss_path = index_data / "packages" / "rss.xml"
+
+    assert not rss_path.exists()
+
+    channel_index.index(None)
+    channel_index.update_channeldata(rss=True)
+
+    assert rss_path.exists()
