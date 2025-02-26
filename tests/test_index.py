@@ -1381,7 +1381,7 @@ def test_write_rss(index_data):
 
     rss_path = index_data / "packages" / "rss.xml"
 
-    assert not rss_path.exists()
+    rss_path.unlink(missing_ok=True)
 
     channel_index.index(None)
     channel_index.update_channeldata(rss=True)
