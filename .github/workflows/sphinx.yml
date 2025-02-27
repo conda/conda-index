@@ -44,7 +44,7 @@ jobs:
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
           path: 'build/html'
