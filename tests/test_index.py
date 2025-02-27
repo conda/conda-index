@@ -1335,3 +1335,30 @@ def test_base_url(index_data):
 
     package_url = urllib.parse.urljoin(osx["info"]["base_url"], "package-1.0.conda")
     assert package_url == "https://example.org/somechannel/osx-64/package-1.0.conda"
+
+
+def test_write_current_repodata(index_data):
+    """
+    Test that we can skip current_repodata, and that it deletes the old one.
+    """
+    pkg_dir = Path(index_data, "packages")
+    pattern = "*/current_repodata.json*"
+
+    # compact json
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=True,
+        write_zst=True,
+        compact_json=True,
+        threads=1,
+    )
+
+    channel_index.index(None)
+
+    assert list(pkg_dir.glob(pattern))
+
+    channel_index.write_current_repodata = False
+    channel_index.index(None)
+
+    assert not list(pkg_dir.glob(pattern))

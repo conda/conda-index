@@ -17,7 +17,6 @@ dependencies = [
     "conda-package-streaming >=0.7.0",
     "filelock",
     "jinja2",
-    "more-itertools",
     "ruamel.yaml",
     "zstandard",
 ]
@@ -53,6 +52,17 @@ Home = "https://github.com/conda/conda-index"
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
+filterwarnings = [
+  # elevate conda's deprecated warning to an error
+  "error::PendingDeprecationWarning:conda",
+  "error::DeprecationWarning:conda",
+  # elevate conda-build's deprecated warning to an error
+  "error::PendingDeprecationWarning:conda_build",
+  "error::DeprecationWarning:conda_build",
+  # elevate conda-index's deprecated warning to an error
+  "error::PendingDeprecationWarning:conda_index",
+  "error::DeprecationWarning:conda_index",
+]
 
 [tool.coverage.run]
 concurrency = ["multiprocessing", "thread"]

@@ -141,3 +141,4 @@ dmypy.json
 *.db-*
 
 conda_index_db
+rever/

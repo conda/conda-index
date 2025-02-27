@@ -16,4 +16,4 @@
 
 ### Other
 
-* Update CI configuration to test on more platforms (#142)
+* Remove `more-itertools` dependency. (#127)

@@ -91,6 +91,16 @@ from .. import yaml
         repodata_version=2 which is supported in conda 24.5.0 or later.
         """,
 )
+@click.option(
+    "--current-repodata/--no-current-repodata",
+    help="""
+        Skip generating current_repodata.json, a file containing only the newest
+        versions of all packages and their dependencies, only used by the
+        classic solver.
+        """,
+    default=True,
+    show_default=True,
+)
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
 @click.option(
     "--verbose",
@@ -116,6 +126,7 @@ def cli(
     run_exports=False,
     compact=True,
     base_url=None,
+    current_repodata=True,
 ):
     logutil.configure()
     if verbose:
@@ -135,6 +146,7 @@ def cli(
         write_run_exports=run_exports,
         compact_json=compact,
         base_url=base_url,
+        write_current_repodata=current_repodata,
     )
 
     current_index_versions = None

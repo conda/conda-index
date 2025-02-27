@@ -113,7 +113,7 @@ class CondaIndexCache:
         self.channel_url = channel_url or str(channel_root)
 
         if not self.cache_dir.exists():
-            self.cache_dir.mkdir()
+            self.cache_dir.mkdir(parents=True)
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -262,7 +262,7 @@ class CondaIndexCache:
                     wanted.remove(member.name)
                     reader = tar.extractfile(member)
                     if reader is None:
-                        log.warn(f"{abs_fn}/{member.name} was not a regular file")
+                        log.warning(f"{abs_fn}/{member.name} was not a regular file")
                         continue
                     have[member.name] = reader.read()
 
@@ -374,12 +374,12 @@ class CondaIndexCache:
                 {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
             ).fetchone()[0]
         except TypeError:  # .fetchone() was None
-            log.warn("%s mtime not found in cache", fn)
+            log.warning("%s mtime not found in cache", fn)
             try:
                 mtime = os.stat(join(subdir_path, fn)).st_mtime
             except FileNotFoundError:
                 # don't call if it won't be found...
-                log.warn("%s not found in load_all_from_cache", fn)
+                log.warning("%s not found in load_all_from_cache", fn)
                 return {}
 
         # This method reads up pretty much all of the cached metadata, except
@@ -531,7 +531,7 @@ class CondaIndexCache:
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
                 new_repodata_conda_packages[path] = index_json
             else:
-                log.warn("%s doesn't look like a conda package", path)
+                log.warning("%s doesn't look like a conda package", path)
 
         return new_repodata_packages, new_repodata_conda_packages
 
@@ -618,4 +618,4 @@ def _clear_newline_chars(record, field_name):
                 )
 
             except TypeError:
-                log.warn("Could not _clear_newline_chars from field %s", field_name)
+                log.warning("Could not _clear_newline_chars from field %s", field_name)

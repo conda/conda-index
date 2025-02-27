@@ -1,7 +1,6 @@
 ### Enhancements
 
-* Add support for CEP-15 ``base_url`` to host packages separate from repodata.
-  (#150)
+* <news item>
 
 ### Bug fixes
 
@@ -17,4 +16,4 @@
 
 ### Other
 
-* <news item>
+* Update tests to account for conda-build removals (#180)

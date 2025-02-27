@@ -13,8 +13,7 @@ import os
 import os.path
 import re
 import sqlite3
-
-from more_itertools import ichunked
+from itertools import chain, islice
 
 from . import common
 
@@ -179,7 +178,7 @@ def extract_cache_filesystem(path):
                     with open(fullpath, "rb") as entry:
                         yield path_info, entry
                 except PermissionError as e:  # pragma: no cover
-                    log.warn("Permission error: %s %s", fullpath, e)
+                    log.warning("Permission error: %s %s", fullpath, e)
 
 
 # regex excludes arbitrary names
@@ -194,6 +193,17 @@ def db_path(match, override_channel=None):
     globally unique keys.
     """
     return f"{match['basename']}"
+
+
+def ichunked(iterable, n):
+    """
+    Break iterable into n-item iterables.
+
+    Lazier than Python 3.12 batched().
+    """
+    source = iter(iterable)
+    for item in source:
+        yield islice(chain([item], source), n)
 
 
 def convert_cache(conn, cache_generator):
@@ -240,7 +250,7 @@ def convert_cache(conn, cache_generator):
                             },
                         )
                     except sqlite3.OperationalError as e:
-                        log.warn("SQL error. Not JSON? %s %s", match.groups(0), e)
+                        log.warning("SQL error. Not JSON? %s %s", match.groups(0), e)
 
                 elif match["kind"] == "icon":
                     conn.execute(
@@ -255,7 +265,7 @@ def convert_cache(conn, cache_generator):
                     )
 
                 else:  # pragma: no cover
-                    log.warn("Unhandled %r", match.groupdict())
+                    log.warning("Unhandled %r", match.groupdict())
 
 
 def merge_index_cache(channel_root, output_db="merged.db"):
