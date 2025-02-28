@@ -131,9 +131,9 @@ from ..index.sqlitecache import CondaIndexCache
     is_flag=True,
 )
 @click.option(
-    "--sharded",
+    "--write-shards/--no-write-shards",
     help="""
-        Write index using shards
+        Write a repodata.msgpack.zst index and many smaller files per CEP-16.
         """,
     default=False,
     is_flag=True,
