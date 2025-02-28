@@ -11,8 +11,6 @@ import click
 from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 from .. import yaml
-from ..index.shards import ChannelIndexShards, ShardedIndexCache
-from ..index.sqlitecache import CondaIndexCache
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -131,6 +129,14 @@ from ..index.sqlitecache import CondaIndexCache
     is_flag=True,
 )
 @click.option(
+    "--write-monolithic/--no-write-monolithic",
+    help="""
+    Write repodata.json with all package metadata in a single file.
+    """,
+    default=True,
+    is_flag=True,
+)
+@click.option(
     "--write-shards/--no-write-shards",
     help="""
         Write a repodata.msgpack.zst index and many smaller files per CEP-16.
@@ -157,7 +163,8 @@ def cli(
     save_fs_state=False,
     upstream_stage="fs",
     current_repodata=True,
-    sharded=False,
+    write_monolithic=True,
+    write_shards=False,
 ):
     logutil.configure()
     if verbose:
@@ -166,10 +173,7 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
-    channel_index_class = ChannelIndexShards if sharded else ChannelIndex
-    cache_class = ShardedIndexCache if sharded else CondaIndexCache
-
-    channel_index = channel_index_class(
+    channel_index = ChannelIndex(
         os.path.expanduser(dir),
         channel_name=channel_name,
         output_root=output,
@@ -182,8 +186,9 @@ def cli(
         base_url=base_url,
         save_fs_state=save_fs_state,
         write_current_repodata=current_repodata,
-        cache_class=cache_class,
         upstream_stage=upstream_stage,
+        write_monolithic=write_monolithic,
+        write_shards=write_shards,
     )
 
     if save_fs_state is False:
