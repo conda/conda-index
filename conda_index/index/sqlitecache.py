@@ -241,7 +241,6 @@ class CondaIndexCache:
 
         Return index.json as dict, with added size, checksums.
         """
-        database_path = self.database_path(fn)
 
         wanted = set(PATH_TO_TABLE) - COMPUTED
 
@@ -252,7 +251,7 @@ class CondaIndexCache:
             "info/meta.yaml",
         }
 
-        have = {}
+        members = {}
         # second stream_conda_info "fileobj" parameter accepts Path or str
         # inherited from ZipFile, bz2.open behavior, but we need to open the
         # file ourselves.
@@ -265,17 +264,17 @@ class CondaIndexCache:
                     if reader is None:
                         log.warning(f"{abs_fn}/{member.name} was not a regular file")
                         continue
-                    have[member.name] = reader.read()
+                    members[member.name] = reader.read()
 
                     # immediately parse index.json, decide whether we need icon
                     if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                        index_json = json.loads(have[member.name])
+                        index_json = json.loads(members[member.name])
                         if index_json.get("icon") is None:
                             wanted = wanted - {ICON_PATH}
 
                     if member.name in recipe_want_one:
                         # convert yaml; don't look for any more recipe files
-                        have[member.name] = _cache_recipe(have[member.name])
+                        members[member.name] = _cache_recipe(members[member.name])
                         wanted = wanted - recipe_want_one
 
                 if not wanted:  # we got what we wanted
@@ -296,27 +295,56 @@ class CondaIndexCache:
 
         if wanted and wanted != {"info/run_exports.json"}:
             # very common for some metadata to be missing
-            log.debug(f"{fn} missing {wanted} has {set(have.keys())}")
+            log.debug(f"{fn} missing {wanted} has {set(members.keys())}")
 
-        index_json = json.loads(have["info/index.json"])
+        index_json = json.loads(members["info/index.json"])
 
         # populate run_exports.json (all False's if there was no
         # paths.json). paths.json should not be needed after this; don't
         # cache large paths.json unless we want a "search for paths"
         # feature unrelated to repodata.json
         try:
-            paths_str = have.pop(PATHS_PATH)
+            paths_str = members.pop(PATHS_PATH)
         except KeyError:
             paths_str = ""
-        have["info/post_install.json"] = _cache_post_install_details(paths_str)
+        members["info/post_install.json"] = _cache_post_install_details(paths_str)
 
+        # decide what fields to filter out, like has_prefix
+        filter_fields = {
+            "arch",
+            "has_prefix",
+            "mtime",
+            "platform",
+            "ucs",
+            "requires_features",
+            "binstar",
+            "target-triplet",
+            "machine",
+            "operatingsystem",
+        }
+
+        index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
+
+        new_info = {"md5": md5, "sha256": sha256, "size": size}
+
+        index_json.update(new_info)
+
+        self.store(fn, size, mtime, members, index_json)
+
+        return index_json
+
+    def store(self, fn: str, size: int, mtime, members: dict[str, str|bytes], index_json: dict):
+        """
+        Write cache for a single package to database.
+        """
+        database_path = self.database_path(fn)
         with self.db:
-            for have_path in have:
+            for have_path in members:
                 table = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
                     continue  # not cached, or for index_json cached at end
 
-                parameters = {"path": database_path, "data": have.get(have_path)}
+                parameters = {"path": database_path, "data": members.get(have_path)}
                 if have_path == ICON_PATH:
                     query = """
                                 INSERT OR REPLACE into icon (path, icon_png)
@@ -335,35 +363,15 @@ class CondaIndexCache:
                     # XXX delete from cache
                     raise
 
-            # decide what fields to filter out, like has_prefix
-            filter_fields = {
-                "arch",
-                "has_prefix",
-                "mtime",
-                "platform",
-                "ucs",
-                "requires_features",
-                "binstar",
-                "target-triplet",
-                "machine",
-                "operatingsystem",
-            }
-
-            index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
-
-            new_info = {"md5": md5, "sha256": sha256, "size": size}
-
-            index_json.update(new_info)
-
             # sqlite json() function removes whitespace and ensures valid json
             self.db.execute(
                 "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
                 {"path": database_path, "index_json": json.dumps(index_json)},
             )
 
-            self.store_index_json_stat(database_path, mtime, size, index_json)
-
-        return index_json  # we don't need this return value; it will be queried back out to generate repodata
+            self.store_index_json_stat(
+                database_path, mtime, size, index_json
+            )  # we don't need this return value; it will be queried back out to generate repodata
 
     def load_all_from_cache(self, fn):
         subdir_path = self.subdir_path

@@ -66,7 +66,7 @@ class ShardedIndexCache(CondaIndexCache):
             for row in rows:
                 name, path, index_json = row
                 if not path.endswith((".tar.bz2", ".conda")):
-                    log.warn("%s doesn't look like a conda package", path)
+                    log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
                 key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
