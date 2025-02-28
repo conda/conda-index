@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .. import yaml
 from . import logutil
-from .shards import ChannelIndexShards
+from . import ChannelIndex
 
 if __name__ == "__main__":
     logutil.configure()
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     dir = Path(__file__).parents[2] / "tests" / "index_data" / "packages"
     output = dir.parent / "shards"
     assert dir.exists(), dir
-    channel_index = ChannelIndexShards(
+    channel_index = ChannelIndex(
         dir.expanduser(),
         channel_name=dir.name,
         output_root=output,
@@ -29,6 +29,8 @@ if __name__ == "__main__":
         write_run_exports=True,
         compact_json=True,
         base_url=None,
+        write_monolithic=False,
+        write_shards=True,
     )
 
     current_index_versions = None

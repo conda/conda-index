@@ -5,6 +5,7 @@ cache conda indexing metadata in sqlite.
 from __future__ import annotations
 
 import fnmatch
+import itertools
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
 
+import msgpack
 from conda_package_streaming import package_streaming
 
 from .. import yaml
@@ -333,7 +335,14 @@ class CondaIndexCache:
 
         return index_json
 
-    def store(self, fn: str, size: int, mtime, members: dict[str, str|bytes], index_json: dict):
+    def store(
+        self,
+        fn: str,
+        size: int,
+        mtime,
+        members: dict[str, str | bytes],
+        index_json: dict,
+    ):
         """
         Write cache for a single package to database.
         """
@@ -544,7 +553,7 @@ class CondaIndexCache:
 
         return new_repodata_packages, new_repodata_conda_packages
 
-    def index_shards(self, desired: set | None = None):
+    def index_shards_default(self, desired: set | None = None):  # XXX remove
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -565,6 +574,37 @@ class CondaIndexCache:
         for name in sorted(set((*packages_by_name, *conda_packages_by_name))):
             if not desired or name in desired:
                 shard = {}
+                yield (name, shard)
+
+    def index_shards(self, desired: set | None = None):
+        """
+        Yield (package name, all packages with that name) from database ordered
+        by name, path i.o.w. filename.
+
+        :desired: If not None, set of desired package names.
+        """
+        for name, rows in itertools.groupby(
+            self.db.execute(
+                """SELECT index_json.name, path, index_json
+                FROM stat JOIN index_json USING (path) WHERE stat.stage = ?
+                ORDER BY index_json.name, index_json.path""",
+                (self.upstream_stage,),
+            ),
+            lambda k: k[0],
+        ):
+            shard = {"packages": {}, "packages.conda": {}}
+            for row in rows:
+                name, path, index_json = row
+                if not path.endswith((".tar.bz2", ".conda")):
+                    log.warning("%s doesn't look like a conda package", path)
+                    continue
+                record = json.loads(index_json)
+                key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+                # we may have to pack later for patch functions that look for
+                # hex hashes
+                shard[key][path] = pack_record(record)
+
+            if not desired or name in desired:
                 yield (name, shard)
 
     def store_index_json_stat(self, database_path, mtime, size, index_json):
@@ -588,6 +628,24 @@ class CondaIndexCache:
             """,
             (self.upstream_stage,),
         )
+
+
+def pack_record(record):
+    """
+    Convert hex checksums to bytes.
+    """
+    if sha256 := record.get("sha256"):
+        record["sha256"] = bytes.fromhex(sha256)
+    if md5 := record.get("md5"):
+        record["md5"] = bytes.fromhex(md5)
+    return record
+
+
+def packb_typed(o: Any) -> bytes:
+    """
+    Sidestep lack of typing in msgpack.
+    """
+    return msgpack.packb(o)  # type: ignore
 
 
 def _cache_post_install_details(paths_json_str):
