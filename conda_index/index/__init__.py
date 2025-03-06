@@ -1182,6 +1182,15 @@ class ChannelIndex:
                 return instructions
         return {}
 
+    def _write_or_load_instructions(self, subdir, instructions):
+        if instructions:
+            self._write_patch_instructions(subdir, instructions)
+        else:
+            instructions = self._load_instructions(subdir)
+        if instructions.get("patch_instructions_version", 0) > 1:
+            raise RuntimeError("Incompatible patch instructions version")
+        return instructions
+
     def _patch_repodata(self, subdir, repodata, patch_generator: str | None = None):
         if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
             instructions = self._load_patch_instructions_tarball(
@@ -1191,13 +1200,7 @@ class ChannelIndex:
             instructions = self._create_patch_instructions(
                 subdir, repodata, patch_generator
             )
-        if instructions:
-            self._write_patch_instructions(subdir, instructions)
-        else:
-            instructions = self._load_instructions(subdir)
-        if instructions.get("patch_instructions_version", 0) > 1:
-            raise RuntimeError("Incompatible patch instructions version")
-
+        instructions = self._write_or_load_instructions(subdir, instructions)
         return _apply_instructions(subdir, repodata, instructions), instructions
 
     def _patch_repodata_shards(
@@ -1233,13 +1236,7 @@ class ChannelIndex:
 
             instructions = dict(per_shard_instructions())
 
-        if instructions:
-            self._write_patch_instructions(subdir, instructions)
-        else:
-            instructions = self._load_instructions(subdir)
-
-        if instructions.get("patch_instructions_version", 0) > 1:
-            raise RuntimeError("Incompatible patch instructions version")
+        instructions = self._write_or_load_instructions(subdir, instructions)
 
         def per_shard_apply_instructions():
             # XXX refactor
