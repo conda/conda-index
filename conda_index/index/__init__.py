@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import msgpack
 import zstandard
+from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
