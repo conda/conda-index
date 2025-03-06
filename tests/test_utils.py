@@ -2,7 +2,7 @@ import pathlib
 import tempfile
 
 from conda_index.index.convert_cache import ichunked
-from conda_index.utils import file_contents_match
+from conda_index.utils import file_contents_match, human_bytes
 
 
 def test_file_contents_match():
@@ -74,3 +74,10 @@ def test_ichunked():
         print("Batch")
         for i, c in chunk:
             print(i, generated, c())
+
+
+def test_human_bytes():
+    assert human_bytes(42) == "42 B"
+    assert human_bytes(1042) == "1 KB"
+    assert human_bytes(10004242) == "9.5 MB"
+    assert human_bytes(100000004242) == "93.13 GB"

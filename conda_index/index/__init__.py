@@ -311,10 +311,6 @@ def _make_channeldata_index_html(channel_name, channeldata):
     return rendered_html
 
 
-def _make_rss(channel_name, channeldata):
-    return rss.get_rss(channel_name, channeldata)
-
-
 def thread_executor_factory(debug, threads):
     return (
         DummyExecutor()
@@ -996,7 +992,7 @@ class ChannelIndex:
 
     def _write_rss(self, channeldata):
         log.info("Build RSS")
-        rss = _make_rss(self.channel_name, channeldata)
+        rss = rss.get_rss(self.channel_name, channeldata)
         rss_path = join(self.channel_root, "rss.xml")
         self._maybe_write(rss_path, rss)
         log.info("Built RSS")

@@ -1011,7 +1011,7 @@ def test_current_index_reduces_space(index_data):
         repodata = json.load(f)
     assert len(repodata["packages"]) == 7
     assert len(repodata["packages.conda"]) == 3
-    trimmed_repodata = conda_index.index._build_current_repodata(
+    trimmed_repodata = conda_index.index.current_repodata.build_current_repodata(
         "linux-64", repodata, None
     )
 
@@ -1033,7 +1033,7 @@ def test_current_index_reduces_space(index_data):
     }
 
     # we can keep more than one version series using a collection of keys
-    trimmed_repodata = conda_index.index._build_current_repodata(
+    trimmed_repodata = conda_index.index.current_repodata.build_current_repodata(
         "linux-64", repodata, {"one-gets-filtered": ["1.2", "1.3"]}
     )
 
