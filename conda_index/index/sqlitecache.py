@@ -101,7 +101,7 @@ class CondaIndexCache:
         subdir: platform subdir, e.g. 'linux-64'
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
-        upstream_stage: type of index record it is; defaults to "fs"
+        upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
         """
 
         self.subdir = subdir
