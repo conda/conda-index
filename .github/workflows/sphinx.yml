@@ -44,6 +44,7 @@ jobs:
           pip install -e ".[docs]"
           make html
       - name: Upload artifact
+        id: deployment
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
@@ -68,4 +69,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
