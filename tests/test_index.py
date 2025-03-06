@@ -1279,7 +1279,7 @@ def test_track_features(index_data):
     channel_index.index_prepared_subdir("noarch", False, False, None, None)
 
     # coverage for "doesn't look like a conda package"
-    dict(channel_index.cache_for_subdir("noarch").index_shards())
+    dict(channel_index.cache_for_subdir("noarch").indexed_shards())
 
     # complain about 'unexpected-filename'
     channel_index.build_run_exports_data("noarch")

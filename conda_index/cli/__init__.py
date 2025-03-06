@@ -97,7 +97,7 @@ from .. import yaml
     help="""
         Control whether listdir() is called to refresh the set of available
         packages. Used to generate complete repodata.json from cache only when
-        packages are not on disk.
+        packages are not on disk. (Experimental)
         """,
     default=True,
     show_default=True,
@@ -106,6 +106,7 @@ from .. import yaml
     "--upstream-stage",
     help="""
     Set to 'clone' to generate example repodata from conda-forge test database.
+    (Experimental)
     """,
     default="fs",
 )
@@ -140,6 +141,7 @@ from .. import yaml
     "--write-shards/--no-write-shards",
     help="""
         Write a repodata.msgpack.zst index and many smaller files per CEP-16.
+        (Experimental)
         """,
     default=False,
     is_flag=True,

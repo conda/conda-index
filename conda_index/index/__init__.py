@@ -673,7 +673,7 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        for name, shard in cache.index_shards():
+        for name, shard in cache.indexed_shards():
             shard_data = compressor.compress(sqlitecache.packb_typed(shard))
             shard_hash = hashlib.sha256(shard_data).digest()
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"

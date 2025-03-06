@@ -553,7 +553,7 @@ class CondaIndexCache:
 
         return new_repodata_packages, new_repodata_conda_packages
 
-    def index_shards(self, desired: set | None = None):
+    def indexed_shards(self, desired: set | None = None):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
