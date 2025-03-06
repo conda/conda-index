@@ -1321,6 +1321,7 @@ def test_base_url(index_data):
         compact_json=True,
         threads=1,
         base_url="https://example.org/somechannel/",
+        write_shards=True,
     )
 
     channel_index.index(None)

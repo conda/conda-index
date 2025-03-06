@@ -93,13 +93,13 @@ from .. import yaml
         """,
 )
 @click.option(
-    "--save-fs-state/--no-save-fs-state",
+    "--update-cache/--no-update-cache",
     help="""
-        Skip using listdir() to refresh the set of available packages. Used to
-        generate complete repodata.json from cache only when packages are not on
-        disk.
+        Control whether listdir() is called to refresh the set of available
+        packages. Used to generate complete repodata.json from cache only when
+        packages are not on disk.
         """,
-    default=False,
+    default=True,
     show_default=True,
 )
 @click.option(
@@ -160,7 +160,7 @@ def cli(
     run_exports=False,
     compact=True,
     base_url=None,
-    save_fs_state=False,
+    update_cache=False,
     upstream_stage="fs",
     current_repodata=True,
     write_monolithic=True,
@@ -184,14 +184,14 @@ def cli(
         write_run_exports=run_exports,
         compact_json=compact,
         base_url=base_url,
-        save_fs_state=save_fs_state,
+        save_fs_state=update_cache,
         write_current_repodata=current_repodata,
         upstream_stage=upstream_stage,
         write_monolithic=write_monolithic,
         write_shards=write_shards,
     )
 
-    if save_fs_state is False:
+    if update_cache is False:
         # We call listdir() in save_fs_state, or its remote fs equivalent; then
         # we call changed_packages(); but the changed_packages query against a
         # remote filesystem is different than the one we need for a local

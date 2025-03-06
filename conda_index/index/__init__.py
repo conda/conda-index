@@ -172,6 +172,8 @@ CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
+REPODATA_SHARDS_FN = "repodata_shards.msgpack.zst"
+REPODATA_SHARDS_FROM_PKGS_FN = "repodata_shards_from_packages.msgpack.zst"
 RUN_EXPORTS_JSON_FN = "run_exports.json"
 CHANNELDATA_FIELDS = (
     "description",
@@ -400,6 +402,19 @@ class ChannelIndex:
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
 
+    def cache_for_subdir(self, subdir):
+        cache: sqlitecache.CondaIndexCache = self.cache_class(
+            channel_root=self.channel_root,
+            subdir=subdir,
+            fs=self.fs,
+            channel_url=self.channel_url,
+            upstream_stage=self.upstream_stage,
+        )
+        if cache.cache_is_brand_new:
+            # guaranteed to be only thread doing this?
+            cache.convert()
+        return cache
+
     def index(
         self,
         patch_generator,
@@ -457,8 +472,8 @@ class ChannelIndex:
                 futures = []
                 for subdir in extract_subdirs_to_cache():
                     for indexer, condition in (
-                        (self.index_prepared_subdir, self.write_monolithic),
-                        (self.index_prepared_subdir_shards, self.write_shards),
+                        (self.index_patch_subdir, self.write_monolithic),
+                        (self.index_patch_subdir_shards, self.write_shards),
                     ):
                         if condition:
                             futures.append(
@@ -478,6 +493,7 @@ class ChannelIndex:
                     result = future.result()
                     log.info(f"Completed {result}")
 
+    # old name
     def index_prepared_subdir(
         self,
         subdir: str,
@@ -486,9 +502,20 @@ class ChannelIndex:
         patch_generator,
         current_index_versions,
     ):
+        return self.index_patch_subdir(
+            subdir, verbose, progress, patch_generator, current_index_versions
+        )
+
+    def index_patch_subdir(
+        self,
+        subdir: str,
+        verbose: bool,
+        progress: bool,
+        patch_generator,
+        current_index_versions,
+    ):
         """
-        Create repodata_from_packages.json by calling index_subdir, then apply
-        any patches to create repodata.json.
+        Create repodata_from_packages.json by calling index_subdir, then patch.
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
@@ -553,7 +580,20 @@ class ChannelIndex:
 
         return subdir
 
-    def index_prepared_subdir_shards(  # rename to something like index-and-patch? index-surprised-subdir?
+    # old name
+    def index_prepared_subdir_shards(
+        self,
+        subdir: str,
+        verbose: bool,
+        progress: bool,
+        patch_generator,
+        current_index_versions=None,  # unused
+    ):
+        return self.index_patch_subdir_shards(
+            subdir, verbose, progress, patch_generator, current_index_versions
+        )
+
+    def index_patch_subdir_shards(
         self,
         subdir: str,
         verbose: bool,
@@ -562,26 +602,27 @@ class ChannelIndex:
         current_index_versions=None,  # unused
     ):
         """
-        Create repodata_from_packages, then apply any patches to create repodata.json.
+        Create repodata_from_packages, then patche.
         """
         log.info("Subdir: %s Gathering repodata", subdir)
+
+        compressor = zstandard.ZstdCompressor()
 
         shards_from_packages = self.index_subdir_shards(
             subdir, verbose=verbose, progress=progress
         )
 
-        print(len(shards_from_packages["shards"]))
-
         log.info("%s Writing pre-patch shards", subdir)
-        unpatched_path = self.channel_root / subdir / "repodata_shards.msgpack.zst"
+
+        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FROM_PKGS_FN
         self._maybe_write(
-            unpatched_path,
-            zstandard.compress(sqlitecache.packb_typed(shards_from_packages)),
+            patched_path,
+            compressor.compress(sqlitecache.packb_typed(shards_from_packages)),
         )  # type: ignore
 
         # Apply patch instructions.
         log.info("%s Applying patch instructions", subdir)
-        patched_repodata, _ = self._patch_repodata_shards(
+        patched_packages, _ = self._patch_repodata_shards(
             subdir, shards_from_packages, patch_generator
         )
 
@@ -590,22 +631,23 @@ class ChannelIndex:
         # Create associated index.html.
 
         log.info("%s Writing patched repodata", subdir)
-        # XXX use final names, write patched repodata shards index
-        for pkg, record in patched_repodata.items():
-            Path(self.output_root, subdir, f"{pkg}.msgpack").write_bytes(
-                sqlitecache.packb_typed(record)
-            )
 
-        if self.write_run_exports:
-            log.info("%s Building run_exports data", subdir)
-            run_exports_data = self.build_run_exports_data(subdir)
+        repodata_shards = shards_from_packages.copy()
+        repodata_shards["shards"] = {}
 
-            log.info("%s Writing run_exports.json", subdir)
-            self._write_repodata(
-                subdir,
-                run_exports_data,
-                json_filename=RUN_EXPORTS_JSON_FN,
-            )
+        for pkg, record in patched_packages.items():
+            shard_data = compressor.compress(sqlitecache.packb_typed(record))
+            shard_hash = hashlib.sha256(shard_data).digest()
+            repodata_shards["shards"][pkg] = shard_hash
+            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
+            if not output_path.exists():
+                output_path.write_bytes(shard_data)
+
+        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FN
+        self._maybe_write(
+            patched_path,
+            compressor.compress(sqlitecache.packb_typed(repodata_shards)),
+        )  # type: ignore
 
         log.debug("%s finish", subdir)
 
@@ -613,7 +655,7 @@ class ChannelIndex:
 
     def index_subdir_shards(self, subdir, verbose=False, progress=False):
         """
-        Return repodata from the cache without reading old repodata.json
+        Generate sharded repodata from the cache.
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
@@ -644,166 +686,19 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        # yield shards and combine tiny ones?
-
-        SMALL_SHARD = 1024  # if a shard is this small, it is a candidate for merge
-        MERGE_SHARD = (
-            4096  # if the merged shards are bigger than this then spit them out
-        )
-
-        def merged_shards():
-            """
-            If a shard would be tiny, combine it with a few neighboring shards.
-            """
-            collected = {}
-            for name, shard in cache.index_shards():
-                shard_size = len(sqlitecache.packb_typed(shard))
-                if shard_size > SMALL_SHARD:
-                    if collected:
-                        yield collected
-                    yield {name: shard}
-
-                collected[name] = shard
-
         for name, shard in cache.index_shards():
-            shard_data = sqlitecache.packb_typed(shard)
-            reference_hash = hashlib.sha256(shard_data).hexdigest()
-            output_path = self.output_root / subdir / f"{reference_hash}.msgpack.zst"
+            shard_data = compressor.compress(sqlitecache.packb_typed(shard))
+            shard_hash = hashlib.sha256(shard_data).digest()
+            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
             if not output_path.exists():
-                output_path.write_bytes(compressor.compress(shard_data))
-
-            # XXX associate hashes of compressed and uncompressed shards
-            shards[name] = bytes.fromhex(reference_hash)
+                output_path.write_bytes(shard_data)
+            shards[name] = shard_hash
 
         return shards_index
 
-    def _patch_repodata_shards(
-        self, subdir, repodata_shards, patch_generator: str | None = None
-    ):
-        # XXX see how broken patch instructions are when applied per-shard
-
-        instructions = {}
-
-        if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
-            instructions = self._load_patch_instructions_tarball(
-                subdir, patch_generator
-            )
-        else:
-
-            def per_shard_instructions():
-                # more difficult if some shards are duplicated...
-                for pkg, reference in repodata_shards["shards"].items():
-                    # XXX keep it all in RAM? only patch changed shards or, if patches change, all shards?
-                    shard_path = (
-                        self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
-                    )
-                    shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
-                    yield (
-                        pkg,
-                        self._create_patch_instructions(subdir, shard, patch_generator),
-                    )
-
-            instructions = dict(per_shard_instructions())
-
-        if instructions:
-            self._write_patch_instructions(subdir, instructions)
-        else:
-            instructions = self._load_instructions(subdir)
-
-        if instructions.get("patch_instructions_version", 0) > 1:
-            raise RuntimeError("Incompatible patch instructions version")
-
-        def per_shard_apply_instructions():
-            # XXX refactor
-            # otherwise _apply_instructions would repeat this work
-            new_pkg_fixes = {
-                k.replace(".tar.bz2", ".conda"): v
-                for k, v in instructions.get("packages", {}).items()
-            }
-
-            import time
-
-            begin = time.time()
-
-            for i, (pkg, reference) in enumerate(repodata_shards["shards"].items()):
-                shard_path = (
-                    self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
-                )
-                shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
-                if (now := time.time()) - begin > 1:
-                    print(pkg)
-                    begin = now
-
-                yield (
-                    pkg,
-                    _apply_instructions(
-                        subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
-                    ),
-                )
-
-        return dict(per_shard_apply_instructions()), instructions
-
-    ####
-
-    def update_channeldata(self, rss=False):
-        """
-        Update channeldata based on re-reading output `repodata.json` and existing
-        `channeldata.json`. Call after index() if channeldata is needed.
-        """
-        subdirs = self.detect_subdirs()
-
-        # Skip locking; only writes the channeldata.
-
-        # Keep channeldata in memory, update with each subdir.
-        channel_data = {}
-        channeldata_file = self.channeldata_path()
-        if os.path.isfile(channeldata_file):
-            with open(channeldata_file) as f:
-                channel_data = json.load(f)
-
-        for subdir in subdirs:
-            log.info("Channeldata subdir: %s", subdir)
-            log.debug("%s read repodata", subdir)
-            with open(
-                os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
-            ) as repodata:
-                patched_repodata = json.load(repodata)
-
-            self._update_channeldata(channel_data, patched_repodata, subdir)
-
-            log.debug("%s channeldata finished", subdir)
-
-        # Create and write the rss feed.
-        if rss:
-            self._write_rss(channel_data)
-
-        # Create and write channeldata.
-        self._write_channeldata_index_html(channel_data)
-        log.debug("write channeldata")
-        self._write_channeldata(channel_data)
-
-    def detect_subdirs(self):
-        if not self._subdirs:
-            detected_subdirs = {
-                subdir.name
-                for subdir in os.scandir(self.channel_root)
-                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
-            }
-            log.debug("found subdirs %s", detected_subdirs)
-            self.subdirs = sorted(detected_subdirs | {"noarch"})
-        else:
-            self.subdirs = sorted(set(self._subdirs))
-            if "noarch" not in self.subdirs:
-                log.warning("Indexing %s does not include 'noarch'", self.subdirs)
-        return self.subdirs
-
-    def channeldata_path(self):
-        channeldata_file = os.path.join(self.output_root, "channeldata.json")
-        return channeldata_file
-
     def index_subdir(self, subdir, verbose=False, progress=False):
         """
-        Return repodata from the cache without reading old repodata.json
+        Generate repodata from the cache.
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
@@ -830,19 +725,6 @@ class ChannelIndex:
             new_repodata["repodata_version"] = 2
 
         return new_repodata
-
-    def cache_for_subdir(self, subdir):
-        cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root,
-            subdir=subdir,
-            fs=self.fs,
-            channel_url=self.channel_url,
-            upstream_stage=self.upstream_stage,
-        )
-        if cache.cache_is_brand_new:
-            # guaranteed to be only thread doing this?
-            cache.convert()
-        return cache
 
     def extract_subdir_to_cache(
         self,
@@ -912,6 +794,64 @@ class ChannelIndex:
         )
 
         return subdir
+
+    ####
+
+    def channeldata_path(self):
+        channeldata_file = os.path.join(self.output_root, "channeldata.json")
+        return channeldata_file
+
+    def update_channeldata(self, rss=False):
+        """
+        Update channeldata based on re-reading output `repodata.json` and existing
+        `channeldata.json`. Call after index() if channeldata is needed.
+        """
+        subdirs = self.detect_subdirs()
+
+        # Skip locking; only writes the channeldata.
+
+        # Keep channeldata in memory, update with each subdir.
+        channel_data = {}
+        channeldata_file = self.channeldata_path()
+        if os.path.isfile(channeldata_file):
+            with open(channeldata_file) as f:
+                channel_data = json.load(f)
+
+        for subdir in subdirs:
+            log.info("Channeldata subdir: %s", subdir)
+            log.debug("%s read repodata", subdir)
+            with open(
+                os.path.join(self.output_root, subdir, REPODATA_JSON_FN)
+            ) as repodata:
+                patched_repodata = json.load(repodata)
+
+            self._update_channeldata(channel_data, patched_repodata, subdir)
+
+            log.debug("%s channeldata finished", subdir)
+
+        # Create and write the rss feed.
+        if rss:
+            self._write_rss(channel_data)
+
+        # Create and write channeldata.
+        self._write_channeldata_index_html(channel_data)
+        log.debug("write channeldata")
+        self._write_channeldata(channel_data)
+
+    def detect_subdirs(self):
+        if not self._subdirs:
+            detected_subdirs = {
+                subdir.name
+                for subdir in os.scandir(self.channel_root)
+                if subdir.name in utils.DEFAULT_SUBDIRS and subdir.is_dir()
+            }
+            log.debug("found subdirs %s", detected_subdirs)
+            self.subdirs = sorted(detected_subdirs | {"noarch"})
+        else:
+            self.subdirs = sorted(set(self._subdirs))
+            if "noarch" not in self.subdirs:
+                log.warning("Indexing %s does not include 'noarch'", self.subdirs)
+        return self.subdirs
 
     def _write_repodata(self, subdir, repodata, json_filename):
         """
@@ -992,9 +932,9 @@ class ChannelIndex:
 
     def _write_rss(self, channeldata):
         log.info("Build RSS")
-        rss = rss.get_rss(self.channel_name, channeldata)
+        rss_text = rss.get_rss(self.channel_name, channeldata)
         rss_path = join(self.channel_root, "rss.xml")
-        self._maybe_write(rss_path, rss)
+        self._maybe_write(rss_path, rss_text)
         log.info("Built RSS")
 
     def _write_channeldata_index_html(self, channeldata):
@@ -1272,6 +1212,70 @@ class ChannelIndex:
             raise RuntimeError("Incompatible patch instructions version")
 
         return _apply_instructions(subdir, repodata, instructions), instructions
+
+    def _patch_repodata_shards(
+        self, subdir, repodata_shards, patch_generator: str | None = None
+    ):
+        """
+        Apply patches to sharded repodata.
+
+        Return {"name":{shard data}}, not full repodata format.
+        """
+        # XXX see whether patch instructions are broken when applied per-shard
+
+        instructions = {}
+
+        if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
+            instructions = self._load_patch_instructions_tarball(
+                subdir, patch_generator
+            )
+        else:
+
+            def per_shard_instructions():
+                # more difficult if some shards are duplicated...
+                for pkg, reference in repodata_shards["shards"].items():
+                    # XXX keep it all in RAM? only patch changed shards or, if patches change, all shards?
+                    shard_path = (
+                        self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
+                    )
+                    shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+                    yield (
+                        pkg,
+                        self._create_patch_instructions(subdir, shard, patch_generator),
+                    )
+
+            instructions = dict(per_shard_instructions())
+
+        if instructions:
+            self._write_patch_instructions(subdir, instructions)
+        else:
+            instructions = self._load_instructions(subdir)
+
+        if instructions.get("patch_instructions_version", 0) > 1:
+            raise RuntimeError("Incompatible patch instructions version")
+
+        def per_shard_apply_instructions():
+            # XXX refactor
+            # otherwise _apply_instructions would repeat this work
+            new_pkg_fixes = {
+                k.replace(".tar.bz2", ".conda"): v
+                for k, v in instructions.get("packages", {}).items()
+            }
+
+            for pkg, reference in repodata_shards["shards"].items():
+                shard_path = (
+                    self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
+                )
+                shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+
+                yield (
+                    pkg,
+                    _apply_instructions(
+                        subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
+                    ),
+                )
+
+        return dict(per_shard_apply_instructions()), instructions
 
     def _maybe_write(self, path, content: str | bytes, write_newline_end=False):
         # Create the temp file next "path" so that we can use an atomic move, see
