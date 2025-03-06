@@ -501,7 +501,7 @@ class ChannelIndex:
         progress: bool,
         patch_generator,
         current_index_versions,
-    ):
+    ):  # pragma: no cover
         return self.index_patch_subdir(
             subdir, verbose, progress, patch_generator, current_index_versions
         )
@@ -579,19 +579,6 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
-
-    # old name
-    def index_prepared_subdir_shards(
-        self,
-        subdir: str,
-        verbose: bool,
-        progress: bool,
-        patch_generator,
-        current_index_versions=None,  # unused
-    ):
-        return self.index_patch_subdir_shards(
-            subdir, verbose, progress, patch_generator, current_index_versions
-        )
 
     def index_patch_subdir_shards(
         self,
