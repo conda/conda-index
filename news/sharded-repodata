@@ -17,4 +17,5 @@
 
 ### Other
 
-* <news item>
+* Separate current_repodata generation into own file, raising
+  possibility of "doesn't depend on conda" mode.
