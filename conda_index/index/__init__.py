@@ -1222,9 +1222,7 @@ class ChannelIndex:
         else:
 
             def per_shard_instructions():
-                # more difficult if some shards are duplicated...
                 for pkg, reference in repodata_shards["shards"].items():
-                    # XXX keep it all in RAM? only patch changed shards or, if patches change, all shards?
                     shard_path = (
                         self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                     )

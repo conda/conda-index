@@ -213,7 +213,6 @@ class CondaIndexCache:
             size = stat_dict["size"]
             mtime = stat_dict["mtime"]
         else:
-            # XXX
             abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
             size = stat_result.st_size
             mtime = stat_result.st_mtime
