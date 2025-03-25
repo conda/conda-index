@@ -1249,13 +1249,12 @@ class ChannelIndex:
                     self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                 )
                 shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
-
-                yield (
-                    pkg,
-                    _apply_instructions(
-                        subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
-                    ),
+                patched_shard = _apply_instructions(
+                    subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
                 )
+                if "removed" in patched_shard and not patched_shard["removed"]:
+                    del patched_shard["removed"]
+                yield (pkg, patched_shard)
 
         return dict(per_shard_apply_instructions()), instructions
 
