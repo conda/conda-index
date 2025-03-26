@@ -18,6 +18,7 @@ dependencies = [
     "conda-package-streaming >=0.7.0",
     "filelock",
     "jinja2",
+    "msgpack",
     "ruamel.yaml",
     "zstandard",
 ]
