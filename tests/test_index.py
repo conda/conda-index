@@ -1011,7 +1011,7 @@ def test_current_index_reduces_space(index_data):
         repodata = json.load(f)
     assert len(repodata["packages"]) == 7
     assert len(repodata["packages.conda"]) == 3
-    trimmed_repodata = conda_index.index._build_current_repodata(
+    trimmed_repodata = conda_index.index.current_repodata.build_current_repodata(
         "linux-64", repodata, None
     )
 
@@ -1033,7 +1033,7 @@ def test_current_index_reduces_space(index_data):
     }
 
     # we can keep more than one version series using a collection of keys
-    trimmed_repodata = conda_index.index._build_current_repodata(
+    trimmed_repodata = conda_index.index.current_repodata.build_current_repodata(
         "linux-64", repodata, {"one-gets-filtered": ["1.2", "1.3"]}
     )
 
@@ -1278,6 +1278,9 @@ def test_track_features(index_data):
     # exist.
     channel_index.index_prepared_subdir("noarch", False, False, None, None)
 
+    # coverage for "doesn't look like a conda package"
+    dict(channel_index.cache_for_subdir("noarch").indexed_shards())
+
     # complain about 'unexpected-filename'
     channel_index.build_run_exports_data("noarch")
 
@@ -1396,6 +1399,7 @@ def test_base_url(index_data):
         compact_json=True,
         threads=1,
         base_url="https://example.org/somechannel/",
+        write_shards=True,
     )
 
     channel_index.index(None)
@@ -1437,3 +1441,28 @@ def test_write_current_repodata(index_data):
     channel_index.index(None)
 
     assert not list(pkg_dir.glob(pattern))
+
+
+def test_write_rss(index_data):
+    """
+    Test writing RSS through the update_channeldata(rss=True) code path.
+    """
+    pkg_dir = Path(index_data, "packages")
+
+    channel_index = conda_index.index.ChannelIndex(
+        str(pkg_dir),
+        None,
+        write_bz2=True,
+        write_zst=True,
+        compact_json=True,
+        threads=1,
+    )
+
+    rss_path = index_data / "packages" / "rss.xml"
+
+    rss_path.unlink(missing_ok=True)
+
+    channel_index.index(None)
+    channel_index.update_channeldata(rss=True)
+
+    assert rss_path.exists()

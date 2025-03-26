@@ -145,5 +145,6 @@ def test_patch_instructions_coverage(tmp_path):
     with tarfile.open(patch_invalid, "w:bz2") as tar:
         tar.add(patch, arcname="noarch/patch_instructions.json")
 
-    with pytest.raises(RuntimeError):
-        index._patch_repodata("noarch", {}, str(patch_invalid))
+    for patch_fn in index._patch_repodata, index._patch_repodata_shards:
+        with pytest.raises(RuntimeError):
+            patch_fn("noarch", {}, str(patch_invalid))

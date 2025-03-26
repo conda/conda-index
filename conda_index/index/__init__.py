@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import bz2
-import copy
 import functools
+import hashlib
 import json
 import logging
 import multiprocessing
@@ -18,13 +18,9 @@ from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
+import msgpack
 import zstandard
-from conda.base.context import context
-
-#  BAD BAD BAD - conda internals
-from conda.core.subdir_data import SubdirData
-from conda.exports import MatchSpec, Resolve, VersionOrder, human_bytes
-from conda.models.channel import Channel
+from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
@@ -35,6 +31,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
+from .current_repodata import build_current_repodata
 from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
@@ -175,6 +172,8 @@ CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
+REPODATA_SHARDS_FN = "repodata_shards.msgpack.zst"
+REPODATA_SHARDS_FROM_PKGS_FN = "repodata_shards_from_packages.msgpack.zst"
 RUN_EXPORTS_JSON_FN = "run_exports.json"
 CHANNELDATA_FIELDS = (
     "description",
@@ -209,27 +208,32 @@ CHANNELDATA_FIELDS = (
 )
 
 
-def _apply_instructions(subdir, repodata, instructions):
+def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
     repodata.setdefault("removed", [])
+    # apply to .tar.bz2 packages
     utils.merge_or_update_dict(
         repodata.get("packages", {}),
         instructions.get("packages", {}),
         merge=False,
         add_missing_keys=False,
     )
-    # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
-    #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
-    new_pkg_fixes = {
-        k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
-        for k, v in instructions.get("packages", {}).items()
-    }
 
+    if new_pkg_fixes is None:
+        # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
+        #    that a similarly-named .tar.bz2 file is the same content as .conda, and shares fixes
+        new_pkg_fixes = {
+            k.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2): v
+            for k, v in instructions.get("packages", {}).items()
+        }
+
+    # apply .tar.bz2 fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         new_pkg_fixes,
         merge=False,
         add_missing_keys=False,
     )
+    # apply .conda-only fixes to packages.conda
     utils.merge_or_update_dict(
         repodata.get("packages.conda", {}),
         instructions.get("packages.conda", {}),
@@ -276,7 +280,7 @@ def _get_jinja2_environment():
     environment = Environment(
         loader=PackageLoader("conda_index", "templates"),
     )
-    environment.filters["human_bytes"] = human_bytes
+    environment.filters["human_bytes"] = utils.human_bytes
     environment.filters["strftime"] = _filter_strftime
     environment.filters["add_href"] = _filter_add_href
     environment.trim_blocks = True
@@ -309,152 +313,6 @@ def _make_channeldata_index_html(channel_name, channeldata):
     return rendered_html
 
 
-def _make_rss(channel_name, channeldata):
-    return rss.get_rss(channel_name, channeldata)
-
-
-def _get_resolve_object(subdir, precs=None, repodata=None):
-    packages = {}
-    conda_packages = {}
-    if not repodata:
-        repodata = {
-            "info": {
-                "subdir": subdir,
-                "arch": context.arch_name,
-                "platform": context.platform,
-            },
-            "packages": packages,
-            "packages.conda": conda_packages,
-        }
-
-    channel = Channel(f"https://conda.anaconda.org/dummy-channel/{subdir}")
-    sd = SubdirData(channel)
-
-    # repodata = copy.deepcopy(repodata) # slower than json.dumps/load loop
-    repodata_copy = json.loads(json.dumps(repodata))
-
-    # adds url, Channel objects to each repodata package
-    sd._process_raw_repodata(repodata_copy)
-
-    sd._loaded = True
-    SubdirData._cache_[channel.url(with_credentials=True)] = sd
-
-    index = {prec: prec for prec in precs or sd._package_records}
-    r = Resolve(index, channels=(channel,))
-    return r
-
-
-def _add_missing_deps(new_r, original_r):
-    """For each package in new_r, if any deps are not satisfiable, backfill them from original_r."""
-
-    expanded_groups = copy.deepcopy(new_r.groups)
-    seen_specs = set()
-    for g_name, g_recs in new_r.groups.items():
-        for g_rec in g_recs:
-            for dep_spec in g_rec.depends:
-                if dep_spec in seen_specs:
-                    continue
-                ms = MatchSpec(dep_spec)
-                if not new_r.find_matches(ms):
-                    matches = original_r.find_matches(ms)
-                    if matches:
-                        version = matches[0].version
-                        expanded_groups[ms.name] = set(
-                            expanded_groups.get(ms.name, [])
-                        ) | set(
-                            original_r.find_matches(MatchSpec(f"{ms.name}={version}"))
-                        )
-                seen_specs.add(dep_spec)
-    return [pkg for group in expanded_groups.values() for pkg in group]
-
-
-def _add_prev_ver_for_features(new_r, orig_r):
-    expanded_groups = copy.deepcopy(new_r.groups)
-    for g_name in new_r.groups:
-        if not any(m.track_features or m.features for m in new_r.groups[g_name]):
-            # no features so skip
-            continue
-
-        # versions are sorted here so this is the latest
-        latest_version = VersionOrder(str(new_r.groups[g_name][0].version))
-        if g_name in orig_r.groups:
-            # now we iterate through the list to find the next to latest
-            # without a feature
-            keep_m = None
-            for i in range(len(orig_r.groups[g_name])):
-                _m = orig_r.groups[g_name][i]
-                if VersionOrder(str(_m.version)) <= latest_version and not (
-                    _m.track_features or _m.features
-                ):
-                    keep_m = _m
-                    break
-            if keep_m is not None:
-                expanded_groups[g_name] = {keep_m} | set(
-                    expanded_groups.get(g_name, [])
-                )
-
-    return [pkg for group in expanded_groups.values() for pkg in group]
-
-
-def _shard_newest_packages(subdir, r, pins=None):
-    """Captures only the newest versions of software in the resolve object.
-
-    For things where more than one version is supported simultaneously (like Python),
-    pass pins as a dictionary, with the key being the package name, and the value being
-    a list of supported versions.  For example:
-
-    {'python': ["2.7", "3.6"]}
-    """
-    groups = {}
-    pins = pins or {}
-    for g_name, g_recs in r.groups.items():
-        # always do the latest implicitly
-        version = r.groups[g_name][0].version
-        matches = set(r.find_matches(MatchSpec(f"{g_name}={version}")))
-        if g_name in pins:
-            for pin_value in pins[g_name]:
-                version = r.find_matches(MatchSpec(f"{g_name}={pin_value}"))[0].version
-                matches.update(r.find_matches(MatchSpec(f"{g_name}={version}")))
-        groups[g_name] = matches
-
-    # add the deps of the stuff in the index
-    new_r = _get_resolve_object(
-        subdir, precs=[pkg for group in groups.values() for pkg in group]
-    )
-    new_r = _get_resolve_object(subdir, precs=_add_missing_deps(new_r, r))
-
-    # now for any pkg with features, add at least one previous version
-    # also return
-    return set(_add_prev_ver_for_features(new_r, r))
-
-
-def _build_current_repodata(subdir, repodata, pins):
-    r = _get_resolve_object(subdir, repodata=repodata)
-    keep_pkgs = _shard_newest_packages(subdir, r, pins)
-    new_repodata = {
-        k: repodata[k] for k in set(repodata.keys()) - {"packages", "packages.conda"}
-    }
-    packages = {}
-    conda_packages = {}
-    for keep_pkg in keep_pkgs:
-        if keep_pkg.fn.endswith(CONDA_PACKAGE_EXTENSION_V2):
-            conda_packages[keep_pkg.fn] = repodata["packages.conda"][keep_pkg.fn]
-            # in order to prevent package churn we consider the md5 for the .tar.bz2 that matches the .conda file
-            #    This holds when .conda files contain the same files as .tar.bz2, which is an assumption we'll make
-            #    until it becomes more prevalent that people provide only .conda files and just skip .tar.bz2
-            counterpart = keep_pkg.fn.replace(
-                CONDA_PACKAGE_EXTENSION_V2, CONDA_PACKAGE_EXTENSION_V1
-            )
-            conda_packages[keep_pkg.fn]["legacy_bz2_md5"] = (
-                repodata["packages"].get(counterpart, {}).get("md5")
-            )
-        elif keep_pkg.fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
-            packages[keep_pkg.fn] = repodata["packages"][keep_pkg.fn]
-    new_repodata["packages"] = packages
-    new_repodata["packages.conda"] = conda_packages
-    return new_repodata
-
-
 def thread_executor_factory(debug, threads):
     return (
         DummyExecutor()
@@ -481,6 +339,9 @@ class ChannelIndex:
     :param channel_url: fsspec URL where package files live. If provided, channel_root will only be used for cache and index output.
     :param fs: ``MinimalFS`` instance to be used with channel_url. Wrap fsspec AbstractFileSystem with ``conda_index.index.fs.FsspecFS(fs)``.
     :param base_url: Add ``base_url/<subdir>`` to repodata.json to be able to host packages separate from repodata.json
+    :param save_fs_state: Pass False to use cached filesystem state instead of ``os.listdir(subdir)``
+    :param write_monolithic: Pass True to write large 'repodata.json' with all packages.
+    :param write_shards: Pass True to write sharded repodata.msgpack and per-package fragments.
     """
 
     fs: MinimalFS | None = None
@@ -500,11 +361,15 @@ class ChannelIndex:
         write_zst=False,
         write_run_exports=False,
         compact_json=True,
+        write_monolithic=True,
+        write_shards=False,
         *,
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
         base_url: str | None = None,
+        save_fs_state=True,
         write_current_repodata=True,
+        upstream_stage: str = "fs",
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -529,9 +394,26 @@ class ChannelIndex:
         self.write_bz2 = write_bz2
         self.write_zst = write_zst
         self.write_run_exports = write_run_exports
+        self.write_monolithic = write_monolithic
+        self.write_shards = write_shards
         self.compact_json = compact_json
         self.base_url = base_url
+        self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
+        self.upstream_stage = upstream_stage
+
+    def cache_for_subdir(self, subdir):
+        cache: sqlitecache.CondaIndexCache = self.cache_class(
+            channel_root=self.channel_root,
+            subdir=subdir,
+            fs=self.fs,
+            channel_url=self.channel_url,
+            upstream_stage=self.upstream_stage,
+        )
+        if cache.cache_is_brand_new:
+            # guaranteed to be only thread doing this?
+            cache.convert()
+        return cache
 
     def index(
         self,
@@ -557,7 +439,7 @@ class ChannelIndex:
             # begin non-stop "extract packages into cache";
             # extract_subdir_to_cache manages subprocesses. Keeps cores busy
             # during write/patch/update channeldata steps.
-            def extract_subdirs_to_cache():
+            def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
                 executor = ThreadPoolExecutor(max_workers=1)
 
                 def extract_args():
@@ -571,6 +453,10 @@ class ChannelIndex:
                     # runs in thread
                     subdir, verbose, progress, subdir_path = args
                     cache = self.cache_for_subdir(subdir)
+                    # exactly these packages (unless they are un-indexable) will
+                    # be in the output repodata
+                    if self.save_fs_state:
+                        cache.save_fs_state(subdir_path)
                     return self.extract_subdir_to_cache(
                         subdir, verbose, progress, subdir_path, cache
                     )
@@ -583,25 +469,44 @@ class ChannelIndex:
             # Collect repodata from packages, save to
             # REPODATA_FROM_PKGS_JSON_FN file
             with self.thread_executor_factory() as index_process:
-                futures = [
-                    index_process.submit(
-                        functools.partial(
-                            self.index_prepared_subdir,
-                            subdir=subdir,
-                            verbose=verbose,
-                            progress=progress,
-                            patch_generator=patch_generator,
-                            current_index_versions=current_index_versions,
-                        )
-                    )
-                    for subdir in extract_subdirs_to_cache()
-                ]
+                futures = []
+                for subdir in extract_subdirs_to_cache():
+                    for indexer, condition in (
+                        (self.index_patch_subdir, self.write_monolithic),
+                        (self.index_patch_subdir_shards, self.write_shards),
+                    ):
+                        if condition:
+                            futures.append(
+                                index_process.submit(
+                                    functools.partial(
+                                        indexer,
+                                        subdir=subdir,
+                                        verbose=verbose,
+                                        progress=progress,
+                                        patch_generator=patch_generator,
+                                        current_index_versions=current_index_versions,
+                                    )
+                                )
+                            )
                 # limited API to support DummyExecutor
                 for future in futures:
                     result = future.result()
                     log.info(f"Completed {result}")
 
+    # old name
     def index_prepared_subdir(
+        self,
+        subdir: str,
+        verbose: bool,
+        progress: bool,
+        patch_generator,
+        current_index_versions,
+    ):  # pragma: no cover
+        return self.index_patch_subdir(
+            subdir, verbose, progress, patch_generator, current_index_versions
+        )
+
+    def index_patch_subdir(
         self,
         subdir: str,
         verbose: bool,
@@ -610,8 +515,7 @@ class ChannelIndex:
         current_index_versions,
     ):
         """
-        Create repodata_from_packages.json by calling index_subdir, then apply
-        any patches to create repodata.json.
+        Create repodata_from_packages.json by calling index_subdir, then patch.
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
@@ -643,7 +547,7 @@ class ChannelIndex:
         if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
 
-            current_repodata = _build_current_repodata(
+            current_repodata = build_current_repodata(
                 subdir, patched_repodata, pins=current_index_versions
             )
 
@@ -675,6 +579,224 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
+
+    def index_patch_subdir_shards(
+        self,
+        subdir: str,
+        verbose: bool,
+        progress: bool,
+        patch_generator,
+        current_index_versions=None,  # unused
+    ):
+        """
+        Create repodata_from_packages, then patche.
+        """
+        log.info("Subdir: %s Gathering repodata", subdir)
+
+        compressor = zstandard.ZstdCompressor()
+
+        shards_from_packages = self.index_subdir_shards(
+            subdir, verbose=verbose, progress=progress
+        )
+
+        log.info("%s Writing pre-patch shards", subdir)
+
+        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FROM_PKGS_FN
+        self._maybe_write(
+            patched_path,
+            compressor.compress(sqlitecache.packb_typed(shards_from_packages)),
+        )  # type: ignore
+
+        # Apply patch instructions.
+        log.info("%s Applying patch instructions", subdir)
+        patched_packages, _ = self._patch_repodata_shards(
+            subdir, shards_from_packages, patch_generator
+        )
+
+        # Save patched and augmented repodata. If the contents
+        # of repodata have changed, write a new repodata.json.
+        # Create associated index.html.
+
+        log.info("%s Writing patched repodata", subdir)
+
+        repodata_shards = shards_from_packages.copy()
+        repodata_shards["shards"] = {}
+
+        for pkg, record in patched_packages.items():
+            shard_data = compressor.compress(sqlitecache.packb_typed(record))
+            shard_hash = hashlib.sha256(shard_data).digest()
+            repodata_shards["shards"][pkg] = shard_hash
+            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
+            if not output_path.exists():
+                output_path.write_bytes(shard_data)
+
+        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FN
+        self._maybe_write(
+            patched_path,
+            compressor.compress(sqlitecache.packb_typed(repodata_shards)),
+        )  # type: ignore
+
+        log.debug("%s finish", subdir)
+
+        return subdir
+
+    def index_subdir_shards(self, subdir, verbose=False, progress=False):
+        """
+        Generate sharded repodata from the cache.
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
+        """
+
+        cache = self.cache_for_subdir(subdir)  # type: ignore
+
+        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
+
+        shards = {}
+
+        shards_index = {
+            "info": {
+                "subdir": subdir,
+            },
+            "repodata_version": REPODATA_VERSION,
+            "removed": [],  # can be added by patch/hotfix process
+            "shards": shards,
+        }
+
+        if self.base_url:
+            # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
+            shards_index["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
+            shards_index["repodata_version"] = 2
+
+        # Higher compression levels are a waste of time for tiny gains on this
+        # collection of small objects.
+        compressor = zstandard.ZstdCompressor()
+
+        (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
+
+        for name, shard in cache.indexed_shards():
+            shard_data = compressor.compress(sqlitecache.packb_typed(shard))
+            shard_hash = hashlib.sha256(shard_data).digest()
+            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
+            if not output_path.exists():
+                output_path.write_bytes(shard_data)
+            shards[name] = shard_hash
+
+        return shards_index
+
+    def index_subdir(self, subdir, verbose=False, progress=False) -> dict:
+        """
+        Generate repodata from the cache.
+
+        Must call `extract_subdir_to_cache()` first or will be outdated.
+        """
+
+        cache = self.cache_for_subdir(subdir)
+
+        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
+
+        # XXX add parameter to control record filter. We filter this way to
+        # avoid iterating over the packages another time, this may or may not be
+        # a useful optimization.
+        def filter(record):
+            return {
+                k: v
+                for k, v in record.items()
+                if not ((k == "subdir" and v == subdir) or k in ("platform", "arch"))
+            }
+
+        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages(filter=filter)
+
+        new_repodata = {
+            "packages": new_repodata_packages,
+            "packages.conda": new_repodata_conda_packages,
+            "info": {
+                "subdir": subdir,
+            },
+            "repodata_version": REPODATA_VERSION,
+            "removed": [],  # can be added by patch/hotfix process
+        }
+
+        if self.base_url:
+            # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
+            new_repodata["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
+            new_repodata["repodata_version"] = 2
+
+        return new_repodata
+
+    def extract_subdir_to_cache(
+        self,
+        subdir: str,
+        verbose,
+        progress,
+        subdir_path,
+        cache: sqlitecache.CondaIndexCache,
+    ) -> str:
+        """
+        Extract all changed packages into the subdir cache.
+
+        Return name of subdir.
+        """
+        log.debug("%s find packages to extract", subdir)
+
+        # list so tqdm can show progress
+        extract = [
+            FileInfo(
+                fn=cache.plain_path(row["path"]),
+                st_mtime=row["mtime"],
+                st_size=row["size"],
+            )
+            for row in cache.changed_packages()
+        ]
+
+        log.debug("%s extract %d packages", subdir, len(extract))
+
+        # now updates own stat cache
+        extract_func = functools.partial(
+            cache.extract_to_cache_info_object, self.channel_root, subdir
+        )
+
+        start_time = time.time()
+        size_processed = 0
+
+        with self.thread_executor_factory() as thread_executor:
+            for fn, mtime, size, index_json in thread_executor.map(
+                extract_func, extract
+            ):
+                # XXX allow size to be None or get from "bytes sent through
+                # checksum algorithm" e.g. for fsspec where size may not be
+                # known in advance
+                size_processed += size  # even if processed incorrectly
+                # fn can be None if the file was corrupt or no longer there
+                if fn and mtime:
+                    if index_json:
+                        pass  # correctly indexed a package! index_subdir will fetch.
+                    else:
+                        log.error(
+                            "Package at %s did not contain valid index.json data.  Please"
+                            " check the file and remove/redownload if necessary to obtain "
+                            "a valid package.",
+                            os.path.join(subdir_path, fn),
+                        )
+            end_time = time.time()
+            try:
+                bytes_sec = size_processed / (end_time - start_time)
+            except ZeroDivisionError:  # pragma: no cover
+                bytes_sec = 0
+        log.info(
+            "%s cached %s from %s packages at %s/second",
+            subdir,
+            utils.human_bytes(size_processed),
+            len(extract),
+            utils.human_bytes(bytes_sec),
+        )
+
+        return subdir
+
+    ####
+
+    def channeldata_path(self):
+        channeldata_file = os.path.join(self.output_root, "channeldata.json")
+        return channeldata_file
 
     def update_channeldata(self, rss=False):
         """
@@ -727,130 +849,6 @@ class ChannelIndex:
             if "noarch" not in self.subdirs:
                 log.warning("Indexing %s does not include 'noarch'", self.subdirs)
         return self.subdirs
-
-    def channeldata_path(self):
-        channeldata_file = os.path.join(self.output_root, "channeldata.json")
-        return channeldata_file
-
-    def index_subdir(self, subdir, verbose=False, progress=False) -> dict:
-        """
-        Return repodata from the cache without reading old repodata.json
-
-        Must call `extract_subdir_to_cache()` first or will be outdated.
-        """
-
-        cache = self.cache_for_subdir(subdir)
-
-        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
-
-        # XXX add parameter to control record filter. We filter this way to
-        # avoid iterating over the packages another time, this may or may not be
-        # a useful optimization.
-        def filter(record):
-            return {
-                k: v
-                for k, v in record.items()
-                if not ((k == "subdir" and v == subdir) or k in ("platform", "arch"))
-            }
-
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages(filter=filter)
-
-        new_repodata = {
-            "packages": new_repodata_packages,
-            "packages.conda": new_repodata_conda_packages,
-            "info": {
-                "subdir": subdir,
-            },
-            "repodata_version": REPODATA_VERSION,
-            "removed": [],  # can be added by patch/hotfix process
-        }
-
-        if self.base_url:
-            # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
-            new_repodata["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
-            new_repodata["repodata_version"] = 2
-
-        return new_repodata
-
-    def cache_for_subdir(self, subdir):
-        cache: sqlitecache.CondaIndexCache = self.cache_class(
-            channel_root=self.channel_root,
-            subdir=subdir,
-            fs=self.fs,
-            channel_url=self.channel_url,
-        )
-        if cache.cache_is_brand_new:
-            # guaranteed to be only thread doing this?
-            cache.convert()
-        return cache
-
-    def extract_subdir_to_cache(
-        self, subdir, verbose, progress, subdir_path, cache: sqlitecache.CondaIndexCache
-    ):
-        """
-        Extract all changed packages into the subdir cache.
-
-        Return name of subdir.
-        """
-        # exactly these packages (unless they are un-indexable) will be in the
-        # output repodata
-        cache.save_fs_state(subdir_path)
-
-        log.debug("%s find packages to extract", subdir)
-
-        # list so tqdm can show progress
-        extract = [
-            FileInfo(
-                fn=cache.plain_path(row["path"]),
-                st_mtime=row["mtime"],
-                st_size=row["size"],
-            )
-            for row in cache.changed_packages()
-        ]
-
-        log.debug("%s extract %d packages", subdir, len(extract))
-
-        # now updates own stat cache
-        extract_func = functools.partial(
-            cache.extract_to_cache_info_object, self.channel_root, subdir
-        )
-
-        start_time = time.time()
-        size_processed = 0
-
-        with self.thread_executor_factory() as thread_executor:
-            for fn, mtime, size, index_json in thread_executor.map(
-                extract_func, extract
-            ):
-                # XXX allow size to be None or get from "bytes sent through
-                # checksum algorithm" e.g. for fsspec where size may not be
-                # known in advance
-                size_processed += size  # even if processed incorrectly
-                # fn can be None if the file was corrupt or no longer there
-                if fn and mtime:
-                    if index_json:
-                        pass  # correctly indexed a package! index_subdir will fetch.
-                    else:
-                        log.error(
-                            "Package at %s did not contain valid index.json data.  Please"
-                            " check the file and remove/redownload if necessary to obtain "
-                            "a valid package.",
-                            os.path.join(subdir_path, fn),
-                        )
-            end_time = time.time()
-            try:
-                bytes_sec = size_processed / (end_time - start_time)
-            except ZeroDivisionError:  # pragma: no cover
-                bytes_sec = 0
-        log.info(
-            "%s cached %s from %s packages at %s/second",
-            subdir,
-            human_bytes(size_processed),
-            len(extract),
-            human_bytes(bytes_sec),
-        )
-
-        return subdir
 
     def _write_repodata(self, subdir, repodata, json_filename):
         """
@@ -931,9 +929,9 @@ class ChannelIndex:
 
     def _write_rss(self, channeldata):
         log.info("Build RSS")
-        rss = _make_rss(self.channel_name, channeldata)
+        rss_text = rss.get_rss(self.channel_name, channeldata)
         rss_path = join(self.channel_root, "rss.xml")
-        self._maybe_write(rss_path, rss)
+        self._maybe_write(rss_path, rss_text)
         log.info("Built RSS")
 
     def _write_channeldata_index_html(self, channeldata):
@@ -1194,6 +1192,15 @@ class ChannelIndex:
                 return instructions
         return {}
 
+    def _write_or_load_instructions(self, subdir, instructions):
+        if instructions:
+            self._write_patch_instructions(subdir, instructions)
+        else:
+            instructions = self._load_instructions(subdir)
+        if instructions.get("patch_instructions_version", 0) > 1:
+            raise RuntimeError("Incompatible patch instructions version")
+        return instructions
+
     def _patch_repodata(self, subdir, repodata, patch_generator: str | None = None):
         if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
             instructions = self._load_patch_instructions_tarball(
@@ -1203,14 +1210,63 @@ class ChannelIndex:
             instructions = self._create_patch_instructions(
                 subdir, repodata, patch_generator
             )
-        if instructions:
-            self._write_patch_instructions(subdir, instructions)
-        else:
-            instructions = self._load_instructions(subdir)
-        if instructions.get("patch_instructions_version", 0) > 1:
-            raise RuntimeError("Incompatible patch instructions version")
-
+        instructions = self._write_or_load_instructions(subdir, instructions)
         return _apply_instructions(subdir, repodata, instructions), instructions
+
+    def _patch_repodata_shards(
+        self, subdir, repodata_shards, patch_generator: str | None = None
+    ):
+        """
+        Apply patches to sharded repodata.
+
+        Return {"name":{shard data}}, not full repodata format.
+        """
+        # XXX see whether patch instructions are broken when applied per-shard
+
+        instructions = {}
+
+        if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
+            instructions = self._load_patch_instructions_tarball(
+                subdir, patch_generator
+            )
+        else:
+
+            def per_shard_instructions():
+                for pkg, reference in repodata_shards["shards"].items():
+                    shard_path = (
+                        self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
+                    )
+                    shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+                    yield (
+                        pkg,
+                        self._create_patch_instructions(subdir, shard, patch_generator),
+                    )
+
+            instructions = dict(per_shard_instructions())
+
+        instructions = self._write_or_load_instructions(subdir, instructions)
+
+        def per_shard_apply_instructions():
+            # XXX refactor
+            # otherwise _apply_instructions would repeat this work
+            new_pkg_fixes = {
+                k.replace(".tar.bz2", ".conda"): v
+                for k, v in instructions.get("packages", {}).items()
+            }
+
+            for pkg, reference in repodata_shards["shards"].items():
+                shard_path = (
+                    self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
+                )
+                shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+                patched_shard = _apply_instructions(
+                    subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
+                )
+                if "removed" in patched_shard and not patched_shard["removed"]:
+                    del patched_shard["removed"]
+                yield (pkg, patched_shard)
+
+        return dict(per_shard_apply_instructions()), instructions
 
     def _maybe_write(self, path, content: str | bytes, write_newline_end=False):
         # Create the temp file next "path" so that we can use an atomic move, see
@@ -1251,6 +1307,8 @@ class ChannelIndex:
             encoding = None
             newline = b"\n"
             newline_option = None
+
+        # XXX could we avoid writing output_temp_path in some cases?
 
         # always use \n line separator
         with open(
