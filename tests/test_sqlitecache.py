@@ -12,6 +12,7 @@ import pytest
 
 from conda_index.index.common import connect
 from conda_index.index.convert_cache import (
+    add_computed_name,
     convert_cache,
     create,
     extract_cache_filesystem,
@@ -197,3 +198,15 @@ def test_cache_post_install_details():
         ]
     }
     _cache_post_install_details(json.dumps(details))
+
+
+def test_add_computed_name():
+    """
+    Check migration adding name, sha256 computed columns to database.
+    """
+    db = sqlite3.connect("")  # in-memory database
+    db.execute("CREATE TABLE index_json (index_json)")
+    columns_before = set(row[1] for row in db.execute("PRAGMA table_xinfo(index_json)"))
+    add_computed_name(db)
+    columns_after = set(row[1] for row in db.execute("PRAGMA table_xinfo(index_json)"))
+    assert columns_after - columns_before == set(("name", "sha256"))

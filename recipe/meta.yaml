@@ -30,6 +30,7 @@ requirements:
     - conda-package-streaming
     - filelock
     - jinja2
+    - msgpack-python >=1.0.2
     - ruamel.yaml
 
 test:
