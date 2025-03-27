@@ -140,5 +140,6 @@ dmypy.json
 *.db
 *.db-*
 
+conda_index_db
 rever/
 conda_index_db/
