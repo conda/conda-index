@@ -7,7 +7,8 @@ from pathlib import Path
 
 from . import sqlitecache
 from .fs import MinimalFS, FileInfo
-from .sqlitecache import PATH_TO_TABLE, COMPUTED, TABLE_NO_CACHE
+from .sqlitecache import PATH_TO_TABLE, COMPUTED, TABLE_NO_CACHE, INDEX_JSON_PATH
+from . import convert_cache
 
 log = logging.getLogger(__name__)
 
