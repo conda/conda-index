@@ -6,15 +6,8 @@ Used for psqlcache mode instead of low-dependencies sqlite mode.
 
 from __future__ import annotations
 
-
-from sqlalchemy import (
-    JSON,
-    TEXT,
-    Column,
-    LargeBinary,
-    Table,
-)
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import JSON, TEXT, Column, Integer, LargeBinary, Table
+from sqlalchemy.orm import DeclarativeBase, mapped_column
 
 TABLE_NAMES = {
     "about",
@@ -24,8 +17,6 @@ TABLE_NAMES = {
     "recipe",
     "run_exports",
 }
-
-# stat table
 
 
 class Base(DeclarativeBase):
@@ -41,19 +32,18 @@ for table in TABLE_NAMES:
         data_column = Column(table, JSON)  # or JSONB for postgresql?
     Table(table, metadata_obj, Column("path", TEXT, primary_key=True), data_column)
 
-# TODO express stat table as Table or mapped class:
-# conn.execute(
-#     """CREATE TABLE IF NOT EXISTS stat (
-#             stage TEXT NOT NULL DEFAULT 'indexed',
-#             path TEXT NOT NULL,
-#             mtime NUMBER,
-#             size INTEGER,
-#             sha256 TEXT,
-#             md5 TEXT,
-#             last_modified TEXT,
-#             etag TEXT
-#         )"""
-# )
+
+class Stat(Base):
+    __tablename__ = "stat"
+
+    stage = mapped_column(TEXT, default="indexed", nullable=False, primary_key=True)
+    path = mapped_column(TEXT, nullable=False, primary_key=True)
+    mtime = mapped_column(Integer)
+    size = mapped_column(Integer)
+    sha256 = mapped_column(TEXT)
+    md5 = mapped_column(TEXT)
+    last_modified = mapped_column(TEXT)
+    etag = mapped_column(TEXT)
 
 
 def create(engine):

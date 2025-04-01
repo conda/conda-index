@@ -1,44 +1,48 @@
+import shutil
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 from subprocess import run
-from functools import partial
+
 import sqlalchemy
 from sqlalchemy import text
-import shutil
 
 BASE = Path(__file__).parents[1]
 
 USERNAME = "conda_index_test"
 DBNAME = "conda_index_test"
+DBDIR = "conda_index_db"
 
 
-@contextmanager
 def postgresql_fixture():
     """
     Run a local postgresql server for testing.
     """
-    run(
-        [
-            "initdb",
-            "-D",
-            "conda_index_db",
-        ],
-        cwd=BASE,
-    )
-    run(["pg_ctl", "-D", "conda_index_db", "start"], check=True, cwd=BASE)
-    run(["createuser", "-d", USERNAME], check=True, cwd=BASE)
-    run(["createdb", "--owner", USERNAME, DBNAME], check=True)
 
-    engine = sqlalchemy.create_engine(f"postgresql://{USERNAME}@localhost/{DBNAME}")
+    if not (BASE / DBDIR).exists():
+        run(
+            ["initdb", "-D", DBDIR],
+            cwd=BASE,
+        )
 
-    print(list(engine.connect().execute(text("SELECT 1"))))
+    try:
+        run(["pg_ctl", "-D", DBDIR, "start"], check=True, cwd=BASE)
+        run(["createuser", "-d", USERNAME], check=False, cwd=BASE)
+        run(["createdb", "--owner", USERNAME, DBNAME], check=False)
 
-    yield engine
+        engine = sqlalchemy.create_engine(f"postgresql://{USERNAME}@localhost/{DBNAME}")
 
-    run(["pg_ctl", "-D", "conda_index_db", "stop"], cwd=BASE, check=True)
-    shutil.rmtree(BASE / "conda_index_db")
+        print(list(engine.connect().execute(text("SELECT 1"))))
+
+        yield engine
+
+    finally:
+        run(["pg_ctl", "-D", DBDIR, "stop"], cwd=BASE, check=True)
+
+    # shutil.rmtree(BASE / DBDIR)
 
 
 if __name__ == "__main__":
-    with postgresql_fixture():
+    with contextmanager(postgresql_fixture)() as p:
         print("Used postgresql")
+        # p.url is the db url

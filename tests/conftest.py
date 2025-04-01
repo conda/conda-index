@@ -203,3 +203,10 @@ def http_package_server():
     # shutdown is checked at a polling interval, or the daemon thread will shut
     # down when the test suite exits.
     http.shutdown()
+
+
+@pytest.fixture(scope="session")
+def postgresql_database():
+    from . import postgresql_fixture
+
+    yield from postgresql_fixture.postgresql_fixture()

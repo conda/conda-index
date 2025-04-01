@@ -370,6 +370,7 @@ class ChannelIndex:
         save_fs_state=True,
         write_current_repodata=True,
         upstream_stage: str = "fs",
+        cache_kwargs=None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -402,6 +403,8 @@ class ChannelIndex:
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
 
+        self.cache_kwargs = cache_kwargs
+
     def cache_for_subdir(self, subdir):
         cache: sqlitecache.CondaIndexCache = self.cache_class(
             channel_root=self.channel_root,
@@ -409,6 +412,7 @@ class ChannelIndex:
             fs=self.fs,
             channel_url=self.channel_url,
             upstream_stage=self.upstream_stage,
+            **self.cache_kwargs or {},
         )
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
