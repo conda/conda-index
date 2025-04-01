@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import msgpack
 import split_repo
 import zstandard
-import msgpack
 
 SUBDIRS = "noarch", "linux-64"
 
