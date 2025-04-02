@@ -11,9 +11,10 @@ import logging
 import os
 import os.path
 import sqlite3
+from numbers import Number
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, TypedDict
 from zipfile import BadZipFile
 
 import msgpack
@@ -30,7 +31,6 @@ from . import common, convert_cache
 from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
-
 
 INDEX_JSON_PATH = "info/index.json"
 ICON_PATH = "info/icon.png"
@@ -84,6 +84,12 @@ class cacher:
             setattr(inst, self.wrapped.__name__, value)
             return value
         return self
+
+
+class ChangedPackage(TypedDict):
+    path: str
+    mtime: Number
+    size: Number
 
 
 class CondaIndexCache:
@@ -498,7 +504,7 @@ class CondaIndexCache:
                 listdir_stat,
             )
 
-    def changed_packages(self):
+    def changed_packages(self) -> list[ChangedPackage]:
         """
         Compare upstream to 'indexed' state.
 

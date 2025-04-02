@@ -5,19 +5,20 @@ Use sqlalchemy+postgresql instead of sqlite.
 import json
 import logging
 import os
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
 import sqlalchemy
+from psycopg2 import OperationalError
+from sqlalchemy import cte, join, or_, select
 
 from conda_index.index import sqlitecache
-from conda_index.index.fs import FileInfo, MinimalFS
+from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
-    COMPUTED,
-    INDEX_JSON_PATH,
+    ICON_PATH,
     PATH_TO_TABLE,
     TABLE_NO_CACHE,
+    ChangedPackage,
     cacher,
 )
 
@@ -58,6 +59,12 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
         self.channel_id = json.loads(self.db_filename.read_text())["channel_id"]
 
+    def __getstate__(self):
+        """
+        Remove db connection when pickled.
+        """
+        return {k: self.__dict__[k] for k in self.__dict__ if k not in ("db", "engine")}
+
     @property
     def database_prefix(self):
         """
@@ -69,10 +76,15 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
     @cacher
     def db(self):
-        engine = sqlalchemy.create_engine(self.db_url)
-        model.create(engine)
+        engine = self.engine
         conn = engine.raw_connection()  # semi-compatible with existing SQL?
         return ConnectionWrapper(conn)
+
+    @cacher
+    def engine(self):
+        engine = sqlalchemy.create_engine(self.db_url, echo=True)
+        model.create(engine)
+        return engine
 
     def convert(self, force=False):
         """
@@ -85,20 +97,108 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         """
         Write {path, mtime, size} into database.
         """
-        with self.db:
+        with self.engine.begin() as connection:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
-            self.db.execute(
-                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": self.database_path_like},
+            stat = model.Stat.__table__
+            # mypy doesn't know these types
+            connection.execute(
+                stat.delete().where(stat.c.path.like(self.database_path_like))
             )
-            self.db.executemany(
-                """
-            INSERT INTO STAT (stage, path, mtime, size)
-            VALUES ('fs', :path, :mtime, :size)
-            """,
-                listdir_stat,
+            for item in listdir_stat:
+                connection.execute(stat.insert(), {**item, "stage": "fs"})
+
+    def store(
+        self,
+        fn: str,
+        size: int,
+        mtime,
+        members: dict[str, str | bytes],
+        index_json: dict,
+    ):
+        """
+        Write cache for a single package to database.
+        """
+        database_path = self.database_path(fn)
+        with self.engine.begin() as connection:
+            for have_path in members:
+                table = PATH_TO_TABLE[have_path]
+                if table in TABLE_NO_CACHE or table == "index_json":
+                    continue  # not cached, or for index_json cached at end
+
+                table_obj = model.Base.metadata.tables[table]
+
+                parameters = {"path": database_path, "data": members.get(have_path)}
+                if have_path == ICON_PATH:
+                    query = """
+                                INSERT OR REPLACE into icon (path, icon_png)
+                                VALUES (:path, :data)
+                                """
+                elif parameters["data"] is not None:
+                    query = f"""
+                                INSERT OR REPLACE INTO {table} (path, {table})
+                                VALUES (:path, json(:data))
+                                """
+                # Could delete from all metadata tables that we didn't just see.
+                try:
+                    connection.execute(query, parameters)
+                except OperationalError:  # e.g. malformed json.
+                    log.exception("table=%s parameters=%s", table, parameters)
+                    # XXX delete from cache
+                    raise
+
+            # sqlite json() function removes whitespace and ensures valid json
+            connection.execute(
+                "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
+                {"path": database_path, "index_json": json.dumps(index_json)},
             )
+
+            self.store_index_json_stat(
+                database_path, mtime, size, index_json
+            )  # we don't need this return value; it will be queried back out to generate repodata
+
+    def changed_packages(self) -> list[ChangedPackage]:  # XXX or FileInfo dataclass
+        """
+        Compare upstream to 'indexed' state.
+
+        Return packages in upstream that are changed or missing compared to 'indexed'.
+        """
+
+        stat_table = model.Stat.__table__
+        stat_fs = cte(
+            select(stat_table).where(stat_table.c.stage == self.upstream_stage),
+            "stat_fs",
+        )
+        stat_indexed = cte(
+            select(stat_table).where(stat_table.c.stage == "indexed"),
+            "stat_indexed",
+        )
+
+        query = (
+            select(stat_fs)
+            .select_from(
+                join(
+                    stat_fs,
+                    stat_indexed,
+                    stat_fs.c.path == stat_indexed.c.path,
+                    isouter=True,
+                )
+            )
+            .where(stat_fs.c.path.like(self.database_path_like))
+            .where(
+                or_(
+                    stat_fs.c.mtime != stat_indexed.c.mtime,
+                    stat_fs.c.size != stat_indexed.c.size,
+                    stat_indexed.c.path == None,  # noqa: E711
+                )
+            )
+        )
+
+        with self.engine.begin() as connection:
+            return [
+                dict(path=row.path, size=row.size, mtime=row.mtime)
+                for row in connection.execute(query)
+            ]  # type: ignore
 
 
 class ConnectionWrapper:

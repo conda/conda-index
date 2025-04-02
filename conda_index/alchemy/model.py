@@ -6,7 +6,8 @@ Used for psqlcache mode instead of low-dependencies sqlite mode.
 
 from __future__ import annotations
 
-from sqlalchemy import JSON, TEXT, Column, Integer, LargeBinary, Table
+from sqlalchemy import TEXT, Column, Integer, LargeBinary, Table
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
 TABLE_NAMES = {
@@ -29,7 +30,7 @@ for table in TABLE_NAMES:
     if table == "icon":
         data_column = Column("icon_png", LargeBinary)
     else:
-        data_column = Column(table, JSON)  # or JSONB for postgresql?
+        data_column = Column(table, JSONB)  # or JSONB for postgresql?
     Table(table, metadata_obj, Column("path", TEXT, primary_key=True), data_column)
 
 

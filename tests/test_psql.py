@@ -2,22 +2,17 @@
 Test ability to index off diverse filesystems using fsspec.
 """
 
-import json
-
-import fsspec.core
-import pytest
+from pathlib import Path
 
 from conda_index.alchemy.psqlcache import PsqlCache
 from conda_index.index import ChannelIndex
-from conda_index.index.fs import FsspecFS
 
 
-def test_psql(tmp_path, postgresql_database):
+def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.
     """
-    channel_root = tmp_path / "channel"  # used for sqlite cache in this mode
-    channel_root.mkdir()
+    channel_root = index_data / "packages"
     output = tmp_path / "output"  # default same as channel
     output.mkdir()
 
