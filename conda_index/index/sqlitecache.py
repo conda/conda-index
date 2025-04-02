@@ -13,7 +13,7 @@ import os.path
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from zipfile import BadZipFile
 
 import msgpack
@@ -480,6 +480,9 @@ class CondaIndexCache:
                 }
 
         log.debug("%s save fs state", self.subdir)
+        self.store_fs_state(listdir_stat())
+
+    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
@@ -492,7 +495,7 @@ class CondaIndexCache:
             INSERT INTO STAT (stage, path, mtime, size)
             VALUES ('fs', :path, :mtime, :size)
             """,
-                listdir_stat(),
+                listdir_stat,
             )
 
     def changed_packages(self):
