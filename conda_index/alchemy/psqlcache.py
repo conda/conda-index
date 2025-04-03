@@ -136,15 +136,19 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                     )
                 elif parameters[table] is not None:
                     if isinstance(parameters[table], bytes):
-                        parameters[table] = parameters[table].decode("utf-8")
+                        # There will be an extra json.dumps() on the way to the
+                        # database. May not be convenient to pass json text
+                        # directly into the database's json parser for a small
+                        # gain.
+                        parameters[table] = json.loads(parameters[table])
                     query = (
                         insert(table_obj)
                         .values(**parameters)
                         .on_conflict_do_update(
                             index_elements=[table_obj.c.path],
-                            set_={table: parameters[table]},  # json.loads()?
+                            set_={table: parameters[table]},
                         )
-                    )  # will it cast to jsonb automatically?
+                    )
                 # Could delete from all metadata tables that we didn't just see.
                 try:
                     connection.execute(query)
