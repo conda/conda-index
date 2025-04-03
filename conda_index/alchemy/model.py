@@ -35,6 +35,7 @@ for table in TABLE_NAMES:
 
 
 class Stat(Base):
+    __table__: Table
     __tablename__ = "stat"
 
     stage = mapped_column(TEXT, default="indexed", nullable=False, primary_key=True)

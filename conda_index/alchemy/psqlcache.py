@@ -11,6 +11,7 @@ from typing import Any, Iterator
 import sqlalchemy
 from psycopg2 import OperationalError
 from sqlalchemy import cte, join, or_, select
+from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index import sqlitecache
 from conda_index.index.fs import MinimalFS
@@ -76,13 +77,11 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
     @cacher
     def db(self):
-        engine = self.engine
-        conn = engine.raw_connection()  # semi-compatible with existing SQL?
-        return ConnectionWrapper(conn)
+        return None
 
     @cacher
     def engine(self):
-        engine = sqlalchemy.create_engine(self.db_url, echo=True)
+        engine = sqlalchemy.create_engine(self.db_url, echo=False)
         model.create(engine)
         return engine
 
@@ -98,10 +97,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         Write {path, mtime, size} into database.
         """
         with self.engine.begin() as connection:
-            # always stage='fs', not custom upstream_stage which would be
-            # handled in a subclass
             stat = model.Stat.__table__
-            # mypy doesn't know these types
             connection.execute(
                 stat.delete().where(stat.c.path.like(self.database_path_like))
             )
@@ -128,34 +124,66 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
                 table_obj = model.Base.metadata.tables[table]
 
-                parameters = {"path": database_path, "data": members.get(have_path)}
+                parameters = {"path": database_path, table: members.get(have_path)}
                 if have_path == ICON_PATH:
-                    query = """
-                                INSERT OR REPLACE into icon (path, icon_png)
-                                VALUES (:path, :data)
-                                """
-                elif parameters["data"] is not None:
-                    query = f"""
-                                INSERT OR REPLACE INTO {table} (path, {table})
-                                VALUES (:path, json(:data))
-                                """
+                    query = (
+                        insert(table_obj)
+                        .values(**parameters)
+                        .on_conflict_do_update(
+                            index_elements=[table_obj.c.path],
+                            set_={table: parameters[table]},
+                        )
+                    )
+                elif parameters[table] is not None:
+                    if isinstance(parameters[table], bytes):
+                        parameters[table] = parameters[table].decode("utf-8")
+                    query = (
+                        insert(table_obj)
+                        .values(**parameters)
+                        .on_conflict_do_update(
+                            index_elements=[table_obj.c.path],
+                            set_={table: parameters[table]},  # json.loads()?
+                        )
+                    )  # will it cast to jsonb automatically?
                 # Could delete from all metadata tables that we didn't just see.
                 try:
-                    connection.execute(query, parameters)
+                    connection.execute(query)
                 except OperationalError:  # e.g. malformed json.
                     log.exception("table=%s parameters=%s", table, parameters)
                     # XXX delete from cache
                     raise
 
             # sqlite json() function removes whitespace and ensures valid json
+            # XXX we could handle index_json above; previously, index_json was
+            # the only one parsed, the others were passed straight into the
+            # database as a string.
+            table = "index_json"
+            index_json_table = model.Base.metadata.tables[table]
             connection.execute(
-                "INSERT OR REPLACE INTO index_json (path, index_json) VALUES (:path, json(:index_json))",
-                {"path": database_path, "index_json": json.dumps(index_json)},
+                (
+                    insert(index_json_table)
+                    .values(path=database_path, index_json=index_json)
+                    .on_conflict_do_update(
+                        index_elements=[table_obj.c.path],
+                        set_={table: index_json},
+                    )  # it will cast to jsonb automatically
+                )
             )
 
-            self.store_index_json_stat(
-                database_path, mtime, size, index_json
-            )  # we don't need this return value; it will be queried back out to generate repodata
+            stat_table = model.Base.metadata.tables["stat"]
+            values = {
+                "mtime": mtime,
+                "size": size,
+                "sha256": index_json["sha256"],
+                "md5": index_json["md5"],
+            }
+            connection.execute(
+                insert(stat_table)
+                .values({"path": database_path, "stage": "indexed", **values})
+                .on_conflict_do_update(
+                    index_elements=[stat_table.c.path, stat_table.c.stage], set_=values
+                )
+            )
 
     def changed_packages(self) -> list[ChangedPackage]:  # XXX or FileInfo dataclass
         """
