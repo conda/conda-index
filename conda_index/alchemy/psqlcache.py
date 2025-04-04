@@ -75,6 +75,10 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         # prefix searches
         return f"{self.channel_id}/{self.subdir or '_ROOT'}/"
 
+    @property
+    def database_path_like(self):
+        raise NotImplementedError("avoid unescaped input in LIKE query")
+
     @cacher
     def db(self):
         return None
@@ -99,7 +103,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
             connection.execute(
-                stat.delete().where(stat.c.path.like(self.database_path_like))
+                stat.delete().where(stat.c.path.startswith(self.database_prefix))
             )
             for item in listdir_stat:
                 connection.execute(stat.insert(), {**item, "stage": "fs"})
@@ -216,7 +220,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                     isouter=True,
                 )
             )
-            .where(stat_fs.c.path.like(self.database_path_like))
+            .where(stat_fs.c.path.startswith(self.database_prefix))
             .where(
                 or_(
                     stat_fs.c.mtime != stat_indexed.c.mtime,
@@ -231,23 +235,3 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                 dict(path=row.path, size=row.size, mtime=row.mtime)
                 for row in connection.execute(query)
             ]  # type: ignore
-
-
-class ConnectionWrapper:
-    """
-    sqlite-style connection.
-    """
-
-    def __init__(self, conn):
-        self.conn = conn
-
-    def __enter__(self):
-        self.cursor = self.conn.cursor()
-        return self.cursor
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type:
-            self.conn.rollback()
-
-    def execute(self, *args, **kwargs):
-        return self.cursor.execute(*args, **kwargs)
