@@ -5,6 +5,7 @@ Use sqlalchemy+postgresql instead of sqlite.
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -26,6 +27,9 @@ from conda_index.index.sqlitecache import (
 from . import model
 
 log = logging.getLogger(__name__)
+
+# prevent SQL LIKE abuse
+CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 
 
 class PsqlCache(sqlitecache.CondaIndexCache):
@@ -59,6 +63,10 @@ class PsqlCache(sqlitecache.CondaIndexCache):
             self.cache_is_brand_new = False
 
         self.channel_id = json.loads(self.db_filename.read_text())["channel_id"]
+        if not re.match(CHANNEL_ID_PATTERN, self.channel_id):
+            raise ValueError(
+                f'{self.db_filename} contains invalid channel_id="{self.channel_id}"'
+            )
 
     def __getstate__(self):
         """
@@ -103,7 +111,9 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
             connection.execute(
-                stat.delete().where(stat.c.path.startswith(self.database_prefix))
+                stat.delete().where(
+                    stat.c.path.startswith(self.database_prefix, autoescape=True)
+                )
             )
             for item in listdir_stat:
                 connection.execute(stat.insert(), {**item, "stage": "fs"})
@@ -220,7 +230,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                     isouter=True,
                 )
             )
-            .where(stat_fs.c.path.startswith(self.database_prefix))
+            .where(stat_fs.c.path.startswith(self.database_prefix, autoescape=True))
             .where(
                 or_(
                     stat_fs.c.mtime != stat_indexed.c.mtime,
