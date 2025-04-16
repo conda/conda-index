@@ -2,6 +2,7 @@
 Use sqlalchemy+postgresql instead of sqlite.
 """
 
+import itertools
 import json
 import logging
 import os
@@ -11,7 +12,7 @@ from typing import Any, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import cte, join, or_, select
+from sqlalchemy import cte, func, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index import sqlitecache
@@ -22,6 +23,7 @@ from conda_index.index.sqlitecache import (
     TABLE_NO_CACHE,
     ChangedPackage,
     cacher,
+    pack_record,
 )
 
 from . import model
@@ -245,3 +247,53 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                 dict(path=row.path, size=row.size, mtime=row.mtime)
                 for row in connection.execute(query)
             ]  # type: ignore
+
+    def indexed_shards(self, desired: set | None = None):
+        """
+        Yield (package name, all packages with that name) from database ordered
+        by name, path i.o.w. filename.
+
+        :desired: If not None, set of desired package names.
+        """
+        table = "index_json"
+        index_json_table = model.Base.metadata.tables[table]
+        stat_table = model.Base.metadata.tables["stat"]
+
+        query = (
+            select(
+                # or jsonb_extract_path_text(column, 'name'), or a computed
+                # column (not yet in schema)
+                func.jsonb_path_query(index_json_table.c.index_json, "$.name"),
+                index_json_table.c.path,
+                index_json_table.c.index_json,
+            )
+            .select_from(
+                join(
+                    index_json_table,
+                    stat_table,
+                    index_json_table.c.path == stat_table.c.path,
+                )
+            )
+            .where(stat_table.c.stage == self.upstream_stage)
+            .order_by(index_json_table.c.name, index_json_table.c.path)
+        )
+
+        with self.engine.begin() as connection:
+            for name, rows in itertools.groupby(
+                connection.execute(query),
+                lambda k: k.path,
+            ):
+                shard = {"packages": {}, "packages.conda": {}}
+                for row in rows:
+                    name, path, index_json = row
+                    if not path.endswith((".tar.bz2", ".conda")):
+                        log.warning("%s doesn't look like a conda package", path)
+                        continue
+                    record = json.loads(index_json)
+                    key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+                    # we may have to pack later for patch functions that look for
+                    # hex hashes
+                    shard[key][path] = pack_record(record)
+
+                if not desired or name in desired:
+                    yield (name, shard)

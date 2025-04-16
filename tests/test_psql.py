@@ -30,6 +30,8 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
         compact_json=True,
         cache_class=PsqlCache,
         cache_kwargs={"db_url": postgresql_database.url},
+        write_shards=True,
+        write_monolithic=False,  # not yet in psql
     )
 
     channel_index.index(
