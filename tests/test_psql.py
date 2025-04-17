@@ -31,11 +31,11 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
         cache_class=PsqlCache,
         cache_kwargs={"db_url": postgresql_database.url},
         write_shards=True,
-        write_monolithic=False,  # not yet in psql
+        write_monolithic=True,
     )
 
     channel_index.index(
         patch_generator=None, current_index_versions=None, progress=False
     )
 
-    print("Indexed?")
+    print("Done")

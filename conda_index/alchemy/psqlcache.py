@@ -248,15 +248,15 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(self, desired: set | None = None, *, pack_record=pack_record):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
 
         :desired: If not None, set of desired package names.
+        :pack_record: Function passed each record, returning a modified record. Override to change the default hex to bytes hash conversions.
         """
-        table = "index_json"
-        index_json_table = model.Base.metadata.tables[table]
+        index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
 
         query = (
@@ -275,7 +275,10 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                 )
             )
             .where(stat_table.c.stage == self.upstream_stage)
-            .order_by(index_json_table.c.name, index_json_table.c.path)
+            .order_by(
+                func.jsonb_path_query(index_json_table.c.index_json, "$.name"),
+                index_json_table.c.path,
+            )
         )
 
         with self.engine.begin() as connection:
@@ -285,11 +288,10 @@ class PsqlCache(sqlitecache.CondaIndexCache):
             ):
                 shard = {"packages": {}, "packages.conda": {}}
                 for row in rows:
-                    name, path, index_json = row
+                    name, path, record = row
                     if not path.endswith((".tar.bz2", ".conda")):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
-                    record = json.loads(index_json)
                     key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
                     # we may have to pack later for patch functions that look for
                     # hex hashes
@@ -297,3 +299,19 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
                 if not desired or name in desired:
                     yield (name, shard)
+
+    def indexed_packages(self):
+        """
+        Return "packages" and "packages.conda" values from the cache.
+        """
+        packages = {}
+        packages_conda = {}
+
+        def nopack_record(record):
+            return record
+
+        for _, shard in self.indexed_shards(pack_record=nopack_record):
+            packages.update(shard["packages"])
+            packages_conda.update(shard["packages.conda"])
+
+        return packages, packages_conda
