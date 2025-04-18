@@ -261,9 +261,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
 
         query = (
             select(
-                # or jsonb_extract_path_text(column, 'name'), or a computed
-                # column (not yet in schema)
-                func.jsonb_path_query(index_json_table.c.index_json, "$.name"),
+                index_json_table.c.name,
                 index_json_table.c.path,
                 index_json_table.c.index_json,
             )
@@ -276,7 +274,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
             )
             .where(stat_table.c.stage == self.upstream_stage)
             .order_by(
-                func.jsonb_path_query(index_json_table.c.index_json, "$.name"),
+                index_json_table.c.name,
                 index_json_table.c.path,
             )
         )
@@ -293,8 +291,8 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
                     key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
-                    # we may have to pack later for patch functions that look for
-                    # hex hashes
+                    # This will be passed to the patch function, which we hope
+                    # does not look for hex hash values.
                     shard[key][path] = pack_record(record)
 
                 if not desired or name in desired:

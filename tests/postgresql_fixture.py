@@ -1,6 +1,5 @@
 import shutil
 from contextlib import contextmanager
-from functools import partial
 from pathlib import Path
 from subprocess import run
 
