@@ -282,7 +282,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         with self.engine.begin() as connection:
             for name, rows in itertools.groupby(
                 connection.execute(query),
-                lambda k: k.path,
+                lambda k: k.name,
             ):
                 shard = {"packages": {}, "packages.conda": {}}
                 for row in rows:
