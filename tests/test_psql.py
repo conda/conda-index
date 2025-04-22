@@ -4,10 +4,17 @@ Test ability to index off diverse filesystems using fsspec.
 
 from pathlib import Path
 
-from conda_index.alchemy.psqlcache import PsqlCache
+import pytest
+
 from conda_index.index import ChannelIndex
 
+try:
+    from conda_index.alchemy.psqlcache import PsqlCache
+except ImportError:
+    PsqlCache = None
 
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.

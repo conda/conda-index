@@ -33,6 +33,9 @@ log = logging.getLogger(__name__)
 # prevent SQL LIKE abuse
 CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 
+# test harness, CI setup
+# convert based on streaming "blob of json's to put in store()"
+
 
 class PsqlCache(sqlitecache.CondaIndexCache):
     def __init__(

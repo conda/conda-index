@@ -9,7 +9,6 @@ import itertools
 import json
 import logging
 import os
-import os.path
 import sqlite3
 from numbers import Number
 from os.path import join

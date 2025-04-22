@@ -38,7 +38,7 @@ def postgresql_fixture():
     finally:
         run(["pg_ctl", "-D", DBDIR, "stop"], cwd=BASE, check=True)
 
-    # shutil.rmtree(BASE / DBDIR)
+    shutil.rmtree(BASE / DBDIR)
 
 
 if __name__ == "__main__":
