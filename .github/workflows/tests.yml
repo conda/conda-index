@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   test:
-    name: conda-index (${{ matrix.python-version }}, ${{ matrix.os }})
+    name: conda-index (${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.postgresql }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
