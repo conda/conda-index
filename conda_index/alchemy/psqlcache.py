@@ -14,7 +14,7 @@ from typing import Any, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import cte, func, join, or_, select
+from sqlalchemy import cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index import sqlitecache
@@ -139,22 +139,20 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         database_path = self.database_path(fn)
         with self.engine.begin() as connection:
             for have_path in members:
-                table = PATH_TO_TABLE[have_path]
+                table: str = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
                     continue  # not cached, or for index_json cached at end
 
                 table_obj = model.Base.metadata.tables[table]
+                data_column = {"icon": "icon_png"}.get(table, table)
+                parameters = {
+                    "path": database_path,
+                    data_column: members.get(have_path),
+                }
 
-                parameters = {"path": database_path, table: members.get(have_path)}
                 if have_path == ICON_PATH:
-                    query = (
-                        insert(table_obj)
-                        .values(**parameters)
-                        .on_conflict_do_update(
-                            index_elements=[table_obj.c.path],
-                            set_={table: parameters[table]},
-                        )
-                    )
+                    # not parsed as json
+                    pass
                 elif parameters[table] is not None:
                     if isinstance(parameters[table], bytes):
                         # There will be an extra json.dumps() on the way to the
@@ -162,20 +160,17 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                         # directly into the database's json parser for a small
                         # gain.
                         parameters[table] = json.loads(parameters[table])
-                    query = (
-                        insert(table_obj)
-                        .values(**parameters)
-                        .on_conflict_do_update(
-                            index_elements=[table_obj.c.path],
-                            set_={table: parameters[table]},
-                        )
-                    )
+
+                insert_obj = insert(table_obj)
+                query = insert_obj.values(**parameters).on_conflict_do_update(
+                    index_elements=[table_obj.c.path],
+                    set_={data_column: insert_obj.excluded[data_column]},
+                )
                 # Could delete from all metadata tables that we didn't just see.
                 try:
                     connection.execute(query)
                 except OperationalError:  # e.g. malformed json.
                     log.exception("table=%s parameters=%s", table, parameters)
-                    # XXX delete from cache
                     raise
 
             # sqlite json() function removes whitespace and ensures valid json
@@ -184,13 +179,14 @@ class PsqlCache(sqlitecache.CondaIndexCache):
             # database as a string.
             table = "index_json"
             index_json_table = model.Base.metadata.tables[table]
+            insert_obj = insert(index_json_table)
             connection.execute(
                 (
                     insert(index_json_table)
                     .values(path=database_path, index_json=index_json)
                     .on_conflict_do_update(
                         index_elements=[table_obj.c.path],
-                        set_={table: index_json},
+                        set_={table: insert_obj.excluded.index_json},
                     )  # it will cast to jsonb automatically
                 )
             )
@@ -292,6 +288,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
                 shard = {"packages": {}, "packages.conda": {}}
                 for row in rows:
                     name, path, record = row
+                    path = self.plain_path(path)
                     if not path.endswith((".tar.bz2", ".conda")):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
