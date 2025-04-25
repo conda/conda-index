@@ -162,6 +162,7 @@ from .. import yaml
         CONDA_INDEX_DBURL environment variable. (Experimental)
         """,
     default="postgresql:///conda_index",
+    show_default=True,
     envvar="CONDA_INDEX_DBURL",
 )
 def cli(
