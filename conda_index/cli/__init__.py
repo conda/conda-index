@@ -146,6 +146,24 @@ from .. import yaml
     default=False,
     is_flag=True,
 )
+@click.option(
+    "--postgresql/--no-postgresql",
+    help="""
+        Use a PostgreSQL database instead of sqlite. Requires sqlalchemy.
+        (Experimental)
+        """,
+    default=False,
+    is_flag=True,
+)
+@click.option(
+    "--db-url",
+    help="""
+        SQLAlchemy database URL when using --postgresql. Alternatively, use the
+        CONDA_INDEX_DBURL environment variable. (Experimental)
+        """,
+    default="postgresql:///conda_index",
+    envvar="CONDA_INDEX_DBURL",
+)
 def cli(
     dir,
     patch_generator=None,
@@ -167,6 +185,8 @@ def cli(
     current_repodata=True,
     write_monolithic=True,
     write_shards=False,
+    postgresql=False,
+    db_url="",
 ):
     logutil.configure()
     if verbose:
@@ -174,6 +194,21 @@ def cli(
 
     if output:
         output = os.path.expanduser(output)
+
+    cache_kwargs = {}
+
+    if postgresql:
+        try:
+            import conda_index.alchemy.psqlcache
+
+            cache_class = conda_index.alchemy.psqlcache.PsqlCache
+            cache_kwargs["db_url"] = db_url
+        except ImportError as e:
+            raise click.ClickException(f"Missing dependencies for postgresql: {e}")
+    else:
+        from conda_index.index.sqlitecache import CondaIndexCache
+
+        cache_class = CondaIndexCache
 
     channel_index = ChannelIndex(
         os.path.expanduser(dir),
@@ -191,6 +226,8 @@ def cli(
         upstream_stage=upstream_stage,
         write_monolithic=write_monolithic,
         write_shards=write_shards,
+        cache_class=cache_class,
+        cache_kwargs=cache_kwargs,
     )
 
     if update_cache is False:
