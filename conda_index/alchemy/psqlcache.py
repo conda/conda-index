@@ -35,7 +35,6 @@ log = logging.getLogger(__name__)
 # prevent SQL LIKE abuse
 CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 
-# test harness, CI setup
 # convert based on streaming "blob of json's to put in store()"
 
 
@@ -60,8 +59,7 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         self.db_filename = self.channel_root / ".cache" / "cache.json"
         self.db_url = db_url
 
-        # XXX do we want to use the fs abstraction here? Or should we finally
-        # separate package, database, output directories?
+        # each on-disk location gets a unique (random) prefix in the shared database
         if not self.db_filename.exists():
             self.db_filename.parent.mkdir(parents=True)
             self.db_filename.write_text(json.dumps({"channel_id": os.urandom(8).hex()}))
@@ -118,9 +116,9 @@ class PsqlCache(sqlitecache.CondaIndexCache):
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
             connection.execute(
-                stat.delete().where(
-                    stat.c.path.startswith(self.database_prefix, autoescape=True)
-                )
+                stat.delete()
+                .where(stat.c.stage == "fs")
+                .where(stat.c.path.startswith(self.database_prefix, autoescape=True))
             )
             for item in listdir_stat:
                 connection.execute(stat.insert(), {**item, "stage": "fs"})
