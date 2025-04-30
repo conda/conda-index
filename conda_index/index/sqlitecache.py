@@ -4,23 +4,20 @@ cache conda indexing metadata in sqlite.
 
 from __future__ import annotations
 
-import fnmatch
 import itertools
 import json
 import logging
 import os
 import sqlite3
-from numbers import Number
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterator, TypedDict
+from typing import Any, Iterator
 
 import msgpack
 
-from .. import yaml
 from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .cache import BaseCondaIndexCache
+from .cache import BaseCondaIndexCache, ChangedPackage, cacher
 from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
@@ -64,25 +61,6 @@ TABLE_NO_CACHE = {
 
 # saved to cache, not found in package
 COMPUTED = {"info/post_install.json"}
-
-
-# lock-free replacement for @cached_property
-class cacher:
-    def __init__(self, wrapped):
-        self.wrapped = wrapped
-
-    def __get__(self, inst, objtype=None) -> Any:
-        if inst:
-            value = self.wrapped(inst)
-            setattr(inst, self.wrapped.__name__, value)
-            return value
-        return self
-
-
-class ChangedPackage(TypedDict):
-    path: str
-    mtime: Number
-    size: Number
 
 
 class CondaIndexCache(BaseCondaIndexCache):
@@ -448,54 +426,6 @@ def packb_typed(o: Any) -> bytes:
     Sidestep lack of typing in msgpack.
     """
     return msgpack.packb(o)  # type: ignore
-
-
-def _cache_post_install_details(paths_json_str):
-    post_install_details_json = {
-        "binary_prefix": False,
-        "text_prefix": False,
-        "activate.d": False,
-        "deactivate.d": False,
-        "pre_link": False,
-        "post_link": False,
-        "pre_unlink": False,
-    }
-    if paths_json_str:  # if paths exists at all
-        paths = json.loads(paths_json_str).get("paths", [])
-
-        # get embedded prefix data from paths.json
-        for f in paths:
-            if f.get("prefix_placeholder"):
-                if f.get("file_mode") == "binary":
-                    post_install_details_json["binary_prefix"] = True
-                elif f.get("file_mode") == "text":
-                    post_install_details_json["text_prefix"] = True
-            # check for any activate.d/deactivate.d scripts
-            for k in ("activate.d", "deactivate.d"):
-                if not post_install_details_json.get(k) and f["_path"].startswith(
-                    f"etc/conda/{k}"
-                ):
-                    post_install_details_json[k] = True
-            # check for any link scripts
-            for pat in ("pre-link", "post-link", "pre-unlink"):
-                if not post_install_details_json.get(pat) and fnmatch.fnmatch(
-                    f["_path"], f"*/.*-{pat}.*"
-                ):
-                    post_install_details_json[pat.replace("-", "_")] = True
-
-    return json.dumps(post_install_details_json)
-
-
-def _cache_recipe(recipe_reader):
-    recipe_json = yaml.determined_load(recipe_reader)
-
-    try:
-        recipe_json_str = json.dumps(recipe_json)
-    except TypeError:
-        recipe_json.get("requirements", {}).pop("build")  # weird
-        recipe_json_str = json.dumps(recipe_json)
-
-    return recipe_json_str
 
 
 def _clear_newline_chars(record, field_name):
