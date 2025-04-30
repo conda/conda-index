@@ -1,6 +1,6 @@
 ### Enhancements
 
-* <news item>
+* Add postgresql as a supported database backend in addition to sqlite (#199)
 
 ### Bug fixes
 
@@ -16,4 +16,4 @@
 
 ### Other
 
-* Update `pypa/gh-action-pypi-publish` to 1.12.4. (#201)
+* <news item>
