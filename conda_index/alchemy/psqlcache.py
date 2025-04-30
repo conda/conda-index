@@ -14,10 +14,10 @@ from typing import Any, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import cte, join, or_, select
+from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index.cache import BaseCondaIndexCache
+from conda_index.index.cache import BaseCondaIndexCache, clear_newline_chars
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
@@ -77,7 +77,7 @@ class PsqlCache(BaseCondaIndexCache):
         """
         Remove db connection when pickled.
         """
-        return {k: self.__dict__[k] for k in self.__dict__ if k not in ("db", "engine")}
+        return {k: self.__dict__[k] for k in self.__dict__ if k not in ("engine",)}
 
     @property
     def database_prefix(self):
@@ -87,14 +87,6 @@ class PsqlCache(BaseCondaIndexCache):
         # If recording information about the channel_root, use '_ROOT' for nice
         # prefix searches
         return f"{self.channel_id}/{self.subdir or '_ROOT'}/"
-
-    @property
-    def database_path_like(self):
-        raise NotImplementedError("avoid unescaped input in LIKE query")
-
-    @cacher
-    def db(self):
-        return None
 
     @cacher
     def engine(self):
@@ -113,6 +105,7 @@ class PsqlCache(BaseCondaIndexCache):
         """
         Write {path, mtime, size} into database.
         """
+        connection: Connection
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
             connection.execute(
@@ -135,6 +128,7 @@ class PsqlCache(BaseCondaIndexCache):
         Write cache for a single package to database.
         """
         database_path = self.database_path(fn)
+        connection: Connection
         with self.engine.begin() as connection:
             for have_path in members:
                 table: str = PATH_TO_TABLE[have_path]
@@ -171,10 +165,6 @@ class PsqlCache(BaseCondaIndexCache):
                     log.exception("table=%s parameters=%s", table, parameters)
                     raise
 
-            # sqlite json() function removes whitespace and ensures valid json
-            # XXX we could handle index_json above; previously, index_json was
-            # the only one parsed, the others were passed straight into the
-            # database as a string.
             table = "index_json"
             index_json_table = model.Base.metadata.tables[table]
             insert_obj = insert(index_json_table)
@@ -241,6 +231,7 @@ class PsqlCache(BaseCondaIndexCache):
             )
         )
 
+        connection: Connection
         with self.engine.begin() as connection:
             return [
                 dict(path=row.path, size=row.size, mtime=row.mtime)
@@ -252,8 +243,8 @@ class PsqlCache(BaseCondaIndexCache):
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
 
-        :desired: If not None, set of desired package names.
-        :pack_record: Function passed each record, returning a modified record. Override to change the default hex to bytes hash conversions.
+        :param desired: If not None, set of desired package names.
+        :param pack_record: Function passed each record, returning a modified record. Override to change the default hex to bytes hash conversions.
         """
         index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
@@ -278,6 +269,7 @@ class PsqlCache(BaseCondaIndexCache):
             )
         )
 
+        connection: Connection
         with self.engine.begin() as connection:
             for name, rows in itertools.groupby(
                 connection.execute(query),
@@ -313,3 +305,120 @@ class PsqlCache(BaseCondaIndexCache):
             packages_conda.update(shard["packages.conda"])
 
         return packages, packages_conda
+
+    def load_all_from_cache(self, fn: str):
+        """
+        Load package data into a single dict for channeldata.
+
+        :param fn: filename from channeldata.json; can be missing from database.
+        """
+        # XXX called in parallel by ChannelIndex(), easily exceeds postgresql connection limit
+        connection: Connection
+        with self.engine.begin() as connection:
+            try:
+                stat_table = model.Base.metadata.tables["stat"]
+                row = connection.execute(
+                    select(stat_table).where(
+                        stat_table.c.stage == self.upstream_stage
+                        and stat_table.c.path == self.database_path(fn)
+                    )
+                ).first()
+                if not row:
+                    raise TypeError()
+                mtime = row.mtime
+            except TypeError:  # .fetchone() was None
+                log.warning("%s mtime not found in cache", fn)
+                return {}
+
+            tables = model.Base.metadata.tables
+
+            index_json = tables["index_json"]
+            about = tables["about"]
+            post_install = tables["post_install"]
+            recipe = tables["recipe"]
+            run_exports = tables["run_exports"]
+
+            # This method reads up pretty much all of the cached metadata, except
+            # for paths. It all gets dumped into a single map.
+
+            BIG_JOIN = (
+                index_json.join(
+                    about,
+                    isouter=True,
+                    onclause=index_json.c.path == about.c.path,
+                )
+                .join(
+                    post_install,
+                    isouter=True,
+                    onclause=index_json.c.path == post_install.c.path,
+                )
+                .join(
+                    recipe,
+                    isouter=True,
+                    onclause=index_json.c.path == recipe.c.path,
+                )
+                .join(
+                    run_exports,
+                    isouter=True,
+                    onclause=index_json.c.path == run_exports.c.path,
+                )
+            )
+
+            row = connection.execute(
+                select(BIG_JOIN).where(index_json.c.path == self.database_path(fn))
+            ).first()
+
+            if row is None:
+                return {}
+
+            data = {}
+            try:
+                # This order matches the old implementation. clobber recipe, about fields with index_json.
+                for column in ("recipe", "about", "post_install", "index_json"):
+                    if column_data := getattr(row, column):  # is not null or empty
+                        # Only the first two participants in join are
+                        # converted from json by sqlalchemy.
+                        column_data = (
+                            json.loads(column_data)
+                            if column not in ("index_json", "about")
+                            else column_data
+                        )
+                        if not isinstance(column_data, dict):  # pragma: no cover
+                            log.warning(
+                                f"scalar {column_data} found in {column} for {fn}"
+                            )
+                            continue
+                        data.update(column_data)
+            except IndexError:
+                row = None
+
+            data["mtime"] = mtime
+
+            source = data.get("source", {})
+            try:
+                data.update({"source_" + k: v for k, v in source.items()})
+            except AttributeError:
+                # sometimes source is a  list instead of a dict
+                pass
+            clear_newline_chars(data, "description")
+            clear_newline_chars(data, "summary")
+
+            # if run_exports was NULL / empty string, 'loads' the empty object
+            data["run_exports"] = getattr(row, "run_exports", {}) if row else {}
+
+        return data
+
+    def run_exports(self):
+        """
+        Query returning run_exports data, to be formatted by
+        ChannelIndex.build_run_exports_data()
+        """
+        stat = model.Base.metadata.tables["stat"]
+        run_exports = model.Base.metadata.tables["run_exports"]
+        query = stat.join(run_exports, onclause=stat.c.path == run_exports.c.path)
+        connection: Connection
+        with self.engine.connect() as connection:
+            for row in connection.execute(
+                select(query).where(stat.c.stage == self.upstream_stage)
+            ):
+                yield (row.path, json.dumps(row.run_exports))

@@ -24,6 +24,8 @@ from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
+from conda_index.index.cache import BaseCondaIndexCache
+
 from .. import utils
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
@@ -356,7 +358,7 @@ class ChannelIndex:
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
-        cache_class=sqlitecache.CondaIndexCache,
+        cache_class=BaseCondaIndexCache,
         write_bz2=False,
         write_zst=False,
         write_run_exports=False,
@@ -406,14 +408,14 @@ class ChannelIndex:
         self.cache_kwargs = cache_kwargs
 
     def cache_for_subdir(self, subdir):
-        cache: sqlitecache.CondaIndexCache = self.cache_class(
+        cache = self.cache_class(
             channel_root=self.channel_root,
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
             upstream_stage=self.upstream_stage,
             **self.cache_kwargs or {},
-        )
+        )  # type: ignore
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
             cache.convert()

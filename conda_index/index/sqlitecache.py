@@ -18,6 +18,7 @@ import msgpack
 from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
 from .cache import BaseCondaIndexCache, ChangedPackage, cacher
+from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
@@ -426,18 +427,3 @@ def packb_typed(o: Any) -> bytes:
     Sidestep lack of typing in msgpack.
     """
     return msgpack.packb(o)  # type: ignore
-
-
-def _clear_newline_chars(record, field_name):
-    if field_name in record:
-        try:
-            record[field_name] = record[field_name].strip().replace("\n", " ")
-        except AttributeError:
-            try:
-                # sometimes description gets added as a list instead of just a string
-                record[field_name] = (
-                    "".join(record[field_name]).strip().replace("\n", " ")
-                )
-
-            except TypeError:
-                log.warning("Could not _clear_newline_chars from field %s", field_name)

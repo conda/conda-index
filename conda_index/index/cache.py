@@ -112,6 +112,16 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         if not self.cache_dir.exists():
             self.cache_dir.mkdir(parents=True)
 
+        # used to determine whether to call self.convert()
+        self.cache_is_brand_new = False
+
+    @abc.abstractmethod
+    def convert(self):
+        """
+        Convert filesystem cache to database.
+        """
+        pass
+
     def close(self):
         """
         Remove and close any database connections.
@@ -415,3 +425,18 @@ def _cache_recipe(recipe_reader):
         recipe_json_str = json.dumps(recipe_json)
 
     return recipe_json_str
+
+
+def clear_newline_chars(record, field_name):
+    if field_name in record:
+        try:
+            record[field_name] = record[field_name].strip().replace("\n", " ")
+        except AttributeError:
+            try:
+                # sometimes description gets added as a list instead of just a string
+                record[field_name] = (
+                    "".join(record[field_name]).strip().replace("\n", " ")
+                )
+
+            except TypeError:
+                log.warning("Could not _clear_newline_chars from field %s", field_name)

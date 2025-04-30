@@ -196,6 +196,9 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
+    if current_repodata and not write_monolithic:
+        raise click.ClickException("--current-repodata requires --write-monolithic")
+
     cache_kwargs = {}
 
     if postgresql:
