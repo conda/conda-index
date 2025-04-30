@@ -64,7 +64,7 @@
 {%- endfor %}
 {% for fn, record in packages|dictsort() %}
     <tr>
-      <td>{{ fn | add_href(fn) }}</td>
+      <td title="{{ record | to_title }}">{{ fn | add_href(fn) }}</td>
       <td class="s">{{ record.size | human_bytes }}</td>
       <td>{% if record.timestamp %}{{ record.timestamp|strftime("%Y-%m-%d %H:%M:%S %z") }}{% endif %}</td>
       <td>{{ record.sha256 }}</td>
