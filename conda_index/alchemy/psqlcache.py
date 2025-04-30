@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 # prevent SQL LIKE abuse
 CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 
-# convert based on streaming "blob of json's to put in store()"
+# XXX convert based on streaming "blob of json's to put in store()"
 
 
 class PsqlCache(BaseCondaIndexCache):
@@ -146,12 +146,11 @@ class PsqlCache(BaseCondaIndexCache):
                     # not parsed as json
                     pass
                 elif parameters[table] is not None:
-                    if isinstance(parameters[table], bytes):
-                        # There will be an extra json.dumps() on the way to the
-                        # database. May not be convenient to pass json text
-                        # directly into the database's json parser for a small
-                        # gain.
-                        parameters[table] = json.loads(parameters[table])
+                    # There will be an extra json.dumps() on the way to the
+                    # database. May not be convenient to pass json text
+                    # directly into the database's json parser for a small
+                    # gain.
+                    parameters[table] = json.loads(parameters[table])
 
                 insert_obj = insert(table_obj)
                 query = insert_obj.values(**parameters).on_conflict_do_update(
@@ -376,13 +375,6 @@ class PsqlCache(BaseCondaIndexCache):
                 # This order matches the old implementation. clobber recipe, about fields with index_json.
                 for column in ("recipe", "about", "post_install", "index_json"):
                     if column_data := getattr(row, column):  # is not null or empty
-                        # Only the first two participants in join are
-                        # converted from json by sqlalchemy.
-                        column_data = (
-                            json.loads(column_data)
-                            if column not in ("index_json", "about")
-                            else column_data
-                        )
                         if not isinstance(column_data, dict):  # pragma: no cover
                             log.warning(
                                 f"scalar {column_data} found in {column} for {fn}"
