@@ -149,7 +149,7 @@ from .. import yaml
 @click.option(
     "--postgresql/--no-postgresql",
     help="""
-        Use a PostgreSQL database instead of sqlite. Requires sqlalchemy.
+        Use a PostgreSQL database instead of sqlite. Requires SQLAlchemy.
         (Experimental)
         """,
     default=False,

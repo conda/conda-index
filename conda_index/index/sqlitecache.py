@@ -14,20 +14,14 @@ from numbers import Number
 from os.path import join
 from pathlib import Path
 from typing import Any, Iterator, TypedDict
-from zipfile import BadZipFile
 
 import msgpack
-from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import (
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-    CONDA_PACKAGE_EXTENSIONS,
-    _checksum,
-)
+from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .fs import FileInfo, MinimalFS
+from .cache import BaseCondaIndexCache
+from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +85,7 @@ class ChangedPackage(TypedDict):
     size: Number
 
 
-class CondaIndexCache:
+class CondaIndexCache(BaseCondaIndexCache):
     def __init__(
         self,
         channel_root: Path | str,
@@ -109,19 +103,16 @@ class CondaIndexCache:
         upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
         """
 
-        self.subdir = subdir
-        self.channel_root = Path(channel_root)
-        self.subdir_path = Path(channel_root, subdir)
-        self.cache_dir = Path(channel_root, subdir, ".cache")
+        super().__init__(
+            channel_root,
+            subdir,
+            fs=fs,
+            channel_url=channel_url,
+            upstream_stage=upstream_stage,
+        )
+
         self.db_filename = Path(self.cache_dir, "cache.db")
         self.cache_is_brand_new = not self.db_filename.exists()
-        self.upstream_stage = upstream_stage
-
-        self.fs = fs or MinimalFS()
-        self.channel_url = channel_url or str(channel_root)
-
-        if not self.cache_dir.exists():
-            self.cache_dir.mkdir(parents=True)
 
         log.debug(
             f"CondaIndexCache channel_root={channel_root}, subdir={subdir} db_filename={self.db_filename} cache_is_brand_new={self.cache_is_brand_new}"
@@ -192,152 +183,6 @@ class CondaIndexCache:
                 convert_cache.remove_prefix(self.db)
             # prepare to be sent to other thread
             self.close()
-
-    def open(self, fn: str):
-        """
-        Given a base package name "somepackage.conda", return an open, seekable
-        file object from our channel_url/subdir/fn suitable for reading that
-        package.
-        """
-        abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
-        return self.fs.open(abs_fn)
-
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
-        """
-        fn_info: object with .fn, .st_size, and .st_msize properties
-        """
-        return self._extract_to_cache(
-            channel_root, subdir, fn_info.fn, stat_result=fn_info
-        )
-
-    def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
-        if stat_result is None:
-            # this code path is deprecated
-            abs_fn = self.fs.join(self.subdir_path, fn)
-            stat_dict = self.fs.stat(abs_fn)
-            size = stat_dict["size"]
-            mtime = stat_dict["mtime"]
-        else:
-            abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
-            size = stat_result.st_size
-            mtime = stat_result.st_mtime
-        retval = fn, mtime, size, None
-
-        # we no longer re-use the .conda cache for .tar.bz2; faster conda
-        # extraction should preserve enough performance
-        try:
-            log.debug("cache %s/%s", subdir, fn)
-
-            index_json = self.extract_to_cache_unconditional(fn, abs_fn, size, mtime)
-
-            retval = fn, mtime, size, index_json
-        except (
-            KeyError,
-            EOFError,
-            json.JSONDecodeError,
-            BadZipFile,  # stdlib zipfile
-            OSError,  # stdlib tarfile: OSError: Invalid data stream
-        ):
-            log.exception("Error extracting %s", fn)
-        return retval
-
-    def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
-        """
-        Add or replace fn into cache, disregarding whether it is already cached.
-
-        Return index.json as dict, with added size, checksums.
-        """
-
-        wanted = set(PATH_TO_TABLE) - COMPUTED
-
-        # when we see one of these, remove the rest from wanted
-        recipe_want_one = {
-            "info/recipe/meta.yaml.rendered",
-            "info/recipe/meta.yaml",  # by far the most common
-            "info/meta.yaml",
-        }
-
-        members = {}
-        # second stream_conda_info "fileobj" parameter accepts Path or str
-        # inherited from ZipFile, bz2.open behavior, but we need to open the
-        # file ourselves.
-        with self.open(fn) as fileobj:
-            package_stream = iter(package_streaming.stream_conda_info(fn, fileobj))
-            for tar, member in package_stream:
-                if member.name in wanted:
-                    wanted.remove(member.name)
-                    reader = tar.extractfile(member)
-                    if reader is None:
-                        log.warning(f"{abs_fn}/{member.name} was not a regular file")
-                        continue
-                    members[member.name] = reader.read()
-
-                    # immediately parse index.json, decide whether we need icon
-                    if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                        index_json = json.loads(members[member.name])
-                        if index_json.get("icon") is None:
-                            wanted = wanted - {ICON_PATH}
-
-                    if member.name in recipe_want_one:
-                        # convert yaml; don't look for any more recipe files
-                        members[member.name] = _cache_recipe(members[member.name])
-                        wanted = wanted - recipe_want_one
-
-                if not wanted:  # we got what we wanted
-                    package_stream.close()
-                    log.debug("%s early close", fn)
-
-            # XXX if we are reindexing a channel, provide a way to assert that
-            # checksums match the upstream stage.
-            def checksums():
-                """
-                Use utility function that accepts open file instead of filename.
-                """
-                for algorithm in "md5", "sha256":
-                    fileobj.seek(0)
-                    yield _checksum(fileobj, algorithm)
-
-            md5, sha256 = checksums()
-
-        if wanted and wanted != {"info/run_exports.json"}:
-            # very common for some metadata to be missing
-            log.debug(f"{fn} missing {wanted} has {set(members.keys())}")
-
-        index_json = json.loads(members["info/index.json"])
-
-        # populate run_exports.json (all False's if there was no
-        # paths.json). paths.json should not be needed after this; don't
-        # cache large paths.json unless we want a "search for paths"
-        # feature unrelated to repodata.json
-        try:
-            paths_str = members.pop(PATHS_PATH)
-        except KeyError:
-            paths_str = ""
-        members["info/post_install.json"] = _cache_post_install_details(paths_str)
-
-        # decide what fields to filter out, like has_prefix
-        filter_fields = {
-            "arch",
-            "has_prefix",
-            "mtime",
-            "platform",
-            "ucs",
-            "requires_features",
-            "binstar",
-            "target-triplet",
-            "machine",
-            "operatingsystem",
-        }
-
-        index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
-
-        new_info = {"md5": md5, "sha256": sha256, "size": size}
-
-        index_json.update(new_info)
-
-        self.store(fn, size, mtime, members, index_json)
-
-        return index_json
 
     def store(
         self,
@@ -457,35 +302,6 @@ class CondaIndexCache:
         data["run_exports"] = json.loads(row["run_exports"] or "{}") if row else {}
 
         return data
-
-    def save_fs_state(self, subdir_path: str | Path | None = None):
-        """
-        stat all files in subdir_path to compare against cached repodata.
-
-        subdir_path: implied from self.subdir; not used.
-        """
-        subdir_url = self.fs.join(self.channel_url, self.subdir)
-
-        log.debug("%s listdir", self.subdir)
-
-        # Put filesystem 'ground truth' into stat table. Will we eventually stat
-        # everything on fs, or can we shortcut for new files?
-
-        def listdir_stat():
-            # Gather conda package filenames in subdir
-            for entry in self.fs.listdir(subdir_url):
-                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
-                    continue
-                if "mtime" not in entry or "size" not in entry:
-                    entry.update(self.fs.stat(entry["name"]))
-                yield {
-                    "path": self.database_path(self.fs.basename(entry["name"])),
-                    "mtime": entry.get("mtime"),
-                    "size": entry["size"],
-                }
-
-        log.debug("%s save fs state", self.subdir)
-        self.store_fs_state(listdir_stat())
 
     def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         with self.db:

@@ -17,7 +17,7 @@ from psycopg2 import OperationalError
 from sqlalchemy import cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index import sqlitecache
+from conda_index.index.cache import BaseCondaIndexCache
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
@@ -38,7 +38,7 @@ CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 # convert based on streaming "blob of json's to put in store()"
 
 
-class PsqlCache(sqlitecache.CondaIndexCache):
+class PsqlCache(BaseCondaIndexCache):
     def __init__(
         self,
         channel_root: Path | str,
