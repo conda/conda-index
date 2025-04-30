@@ -358,7 +358,7 @@ class ChannelIndex:
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
-        cache_class=sqlitecache.CondaIndexCache,
+        cache_class: type[BaseCondaIndexCache] = sqlitecache.CondaIndexCache,
         write_bz2=False,
         write_zst=False,
         write_run_exports=False,

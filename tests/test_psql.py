@@ -25,6 +25,8 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
 
     test_subdirs = ("noarch", "osx-64")
 
+    assert PsqlCache
+
     channel_index = ChannelIndex(
         channel_root,
         channel_name="psql",
