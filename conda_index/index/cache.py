@@ -11,19 +11,13 @@ import json
 import logging
 from numbers import Number
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import (
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-    CONDA_PACKAGE_EXTENSIONS,
-    _checksum,
-)
-from . import common, convert_cache
+from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
