@@ -400,7 +400,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()
         """
-        return self.db.execute(
+        for path, run_exports in self.db.execute(
             """
             SELECT path, run_exports FROM stat
             LEFT JOIN run_exports USING (path)
@@ -408,7 +408,8 @@ class CondaIndexCache(BaseCondaIndexCache):
             ORDER BY path
             """,
             (self.upstream_stage,),
-        )
+        ):
+            yield (path, json.loads(run_exports or "{}"))
 
 
 def pack_record(record):

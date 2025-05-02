@@ -1106,7 +1106,7 @@ class ChannelIndex:
         # load cached packages
         for row in cache.run_exports():
             path, run_exports_data = row
-            run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
+            run_exports_data = {"run_exports": run_exports_data or {}}
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 run_exports_packages[path] = run_exports_data
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):

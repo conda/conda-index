@@ -413,4 +413,4 @@ class PsqlCache(BaseCondaIndexCache):
             for row in connection.execute(
                 select(query).where(stat.c.stage == self.upstream_stage)
             ):
-                yield (row.path, json.dumps(row.run_exports))
+                yield (self.plain_path(row.path), json.dumps(row.run_exports))
