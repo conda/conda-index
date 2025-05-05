@@ -1,3 +1,9 @@
+"""
+Tests for abstact BaseCondaIndexCache.
+"""
+
+from __future__ import annotations
+
 from typing import Any
 
 from conda_index.index import cache
