@@ -120,13 +120,11 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         Convert filesystem cache to database.
         """
-        pass
 
     def close(self):
         """
         Remove and close any database connections.
         """
-        pass
 
     @property
     def database_prefix(self):
