@@ -387,8 +387,6 @@ class CondaIndexCache(BaseCondaIndexCache):
                 yield (name, shard)
 
     def store_index_json_stat(self, database_path, mtime, size, index_json):
-        # XXX transaction/connnection needs to be passed in or we'll just remove
-        # this method
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
                 VALUES ('indexed', ?, ?, ?, ?, ?)""",
