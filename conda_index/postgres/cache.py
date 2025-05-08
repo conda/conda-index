@@ -409,7 +409,7 @@ class PsqlCache(BaseCondaIndexCache):
         run_exports = model.Base.metadata.tables["run_exports"]
         query = stat.join(run_exports, onclause=stat.c.path == run_exports.c.path)
         connection: Connection
-        with self.engine.connect() as connection:
+        with self.engine.begin() as connection:
             for row in connection.execute(
                 select(query).where(stat.c.stage == self.upstream_stage)
             ):

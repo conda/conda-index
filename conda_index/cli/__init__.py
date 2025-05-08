@@ -147,13 +147,13 @@ from .. import yaml
     is_flag=True,
 )
 @click.option(
-    "--postgresql/--no-postgresql",
+    "--db",
     help="""
-        Use a PostgreSQL database instead of sqlite. Requires SQLAlchemy.
+        Choose database backend. "sqlite3" (default) or "postgresql"
         (Experimental)
         """,
-    default=False,
-    is_flag=True,
+    default="sqlite3",
+    type=click.Choice(["sqlite3", "postgresql"]),
 )
 @click.option(
     "--db-url",
@@ -186,7 +186,7 @@ def cli(
     current_repodata=True,
     write_monolithic=True,
     write_shards=False,
-    postgresql=False,
+    db="sqlite3",
     db_url="",
 ):
     logutil.configure()
@@ -201,7 +201,7 @@ def cli(
 
     cache_kwargs = {}
 
-    if postgresql:
+    if db == "postgresql":
         try:
             import conda_index.postgres.cache
 
