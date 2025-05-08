@@ -24,6 +24,8 @@ from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
+from conda_index.index.cache import BaseCondaIndexCache
+
 from .. import utils
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
@@ -356,7 +358,7 @@ class ChannelIndex:
         deep_integrity_check=False,
         debug=False,
         output_root=None,  # write repodata.json etc. to separate folder?
-        cache_class=sqlitecache.CondaIndexCache,
+        cache_class: type[BaseCondaIndexCache] = sqlitecache.CondaIndexCache,
         write_bz2=False,
         write_zst=False,
         write_run_exports=False,
@@ -370,6 +372,7 @@ class ChannelIndex:
         save_fs_state=True,
         write_current_repodata=True,
         upstream_stage: str = "fs",
+        cache_kwargs=None,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -402,14 +405,17 @@ class ChannelIndex:
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
 
+        self.cache_kwargs = cache_kwargs
+
     def cache_for_subdir(self, subdir):
-        cache: sqlitecache.CondaIndexCache = self.cache_class(
+        cache = self.cache_class(
             channel_root=self.channel_root,
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
             upstream_stage=self.upstream_stage,
-        )
+            **self.cache_kwargs or {},
+        )  # type: ignore
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
             cache.convert()
@@ -1110,7 +1116,7 @@ class ChannelIndex:
         # load cached packages
         for row in cache.run_exports():
             path, run_exports_data = row
-            run_exports_data = {"run_exports": json.loads(run_exports_data or "{}")}
+            run_exports_data = {"run_exports": run_exports_data or {}}
             if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 run_exports_packages[path] = run_exports_data
             elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):

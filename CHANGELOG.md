@@ -2,8 +2,15 @@
 
 ### Enhancements
 
-* Remove subdir, platform, arch from package records to reduce size, these are
-  redundant or implied by `"info":{"subdir":...}` (#132)
+* Remove redundant or implied subdir, platform, arch from package records to
+  reduce size. (#132)
+
+## 0.6.0 (2025-03-27)
+
+### Enhancements
+
+* Add `--channeldata/--no-channeldata` flag to toggle generating channeldata.
+* Add sharded repodata (repodata split into separate files per package name).
 
 ### Other
 
@@ -11,6 +18,12 @@
   script, in case `conda-index` is used on a network file system. Note WAL mode
   is persistent, `PRAGMA journal_mode=DELETE` can be used to convert a WAL
   database back to a rollback journal mode. (#177)
+* Separate current_repodata generation into own file, raising
+  possibility of "doesn't depend on conda" mode.
+* Update tests to account for conda-build removals. (#180)
+* Publish new `conda-index` releases on PyPI automatically. (#195)
+
+See also https://github.com/conda/conda-index/releases/tag/0.6.0
 
 ## 0.5.0 (2024-06-07)
 
