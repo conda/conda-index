@@ -1,5 +1,10 @@
 [//]: # (current developments)
 
+### Enhancements
+
+* Remove redundant or implied subdir, platform, arch from package records to
+  reduce size. (#132)
+
 ## 0.6.0 (2025-03-27)
 
 ### Enhancements
