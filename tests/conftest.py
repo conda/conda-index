@@ -206,8 +206,8 @@ def http_package_server():
 
 
 @pytest.fixture(scope="session")
-def postgresql_database():
+def postgresql_database(tmp_path):
     # ensure we can run the rest of the test suite without sqlalchemy
     from . import postgresql_fixture
 
-    yield from postgresql_fixture.postgresql_fixture()
+    yield from postgresql_fixture.postgresql_fixture(tmp_path)

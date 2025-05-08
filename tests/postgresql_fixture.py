@@ -13,7 +13,7 @@ DBNAME = "conda_index_test"
 DBDIR = "conda_index_db"
 
 
-def postgresql_fixture():
+def postgresql_fixture(BASE: Path):
     """
     Run a local postgresql server for testing.
     """
@@ -42,6 +42,6 @@ def postgresql_fixture():
 
 
 if __name__ == "__main__":
-    with contextmanager(postgresql_fixture)() as p:
+    with contextmanager(postgresql_fixture)(BASE) as p:
         print("Used postgresql")
         # p.url is the db url
