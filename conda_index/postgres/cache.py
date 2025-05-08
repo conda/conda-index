@@ -37,6 +37,8 @@ CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
 
 # XXX convert based on streaming "blob of json's to put in store()"
 
+_engine = None
+
 
 class PsqlCache(BaseCondaIndexCache):
     def __init__(
@@ -90,8 +92,14 @@ class PsqlCache(BaseCondaIndexCache):
 
     @cacher
     def engine(self):
+        # Per-process module-scoped engine cache is one way to solve ProcessPool
+        # "too many connections" issue
+        global _engine
+        if _engine:
+            return _engine
         engine = sqlalchemy.create_engine(self.db_url, echo=False)
         model.create(engine)
+        _engine = engine
         return engine
 
     def convert(self, force=False):
