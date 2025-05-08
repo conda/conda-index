@@ -158,8 +158,8 @@ from .. import yaml
 @click.option(
     "--db-url",
     help="""
-        SQLAlchemy database URL when using --postgresql. Alternatively, use the
-        CONDA_INDEX_DBURL environment variable. (Experimental)
+        SQLAlchemy database URL when using --db=postgresql. Alternatively, use
+        the CONDA_INDEX_DBURL environment variable. (Experimental)
         """,
     default="postgresql:///conda_index",
     show_default=True,
