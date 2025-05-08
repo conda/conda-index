@@ -9,7 +9,7 @@ import pytest
 from conda_index.index import ChannelIndex
 
 try:
-    from conda_index.alchemy.psqlcache import PsqlCache
+    from conda_index.postgres.cache import PsqlCache
 except ImportError:
     PsqlCache = None
 

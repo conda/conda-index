@@ -203,9 +203,9 @@ def cli(
 
     if postgresql:
         try:
-            import conda_index.alchemy.psqlcache
+            import conda_index.postgres.cache
 
-            cache_class = conda_index.alchemy.psqlcache.PsqlCache
+            cache_class = conda_index.postgres.cache.PsqlCache
             cache_kwargs["db_url"] = db_url
         except ImportError as e:
             raise click.ClickException(f"Missing dependencies for postgresql: {e}")
