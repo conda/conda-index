@@ -280,13 +280,14 @@ def _get_jinja2_environment():
             return text
 
     def _filter_to_title(obj):
+        depends_str = "\n".join(obj.get('depends', []))
         return (
             # name v0.0.0 pyABC_X
             f"{obj.get('name')} v{obj.get('version')} {obj.get('build')}"
             "\n\n"
             "depends:\n"
             # each dependency on a new line
-            f"{'\n'.join(obj.get('depends', []))}"
+            f"{depends_str}"
         )
 
     environment = Environment(
