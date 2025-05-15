@@ -279,12 +279,24 @@ def _get_jinja2_environment():
         else:
             return text
 
+    def _filter_to_title(obj):
+        depends_str = "\n".join(obj.get('depends', []))
+        return (
+            # name v0.0.0 pyABC_X
+            f"{obj.get('name')} v{obj.get('version')} {obj.get('build')}"
+            "\n\n"
+            "depends:\n"
+            # each dependency on a new line
+            f"{depends_str}"
+        )
+
     environment = Environment(
         loader=PackageLoader("conda_index", "templates"),
     )
     environment.filters["human_bytes"] = utils.human_bytes
     environment.filters["strftime"] = _filter_strftime
     environment.filters["add_href"] = _filter_add_href
+    environment.filters["to_title"] = _filter_to_title
     environment.trim_blocks = True
     environment.lstrip_blocks = True
 
