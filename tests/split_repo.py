@@ -1,24 +1,24 @@
 # From https://github.com/prefix-dev/sharded-repo
 
-import requests
-import os
-import json
-import boto3
-from pathlib import Path
-from botocore.exceptions import ClientError
-import zstandard as zstd
-import hashlib
-import msgpack
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 import argparse
+import hashlib
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from pathlib import Path
+
+import boto3
+import msgpack
+import requests
+import zstandard as zstd
+from botocore.exceptions import ClientError
 from rich.progress import (
-    Progress,
-    track,
-    TransferSpeedColumn,
-    TimeElapsedColumn,
     BarColumn,
+    Progress,
+    TimeElapsedColumn,
+    TransferSpeedColumn,
+    track,
 )
 
 fake_token = {"token": "iamasecrettoken"}

@@ -12,10 +12,7 @@ from conda.core.subdir_data import SubdirData
 from conda.exports import MatchSpec, Resolve, VersionOrder
 from conda.models.channel import Channel
 
-from ..utils import (
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-)
+from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 
 
 def _get_resolve_object(subdir, precs=None, repodata=None):
