@@ -1,0 +1,20 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* Add database-independent base class for (sqlite specific) CondaIndexCache.
+  Return parsed data instead of str in `run_exports()`. (#206)

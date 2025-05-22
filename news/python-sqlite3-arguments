@@ -16,4 +16,5 @@
 
 ### Other
 
-* Publish new `conda-index` releases on PyPI automatically. (#195)
+* Update sqlite3 create_function() arguments for "positional-only in Python
+  3.15" warning.
