@@ -143,3 +143,6 @@ dmypy.json
 conda_index_db
 rever/
 conda_index_db/
+
+# setuptools-scm
+conda_index/_version.py

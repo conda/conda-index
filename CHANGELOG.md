@@ -1,5 +1,25 @@
 [//]: # (current developments)
 
+## 0.6.1 (2025-05-22)
+
+### Enhancements
+
+* Added support for Python 3.13 in the CI test matrix and updated related
+  configurations. (#203)
+
+### Bug fixes
+
+* In sharded repodata, set `base_url` and `shards_base_url` to `""` instead of
+  leaving them undefined, for pixi compatibility. (#209)
+
+### Other
+
+* Add database-independent base class for (sqlite specific) CondaIndexCache.
+  Return parsed data instead of str in `run_exports()`. (#206)
+* Update sqlite3 create_function() arguments for "positional-only in Python
+  3.15" warning. (#211)
+
+
 ## 0.6.0 (2025-03-27)
 
 ### Enhancements

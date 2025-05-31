@@ -661,6 +661,9 @@ class ChannelIndex:
 
         shards_index = {
             "info": {
+                "base_url": "",  # pixi requires this key
+                "shards_base_url": "",  # and this one
+                # "created_at": "2022-01-01T00:00:00Z", # but not this one
                 "subdir": subdir,
             },
             "repodata_version": REPODATA_VERSION,
