@@ -28,7 +28,7 @@ import click
 import jsonpatch
 from conda.gateways.repodata.jlap.core import DEFAULT_IV, DIGEST_SIZE, JLAP
 
-log = logging.getLogger("__name__")
+log = logging.getLogger(__name__)
 
 # attempt to control individual patch size (will fall back to re-downloading
 # repodata.json) without serializing to bytes just to measure
