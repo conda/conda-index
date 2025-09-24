@@ -110,6 +110,7 @@ def update_index(
     write_bz2=True,
     write_zst=False,
     write_run_exports=False,
+    html_dependencies=False,
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
@@ -145,6 +146,7 @@ def update_index(
         write_bz2=write_bz2,
         write_zst=write_zst,
         write_run_exports=write_run_exports,
+        html_dependencies=html_dependencies,
     )
 
     channel_index.index(
