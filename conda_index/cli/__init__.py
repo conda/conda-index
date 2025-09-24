@@ -146,6 +146,16 @@ from .. import yaml
     default=False,
     is_flag=True,
 )
+@click.option(
+    "--html-dependencies/--no-html-dependencies",
+    help="""
+        Include dependency popups in generated HTML index files.
+        May significantly increase file size for large repositories like
+        main or conda-forge.
+        """,
+    default=False,
+    show_default=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -167,6 +177,7 @@ def cli(
     current_repodata=True,
     write_monolithic=True,
     write_shards=False,
+    html_dependencies=False,
 ):
     logutil.configure()
     if verbose:
