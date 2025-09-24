@@ -202,6 +202,7 @@ def cli(
         upstream_stage=upstream_stage,
         write_monolithic=write_monolithic,
         write_shards=write_shards,
+        html_dependencies=html_dependencies,
     )
 
     if update_cache is False:
