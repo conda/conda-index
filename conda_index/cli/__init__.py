@@ -165,6 +165,16 @@ from .. import yaml
     show_default=True,
     envvar="CONDA_INDEX_DBURL",
 )
+@click.option(
+    "--html-dependencies/--no-html-dependencies",
+    help="""
+        Include dependency popups in generated HTML index files.
+        May significantly increase file size for large repositories like
+        main or conda-forge.
+        """,
+    default=False,
+    show_default=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -188,6 +198,7 @@ def cli(
     write_shards=False,
     db="sqlite3",
     db_url="",
+    html_dependencies=False,
 ):
     logutil.configure()
     if verbose:
@@ -232,6 +243,7 @@ def cli(
         write_shards=write_shards,
         cache_class=cache_class,
         cache_kwargs=cache_kwargs,
+        html_dependencies=html_dependencies,
     )
 
     if update_cache is False:

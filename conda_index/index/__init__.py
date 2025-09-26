@@ -110,6 +110,7 @@ def update_index(
     write_bz2=True,
     write_zst=False,
     write_run_exports=False,
+    html_dependencies=False,
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
@@ -145,6 +146,7 @@ def update_index(
         write_bz2=write_bz2,
         write_zst=write_zst,
         write_run_exports=write_run_exports,
+        html_dependencies=html_dependencies,
     )
 
     channel_index.index(
@@ -303,7 +305,7 @@ def _get_jinja2_environment():
     return environment
 
 
-def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths):
+def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths, html_dependencies):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
     rendered_html = template.render(
@@ -311,6 +313,7 @@ def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths
         packages=repodata_packages,
         current_time=datetime.now(timezone.utc),
         extra_paths=extra_paths,
+        html_dependencies=html_dependencies,
     )
     return rendered_html
 
@@ -356,6 +359,7 @@ class ChannelIndex:
     :param save_fs_state: Pass False to use cached filesystem state instead of ``os.listdir(subdir)``
     :param write_monolithic: Pass True to write large 'repodata.json' with all packages.
     :param write_shards: Pass True to write sharded repodata.msgpack and per-package fragments.
+    :param html_dependencies: Pass True to include dependency popups in generated HTML index files.
     """
 
     fs: MinimalFS | None = None
@@ -377,6 +381,7 @@ class ChannelIndex:
         compact_json=True,
         write_monolithic=True,
         write_shards=False,
+        html_dependencies=False,
         *,
         channel_url: str | None = None,
         fs: MinimalFS | None = None,
@@ -411,6 +416,7 @@ class ChannelIndex:
         self.write_run_exports = write_run_exports
         self.write_monolithic = write_monolithic
         self.write_shards = write_shards
+        self.html_dependencies = html_dependencies
         self.compact_json = compact_json
         self.base_url = base_url
         self.save_fs_state = save_fs_state
@@ -932,7 +938,7 @@ class ChannelIndex:
 
         _add_extra_path(extra_paths, join(subdir_path, "patch_instructions.json"))
         rendered_html = _make_subdir_index_html(
-            self.channel_name, subdir, repodata_packages, extra_paths
+            self.channel_name, subdir, repodata_packages, extra_paths, self.html_dependencies,
         )
         assert rendered_html
         index_path = join(subdir_path, "index.html")
