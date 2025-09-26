@@ -16,6 +16,7 @@ from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
+from conda_index.index import _make_subdir_index_html
 from conda_index.utils_build import copy_into
 
 from .utils import archive_dir
@@ -1395,7 +1396,6 @@ def test_write_rss(index_data):
 
 def test_html_dependencies_unit():
     """Test HTML dependencies functionality at the unit level."""
-    from conda_index.index import _make_subdir_index_html
 
     # Test HTML generation with dependencies
     packages = {
