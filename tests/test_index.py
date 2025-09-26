@@ -16,7 +16,6 @@ from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
-from conda_index.index import _make_subdir_index_html
 from conda_index.utils_build import copy_into
 
 from .utils import archive_dir
@@ -1412,14 +1411,14 @@ def test_html_dependencies_unit():
     }
 
     # Test with html_dependencies=True
-    html_with_deps = _make_subdir_index_html(
+    html_with_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=True
     )
     assert 'title=' in html_with_deps
     assert 'depends:' in html_with_deps
 
     # Test with html_dependencies=False
-    html_without_deps = _make_subdir_index_html(
+    html_without_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=False
     )
     assert 'title=' not in html_without_deps
