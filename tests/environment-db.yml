@@ -1,0 +1,8 @@
+name: test
+dependencies:
+  - conda-build
+  - pip >=22
+  - msgpack-python
+  - postgresql
+  - sqlalchemy >=2
+  - psycopg2
