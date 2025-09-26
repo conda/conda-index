@@ -305,7 +305,7 @@ def _get_jinja2_environment():
     return environment
 
 
-def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths, html_dependencies=False):
+def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths, html_dependencies):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
     rendered_html = template.render(
