@@ -51,3 +51,37 @@ python:
     runner.invoke(cli, [str(tmp_path)])
     assert not (tmp_path / "channeldata.json").exists()
     assert (tmp_path / "noarch" / "repodata.json").exists()
+
+
+def test_current_repodata_validation_with_write_shards_does_not_work(tmp_path):
+    """Test --current-repodata only works with --write-monolithic"""
+    runner = CliRunner()
+
+    # Test that --current-repodata still requires --write-monolithic when --write-shards is False
+    result = runner.invoke(cli, [
+        '--no-write-monolithic',
+        '--write-shards',
+        '--current-repodata',
+        str(tmp_path)
+    ])
+
+    assert result.exit_code != 0
+    assert "--current-repodata requires --write-monolithic" in result.output
+
+
+@pytest.mark.parametrize("cli_option", ["--current-repodata", "--run-exports", "--channeldata"])
+def test_mutual_exclusion_current_repodata(cli_option: str, tmp_path):
+    """Test that --current-repodata is blocked when repodata.json is not written."""
+    runner = CliRunner()
+
+    result = runner.invoke(cli, [
+        '--no-write-monolithic',
+        '--no-write-shards',
+        cli_option,
+        str(tmp_path)
+    ])
+
+    assert result.exit_code != 0
+    assert "Arguments mutually exclusive" in result.output
+    assert cli_option in result.output
+    assert "cannot be used when both --no-write-monolithic and --no-write-shards are specified" in result.output
