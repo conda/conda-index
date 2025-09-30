@@ -115,7 +115,7 @@ from .. import yaml
     help="""
         Skip generating current_repodata.json, a file containing only the newest
         versions of all packages and their dependencies, only used by the
-        classic solver. Only works with --write-monolithic.
+        classic solver.  Conflicts with --no-write-monolithic
         """,
     default=True,
     show_default=True,
