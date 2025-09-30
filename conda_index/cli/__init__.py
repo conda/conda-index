@@ -207,9 +207,8 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
-    # Check if repodata.json will be written at all
-    if not write_monolithic and not write_shards:
-        # When neither monolithic nor shards are written, repodata.json is not created
+    if not write_monolithic:
+        # --current-repodata, --run-exports, and --channeldata are only supported with --write-monolithic
         incompatible_args = []
         if current_repodata:
             incompatible_args.append("--current-repodata")
@@ -221,12 +220,8 @@ def cli(
         if incompatible_args:
             args_str = ", ".join(incompatible_args)
             raise click.ClickException(
-                f"Arguments mutually exclusive: {args_str} cannot be used when "
-                "both --no-write-monolithic and --no-write-shards are specified "
-                "(repodata.json is not written in this configuration)"
+                f"Arguments mutually exclusive: {args_str} require --write-monolithic (the default setting)."
             )
-    elif current_repodata and not write_monolithic:
-        raise click.ClickException("--current-repodata requires --write-monolithic")
 
     cache_kwargs = {}
 
