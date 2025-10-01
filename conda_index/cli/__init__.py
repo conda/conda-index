@@ -36,7 +36,7 @@ from .. import yaml
 )
 @click.option(
     "--channeldata/--no-channeldata",
-    help="Generate channeldata.json.",
+    help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -60,7 +60,7 @@ from .. import yaml
 )
 @click.option(
     "--run-exports/--no-run-exports",
-    help="Write run_exports.json.",
+    help="Write run_exports.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -115,7 +115,7 @@ from .. import yaml
     help="""
         Skip generating current_repodata.json, a file containing only the newest
         versions of all packages and their dependencies, only used by the
-        classic solver.  Conflicts with --no-write-monolithic
+        classic solver.  Conflicts with --no-write-monolithic.
         """,
     default=True,
     show_default=True,

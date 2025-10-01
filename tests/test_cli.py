@@ -65,5 +65,5 @@ def test_mutual_exclusion_mononlithic_repodata(cli_option: str, tmp_path):
     ])
 
     assert result.exit_code != 0
-    assert "Arguments mutually exclusive" in result.output
+    assert "Conflicting arguments" in result.output
     assert cli_option in result.output
