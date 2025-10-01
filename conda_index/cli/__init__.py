@@ -220,7 +220,7 @@ def cli(
         if incompatible_args:
             args_str = ", ".join(incompatible_args)
             raise click.ClickException(
-                f"Arguments mutually exclusive: {args_str} require --write-monolithic (the default setting)."
+                f"Conflicting arguments: {args_str} require(s) --write-monolithic (the default setting)."
             )
 
     cache_kwargs = {}
