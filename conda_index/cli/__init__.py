@@ -36,7 +36,7 @@ from .. import yaml
 )
 @click.option(
     "--channeldata/--no-channeldata",
-    help="Generate channeldata.json.",
+    help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -60,7 +60,7 @@ from .. import yaml
 )
 @click.option(
     "--run-exports/--no-run-exports",
-    help="Write run_exports.json.",
+    help="Write run_exports.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -115,7 +115,7 @@ from .. import yaml
     help="""
         Skip generating current_repodata.json, a file containing only the newest
         versions of all packages and their dependencies, only used by the
-        classic solver.
+        classic solver. Conflicts with --no-write-monolithic.
         """,
     default=True,
     show_default=True,
@@ -207,8 +207,21 @@ def cli(
     if output:
         output = os.path.expanduser(output)
 
-    if current_repodata and not write_monolithic:
-        raise click.ClickException("--current-repodata requires --write-monolithic")
+    if not write_monolithic:
+        # --current-repodata, --run-exports, and --channeldata are only supported with --write-monolithic
+        incompatible_args = []
+        if current_repodata:
+            incompatible_args.append("--current-repodata")
+        if run_exports:
+            incompatible_args.append("--run-exports")
+        if channeldata:
+            incompatible_args.append("--channeldata")
+
+        if incompatible_args:
+            args_str = ", ".join(incompatible_args)
+            raise click.ClickException(
+                f"Conflicting arguments: {args_str} require(s) --write-monolithic (the default setting)."
+            )
 
     cache_kwargs = {}
 
