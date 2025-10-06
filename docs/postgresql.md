@@ -29,7 +29,6 @@ Finally, run the following command:
 python -m conda_index --db postgresql --db-url postgresql:///conda_index [DIR]
 ```
 
-
 `conda_index` stores package metadata in the PostgreSQL database given by a
 [SQLAlchemy database
 URL](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls).
