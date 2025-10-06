@@ -36,12 +36,12 @@ URL](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls).
 
 [The
 schema](https://github.com/conda/conda-index/blob/main/conda_index/postgres/model.py)
-is similar to the one used for sqlite3, except that while sqlite3 uses a
-database file per subdirectory, in PostgreSQL all subdirectories are stored in
-the same database. `conda_index` creates a random prefix in
+is similar to the one [used for sqlite3](./database), except that while sqlite3
+uses a database file per subdirectory, in PostgreSQL all subdirectories are
+stored in the same database. `conda_index` creates a random prefix in
 `[DIR]/.cache/cache.json` to differentiate this channel from any others that may
-be stored in the same PostgreSQL database. Each package name is stored with the format
-`<prefix>/<subdir>/<package>.conda` in a single database.
+be stored in the same PostgreSQL database. Each package name is stored with the
+format `<prefix>/<subdir>/<package>.conda` in a single database.
 
 Advanced users can use the CLI or the API to run `conda_index` on a partial
 local package repository. It is possible to add a few local packages to a much
