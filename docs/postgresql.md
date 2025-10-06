@@ -11,12 +11,12 @@ command line arguments, or the `CONDA_INDEX_DBURL` environment variable replaces
 PostgreSQL with the default `postgresql:///conda_index` database URL.
 
 To use a PostgreSQL database with `conda-index`, install `conda-index`'s PostgreSQL-specific dependencies into its environment:
-```
+```sh
 conda install sqlalchemy psycopg2
 ```
 
 Then, install a local PostgreSQL with conda:
-```
+```sh
 # Create a local PostgreSQL installation and conda_index database
 conda install postgresql
 initdb -D conda-index-db
@@ -25,8 +25,9 @@ createdb conda_index
 ```
 
 Finally, run the following command:
-
-`python -m conda_index --db postgresql --db-url postgresql:///conda_index [DIR]`
+```sh
+python -m conda_index --db postgresql --db-url postgresql:///conda_index [DIR]
+```
 
 
 `conda_index` stores package metadata in the PostgreSQL database given by a
