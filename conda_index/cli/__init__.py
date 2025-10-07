@@ -36,7 +36,7 @@ from .. import yaml
 )
 @click.option(
     "--channeldata/--no-channeldata",
-    help="Generate channeldata.json.",
+    help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -60,7 +60,7 @@ from .. import yaml
 )
 @click.option(
     "--run-exports/--no-run-exports",
-    help="Write run_exports.json.",
+    help="Write run_exports.json. Conflicts with --no-write-monolithic.",
     default=False,
     show_default=True,
 )
@@ -115,7 +115,7 @@ from .. import yaml
     help="""
         Skip generating current_repodata.json, a file containing only the newest
         versions of all packages and their dependencies, only used by the
-        classic solver.
+        classic solver. Conflicts with --no-write-monolithic.
         """,
     default=True,
     show_default=True,
@@ -146,6 +146,35 @@ from .. import yaml
     default=False,
     is_flag=True,
 )
+@click.option(
+    "--db",
+    help="""
+        Choose database backend. "sqlite3" (default) or "postgresql"
+        (Experimental)
+        """,
+    default="sqlite3",
+    type=click.Choice(["sqlite3", "postgresql"]),
+)
+@click.option(
+    "--db-url",
+    help="""
+        SQLAlchemy database URL when using --db=postgresql. Alternatively, use
+        the CONDA_INDEX_DBURL environment variable. (Experimental)
+        """,
+    default="postgresql:///conda_index",
+    show_default=True,
+    envvar="CONDA_INDEX_DBURL",
+)
+@click.option(
+    "--html-dependencies/--no-html-dependencies",
+    help="""
+        Include dependency popups in generated HTML index files.
+        May significantly increase file size for large repositories like
+        main or conda-forge.
+        """,
+    default=False,
+    show_default=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -167,6 +196,9 @@ def cli(
     current_repodata=True,
     write_monolithic=True,
     write_shards=False,
+    db="sqlite3",
+    db_url="",
+    html_dependencies=False,
 ):
     logutil.configure()
     if verbose:
@@ -174,6 +206,37 @@ def cli(
 
     if output:
         output = os.path.expanduser(output)
+
+    if not write_monolithic:
+        # --current-repodata, --run-exports, and --channeldata are only supported with --write-monolithic
+        incompatible_args = []
+        if current_repodata:
+            incompatible_args.append("--current-repodata")
+        if run_exports:
+            incompatible_args.append("--run-exports")
+        if channeldata:
+            incompatible_args.append("--channeldata")
+
+        if incompatible_args:
+            args_str = ", ".join(incompatible_args)
+            raise click.ClickException(
+                f"Conflicting arguments: {args_str} require(s) --write-monolithic (the default setting)."
+            )
+
+    cache_kwargs = {}
+
+    if db == "postgresql":
+        try:
+            import conda_index.postgres.cache
+
+            cache_class = conda_index.postgres.cache.PsqlCache
+            cache_kwargs["db_url"] = db_url
+        except ImportError as e:
+            raise click.ClickException(f"Missing dependencies for postgresql: {e}")
+    else:
+        from conda_index.index.sqlitecache import CondaIndexCache
+
+        cache_class = CondaIndexCache
 
     channel_index = ChannelIndex(
         os.path.expanduser(dir),
@@ -191,6 +254,9 @@ def cli(
         upstream_stage=upstream_stage,
         write_monolithic=write_monolithic,
         write_shards=write_shards,
+        cache_class=cache_class,
+        cache_kwargs=cache_kwargs,
+        html_dependencies=html_dependencies,
     )
 
     if update_cache is False:
