@@ -16,4 +16,4 @@
 
 ### Other
 
-* Update "conda index" command plugin to avoid re-exported type
+* Update "conda index" command plugin to avoid re-exported type (#227)
