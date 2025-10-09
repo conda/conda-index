@@ -9,6 +9,7 @@
 cli
 modules
 database
+postgresql
 changelog
 ```
 
