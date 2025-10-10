@@ -710,7 +710,7 @@ class ChannelIndex:
 
         return shards_index
 
-    def index_subdir(self, subdir, verbose=False, progress=False):
+    def index_subdir(self, subdir, verbose=False, progress=False) -> dict:
         """
         Generate repodata from the cache.
 
@@ -721,7 +721,17 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
+        # XXX add parameter to control record filter. We filter this way to
+        # avoid iterating over the packages another time, this may or may not be
+        # a useful optimization.
+        def filter(record):
+            return {
+                k: v
+                for k, v in record.items()
+                if not ((k == "subdir" and v == subdir) or k in ("platform", "arch"))
+            }
+
+        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages(filter=filter)
 
         new_repodata = {
             "packages": new_repodata_packages,
