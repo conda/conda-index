@@ -3,7 +3,7 @@ Conda command plugin, provide "conda index" command, renamed to
 avoid clash with old "conda index" CLI.
 """
 
-import conda.plugins
+import conda.plugins.types
 
 
 def command(args):
@@ -25,6 +25,6 @@ def conda_subcommands():
         # ImportError: conda-build is not installed
         pass
 
-    yield conda.plugins.CondaSubcommand(
+    yield conda.plugins.types.CondaSubcommand(
         name="index", action=command, summary="Update package index metadata files."
     )
