@@ -10,7 +10,7 @@
   github: AndrewValette
 - name: Daniel Holth
   email: dholth@anaconda.com
-  num_commits: 92
+  num_commits: 98
   first_commit: 2022-05-18 19:49:18
   github: dholth
 - name: jaimergp
@@ -46,6 +46,12 @@
 - name: Ryan Keith
   email: rkeith@anaconda.com
   github: ryanskeith
+  aliases:
+  - Ryan
+  num_commits: 1
+  first_commit: 2025-09-26 16:01:11
 - name: Jay Roebuck
   email: jroebuck@esri.com
   github: jtroe
+  num_commits: 1
+  first_commit: 2025-09-26 04:49:26

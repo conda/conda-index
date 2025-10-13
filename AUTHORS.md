@@ -6,7 +6,9 @@ Authors are sorted alphabetically.
 * Conda Bot
 * Daniel Holth
 * Jannis Leidel
+* Jay Roebuck
 * Ken Odegard
 * Klaus Zimmermann
+* Ryan Keith
 * conda-bot
 * jaimergp
