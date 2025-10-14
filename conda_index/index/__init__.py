@@ -282,7 +282,7 @@ def _get_jinja2_environment():
             return text
 
     def _filter_to_title(obj):
-        depends_str = "\n".join(obj.get('depends', []))
+        depends_str = "\n".join(obj.get("depends", []))
         return (
             # name v0.0.0 pyABC_X
             f"{obj.get('name')} v{obj.get('version')} {obj.get('build')}"
@@ -305,7 +305,9 @@ def _get_jinja2_environment():
     return environment
 
 
-def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths, html_dependencies):
+def _make_subdir_index_html(
+    channel_name, subdir, repodata_packages, extra_paths, html_dependencies
+):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
     rendered_html = template.render(
@@ -360,6 +362,7 @@ class ChannelIndex:
     :param write_monolithic: Pass True to write large 'repodata.json' with all packages.
     :param write_shards: Pass True to write sharded repodata.msgpack and per-package fragments.
     :param html_dependencies: Pass True to include dependency popups in generated HTML index files.
+    :param strict: Pass True to raise exceptions instead of logging them.
     """
 
     fs: MinimalFS | None = None
@@ -390,6 +393,7 @@ class ChannelIndex:
         write_current_repodata=True,
         upstream_stage: str = "fs",
         cache_kwargs=None,
+        strict: bool = False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -422,6 +426,7 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
+        self.strict = strict
 
         self.cache_kwargs = cache_kwargs
 
@@ -432,6 +437,7 @@ class ChannelIndex:
             fs=self.fs,
             channel_url=self.channel_url,
             upstream_stage=self.upstream_stage,
+            strict=self.strict,
             **self.cache_kwargs or {},
         )  # type: ignore
         if cache.cache_is_brand_new:
@@ -938,7 +944,11 @@ class ChannelIndex:
 
         _add_extra_path(extra_paths, join(subdir_path, "patch_instructions.json"))
         rendered_html = _make_subdir_index_html(
-            self.channel_name, subdir, repodata_packages, extra_paths, self.html_dependencies,
+            self.channel_name,
+            subdir,
+            repodata_packages,
+            extra_paths,
+            self.html_dependencies,
         )
         assert rendered_html
         index_path = join(subdir_path, "index.html")

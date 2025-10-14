@@ -91,6 +91,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        strict: bool = False,
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -100,6 +101,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
         """
 
+        self.strict = strict
         self.subdir = subdir
         self.channel_root = Path(channel_root)
         self.subdir_path = Path(channel_root, subdir)
@@ -190,6 +192,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             BadZipFile,  # stdlib zipfile
             OSError,  # stdlib tarfile: OSError: Invalid data stream
         ):
+            if self.strict:
+                raise  # include a wrapper exception with filename? still log.exception?
             log.exception("Error extracting %s", fn)
         return retval
 
