@@ -4,18 +4,18 @@
 
 ### Enhancements
 
-* Add postgresql as a supported database backend in addition to sqlite (#199)
-* Show error when --no-write-monolithic is combined with --current-repodata, --run-exports, or --channeldata (#224)
-* Add html title popup with dependencies for each build to index.html (#205), thanks @jtroe
+* Add postgresql as a supported database backend in addition to sqlite. (#199)
+* Show error when `--no-write-monolithic` is combined with `--current-repodata`, `--run-exports`, or `--channeldata`. (#224)
+* Add html title popup with dependencies for each build to `index.html`. (#205)
 * "--html-dependencies/--no-html-dependencies" flag toggles popups. (#218)
 
 ### Docs
 
-* Include narrative documentation for `python -m conda_index --db postgresql ...` in Sphinx (https://conda.github.io/conda-index/) (#219)
+* Include narrative documentation for `python -m conda_index --db postgresql ...` in Sphinx (https://conda.github.io/conda-index/). (#219)
 
 ### Other
 
-* Update "conda index" command plugin to avoid re-exported type (#227)
+* Update `conda index` command plugin to avoid re-exported type. (#227)
 
 ### Contributors
 
