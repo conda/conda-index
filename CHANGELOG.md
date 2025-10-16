@@ -1,5 +1,30 @@
 [//]: # (current developments)
 
+## 0.7.0 (2025-10-13)
+
+### Enhancements
+
+* Add postgresql as a supported database backend in addition to sqlite. (#199)
+* Show error when `--no-write-monolithic` is combined with `--current-repodata`, `--run-exports`, or `--channeldata`. (#224)
+* Add html title popup with dependencies for each build to `index.html`. (#205)
+* "--html-dependencies/--no-html-dependencies" flag toggles popups. (#218)
+
+### Docs
+
+* Include narrative documentation for `python -m conda_index --db postgresql ...` in Sphinx (https://conda.github.io/conda-index/). (#219)
+
+### Other
+
+* Update `conda index` command plugin to avoid re-exported type. (#227)
+
+### Contributors
+
+* @dholth
+* @jtroe
+* @ryanskeith
+
+
+
 ## 0.6.1 (2025-05-22)
 
 ### Enhancements
