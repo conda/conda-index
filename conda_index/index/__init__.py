@@ -282,7 +282,7 @@ def _get_jinja2_environment():
             return text
 
     def _filter_to_title(obj):
-        depends_str = "\n".join(obj.get('depends', []))
+        depends_str = "\n".join(obj.get("depends", []))
         return (
             # name v0.0.0 pyABC_X
             f"{obj.get('name')} v{obj.get('version')} {obj.get('build')}"
@@ -305,7 +305,9 @@ def _get_jinja2_environment():
     return environment
 
 
-def _make_subdir_index_html(channel_name, subdir, repodata_packages, extra_paths, html_dependencies):
+def _make_subdir_index_html(
+    channel_name, subdir, repodata_packages, extra_paths, html_dependencies
+):
     environment = _get_jinja2_environment()
     template = environment.get_template("subdir-index.html.j2")
     rendered_html = template.render(
@@ -684,15 +686,16 @@ class ChannelIndex:
                 # "created_at": "2022-01-01T00:00:00Z", # but not this one
                 "subdir": subdir,
             },
-            "repodata_version": REPODATA_VERSION,
-            "removed": [],  # can be added by patch/hotfix process
+            "version": REPODATA_VERSION,
             "shards": shards,
         }
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
             shards_index["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
-            shards_index["repodata_version"] = 2
+            shards_index["repodata_version"] = (
+                2  # XXX may not be necessary in sharded repodata
+            )
 
         # Higher compression levels are a waste of time for tiny gains on this
         # collection of small objects.
@@ -938,7 +941,11 @@ class ChannelIndex:
 
         _add_extra_path(extra_paths, join(subdir_path, "patch_instructions.json"))
         rendered_html = _make_subdir_index_html(
-            self.channel_name, subdir, repodata_packages, extra_paths, self.html_dependencies,
+            self.channel_name,
+            subdir,
+            repodata_packages,
+            extra_paths,
+            self.html_dependencies,
         )
         assert rendered_html
         index_path = join(subdir_path, "index.html")

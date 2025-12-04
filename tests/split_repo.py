@@ -275,7 +275,7 @@ def files_to_upload(outpath, timestamp, subdir, channel_name):
 
     print(f"Skipped {skipped} out of {total} files")
     if total > 0:
-        print(f"Percentage skipped: {skipped/total*100}%")
+        print(f"Percentage skipped: {skipped / total * 100}%")
 
     return files
 

@@ -1,6 +1,7 @@
 """
 conda index. Create repodata.json for collections of conda packages.
 """
+
 try:
     from ._version import __version__
 except ImportError:

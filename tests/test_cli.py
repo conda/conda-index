@@ -53,16 +53,14 @@ python:
     assert (tmp_path / "noarch" / "repodata.json").exists()
 
 
-@pytest.mark.parametrize("cli_option", ["--current-repodata", "--run-exports", "--channeldata"])
+@pytest.mark.parametrize(
+    "cli_option", ["--current-repodata", "--run-exports", "--channeldata"]
+)
 def test_mutual_exclusion_mononlithic_repodata(cli_option: str, tmp_path):
     """Test that 'cli_option' is blocked when repodata.json is not written."""
     runner = CliRunner()
 
-    result = runner.invoke(cli, [
-        '--no-write-monolithic',
-        cli_option,
-        str(tmp_path)
-    ])
+    result = runner.invoke(cli, ["--no-write-monolithic", cli_option, str(tmp_path)])
 
     assert result.exit_code != 0
     assert "Conflicting arguments" in result.output

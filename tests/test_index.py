@@ -1398,15 +1398,15 @@ def test_html_dependencies_unit():
 
     # Test HTML generation with dependencies
     packages = {
-        'test-package-1.0-py_0.tar.bz2': {
-            'name': 'test-package',
-            'version': '1.0.0',
-            'build': 'py_0',
-            'depends': ['python >=3.8', 'numpy'],
-            'size': 1024,
-            'timestamp': 1234567890,
-            'sha256': 'abc123',
-            'md5': 'def456'
+        "test-package-1.0-py_0.tar.bz2": {
+            "name": "test-package",
+            "version": "1.0.0",
+            "build": "py_0",
+            "depends": ["python >=3.8", "numpy"],
+            "size": 1024,
+            "timestamp": 1234567890,
+            "sha256": "abc123",
+            "md5": "def456",
         }
     }
 
@@ -1414,11 +1414,11 @@ def test_html_dependencies_unit():
     html_with_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=True
     )
-    assert 'title=' in html_with_deps
-    assert 'depends:' in html_with_deps
+    assert "title=" in html_with_deps
+    assert "depends:" in html_with_deps
 
     # Test with html_dependencies=False
     html_without_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=False
     )
-    assert 'title=' not in html_without_deps
+    assert "title=" not in html_without_deps
