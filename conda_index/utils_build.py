@@ -358,7 +358,7 @@ def merge_tree(
 
     if existing and not clobber:
         raise OSError(
-            "Can't merge {} into {}: file exists: " "{}".format(src, dst, existing[0])
+            "Can't merge {} into {}: file exists: {}".format(src, dst, existing[0])
         )
 
     locks = []

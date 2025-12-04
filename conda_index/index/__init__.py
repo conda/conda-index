@@ -693,7 +693,9 @@ class ChannelIndex:
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
             shards_index["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
-            shards_index["repodata_version"] = 2
+            shards_index["repodata_version"] = (
+                2  # XXX may not be necessary in sharded repodata
+            )
 
         # Higher compression levels are a waste of time for tiny gains on this
         # collection of small objects.
