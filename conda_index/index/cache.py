@@ -11,7 +11,7 @@ import json
 import logging
 from numbers import Number
 from pathlib import Path
-from typing import Any, Iterator, TypedDict
+from typing import Any, Generator, Iterator, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -195,7 +195,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
         """
-        Add or replace fn into cache, disregarding whether it is already cached.
+        Add or replace fn into cache, ignoring whether it is already cached.
 
         Return index.json as dict, with added size, checksums.
         """
@@ -361,7 +361,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(self, desired: set | None = None) -> Generator[tuple[str, dict]]:
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
