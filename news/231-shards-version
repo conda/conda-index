@@ -1,0 +1,21 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* Use correct `"version": 1` field in `repodata_shards` instead of
+  `"repodata_version": 2`. Remove json-only `"repodata_version"` key from shards
+  index. (#231)
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>

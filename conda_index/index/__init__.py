@@ -172,6 +172,9 @@ def _make_seconds(timestamp):
 
 
 REPODATA_VERSION = 1
+REPODATA_SHARDS_VERSION = (
+    1  # defined in CEP-16 to be 1; not written by prefix.dev tools
+)
 CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
 REPODATA_JSON_FN = "repodata.json"
@@ -680,22 +683,19 @@ class ChannelIndex:
         shards = {}
 
         shards_index = {
+            "version": REPODATA_SHARDS_VERSION,
             "info": {
                 "base_url": "",  # pixi requires this key
                 "shards_base_url": "",  # and this one
                 # "created_at": "2022-01-01T00:00:00Z", # but not this one
                 "subdir": subdir,
             },
-            "version": REPODATA_VERSION,
             "shards": shards,
         }
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
             shards_index["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
-            shards_index["repodata_version"] = (
-                2  # XXX may not be necessary in sharded repodata
-            )
 
         # Higher compression levels are a waste of time for tiny gains on this
         # collection of small objects.
