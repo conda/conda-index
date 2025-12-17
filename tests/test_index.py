@@ -1315,8 +1315,24 @@ def test_base_url(index_data):
     """
     pkg_dir = Path(index_data, "packages")
 
+    class PatchShardsChannelIndex(conda_index.index.ChannelIndex):
+        """
+        Cover writing patched shard that does not already exist.
+        """
+
+        def _patch_repodata_shards(
+            self, subdir, repodata_shards, patch_generator: str | None = None
+        ):
+            shards, instructions = super()._patch_repodata_shards(
+                subdir, repodata_shards, patch_generator
+            )
+            for record in shards.values():
+                # meaningless value that will not exist in the shard.
+                record["extra"] = "patched"
+            return shards, instructions
+
     # compact json
-    channel_index = conda_index.index.ChannelIndex(
+    channel_index = PatchShardsChannelIndex(
         pkg_dir,
         None,
         write_bz2=False,

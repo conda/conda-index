@@ -618,7 +618,7 @@ class ChannelIndex:
         current_index_versions=None,  # unused
     ):
         """
-        Create repodata_from_packages, then patche.
+        Create repodata_from_packages, then patch.
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
