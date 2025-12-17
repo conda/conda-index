@@ -1438,3 +1438,28 @@ def test_html_dependencies_unit():
         "test-channel", "osx-64", packages, {}, html_dependencies=False
     )
     assert "title=" not in html_without_deps
+
+
+def test_index_format(tmp_path):
+    """
+    Test that empty shards, monolithic indexes have expected "version": 1 or
+    "repodata_version" keys and structure.
+    """
+    (tmp_path / "noarch").mkdir()
+
+    index = conda_index.index.ChannelIndex(tmp_path, "noarch")
+    shards_index = index.index_subdir_shards("noarch")
+    assert shards_index == {
+        "version": 1,
+        "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch"},
+        "shards": {},
+    }
+
+    monolithic_index = index = index.index_subdir("noarch")
+    assert monolithic_index == {
+        "packages": {},
+        "packages.conda": {},
+        "info": {"subdir": "noarch"},
+        "repodata_version": 1,
+        "removed": [],
+    }
