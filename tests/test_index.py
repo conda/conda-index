@@ -1319,7 +1319,7 @@ def test_base_url(index_data):
 
     class PatchShardsChannelIndex(conda_index.index.ChannelIndex):
         """
-        Cover writing patched shard that does not already exist.
+        Cover writing patched shard. If an identical un-patched shard was already written, a line of code is skipped.
         """
 
         def _patch_repodata_shards(
