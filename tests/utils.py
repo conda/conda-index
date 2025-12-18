@@ -53,8 +53,7 @@ def assert_package_consistency(package_path):
                 has_prefix_present = False
     except tarfile.ReadError:
         raise RuntimeError(
-            "Could not extract metadata from %s. "
-            "File probably corrupt." % package_path
+            "Could not extract metadata from %s. File probably corrupt." % package_path
         )
     errors = []
     member_set = set(member_list)  # The tar format allows duplicates in member_list

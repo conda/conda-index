@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import bz2
 import json
 import os
@@ -1315,8 +1317,24 @@ def test_base_url(index_data):
     """
     pkg_dir = Path(index_data, "packages")
 
+    class PatchShardsChannelIndex(conda_index.index.ChannelIndex):
+        """
+        Cover writing patched shard. If an identical un-patched shard was already written, a line of code is skipped.
+        """
+
+        def _patch_repodata_shards(
+            self, subdir, repodata_shards, patch_generator: str | None = None
+        ):
+            shards, instructions = super()._patch_repodata_shards(
+                subdir, repodata_shards, patch_generator
+            )
+            for record in shards.values():
+                # meaningless value that will not exist in the shard.
+                record["extra"] = "patched"
+            return shards, instructions
+
     # compact json
-    channel_index = conda_index.index.ChannelIndex(
+    channel_index = PatchShardsChannelIndex(
         pkg_dir,
         None,
         write_bz2=False,
@@ -1398,15 +1416,15 @@ def test_html_dependencies_unit():
 
     # Test HTML generation with dependencies
     packages = {
-        'test-package-1.0-py_0.tar.bz2': {
-            'name': 'test-package',
-            'version': '1.0.0',
-            'build': 'py_0',
-            'depends': ['python >=3.8', 'numpy'],
-            'size': 1024,
-            'timestamp': 1234567890,
-            'sha256': 'abc123',
-            'md5': 'def456'
+        "test-package-1.0-py_0.tar.bz2": {
+            "name": "test-package",
+            "version": "1.0.0",
+            "build": "py_0",
+            "depends": ["python >=3.8", "numpy"],
+            "size": 1024,
+            "timestamp": 1234567890,
+            "sha256": "abc123",
+            "md5": "def456",
         }
     }
 
@@ -1414,11 +1432,36 @@ def test_html_dependencies_unit():
     html_with_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=True
     )
-    assert 'title=' in html_with_deps
-    assert 'depends:' in html_with_deps
+    assert "title=" in html_with_deps
+    assert "depends:" in html_with_deps
 
     # Test with html_dependencies=False
     html_without_deps = conda_index.index._make_subdir_index_html(
         "test-channel", "osx-64", packages, {}, html_dependencies=False
     )
-    assert 'title=' not in html_without_deps
+    assert "title=" not in html_without_deps
+
+
+def test_index_format(tmp_path):
+    """
+    Test that empty shards, monolithic indexes have expected "version": 1 or
+    "repodata_version" keys and structure.
+    """
+    (tmp_path / "noarch").mkdir()
+
+    index = conda_index.index.ChannelIndex(tmp_path, "noarch")
+    shards_index = index.index_subdir_shards("noarch")
+    assert shards_index == {
+        "version": 1,
+        "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch"},
+        "shards": {},
+    }
+
+    monolithic_index = index = index.index_subdir("noarch")
+    assert monolithic_index == {
+        "packages": {},
+        "packages.conda": {},
+        "info": {"subdir": "noarch"},
+        "repodata_version": 1,
+        "removed": [],
+    }
