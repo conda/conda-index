@@ -2,15 +2,40 @@ import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from conda.base.constants import (  # noqa: F401
+from conda.base.constants import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
 from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
 
+from .utils_build import (
+    ensure_list,
+    get_lock,
+    merge_or_update_dict,
+    move_with_fallback,
+    try_acquire_locks,
+)
+
 DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
 
+__all__ = [
+    "CONDA_PACKAGE_EXTENSIONS",
+    "CONDA_PACKAGE_EXTENSION_V1",
+    "CONDA_PACKAGE_EXTENSION_V2",
+    "DEFAULT_SUBDIRS",
+    "checksum",
+    "checksums",
+    "ensure_list",
+    "file_contents_match",
+    "filecmp",
+    "get_lock",
+    "hashlib",
+    "human_bytes",
+    "merge_or_update_dict",
+    "move_with_fallback",
+    "try_acquire_locks",
+]
 
 # multithreaded checksums
 
@@ -40,15 +65,6 @@ def checksums(fn, algorithms, buffersize=1 << 18):
             e.submit(checksum, fn, algorithm, buffersize) for algorithm in algorithms
         ]
     return [result.result() for result in results]
-
-
-from .utils_build import (  # noqa: F401
-    ensure_list,
-    get_lock,
-    merge_or_update_dict,
-    move_with_fallback,
-    try_acquire_locks,
-)
 
 
 def file_contents_match(pathA, pathB):
