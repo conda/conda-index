@@ -682,12 +682,18 @@ class ChannelIndex:
 
         shards = {}
 
+        # Format timestamp with nanosecond precision and Z suffix
+        now_ns = time.time_ns()
+        now_dt = datetime.fromtimestamp(now_ns // 1_000_000_000, tz=timezone.utc)
+        nanoseconds = now_ns % 1_000_000_000
+        created_at = f"{now_dt.strftime('%Y-%m-%dT%H:%M:%S')}.{nanoseconds:09d}Z"
+
         shards_index = {
             "version": REPODATA_SHARDS_VERSION,
             "info": {
                 "base_url": "",  # pixi requires this key
                 "shards_base_url": "",  # and this one
-                # "created_at": "2022-01-01T00:00:00Z", # but not this one
+                "created_at": created_at,
                 "subdir": subdir,
             },
             "shards": shards,
