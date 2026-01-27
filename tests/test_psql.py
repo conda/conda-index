@@ -5,7 +5,7 @@ Test postgresql support.
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Callable, NamedTuple
 
 import pytest
 
@@ -148,7 +148,7 @@ def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_databa
 
 
 class _DummyConnection:
-    def __init__(self, results_factory=list[Any]) -> None:
+    def __init__(self, results_factory=Callable) -> None:
         self.calls: list[tuple[object, dict | None]] = []
         self.results_factory = results_factory
 
@@ -387,3 +387,24 @@ def test_psql_run_exports(tmp_path: Path):
     ]
     run_exports = list(cache.run_exports())
     assert run_exports == [("package.conda", {})]
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = _DummyConnection()
+    cache.engine = _DummyEngine(connection)
+
+    class result:
+        def first(self):
+            return None
+
+    connection.results_factory = result
+
+    result = cache.load_all_from_cache("missing.conda")
+    assert result == {}

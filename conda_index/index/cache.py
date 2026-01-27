@@ -308,7 +308,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def load_all_from_cache(self, fn):
+    def load_all_from_cache(self, fn) -> dict:
         """
         Load package data merged into a single dict for channeldata.
         """

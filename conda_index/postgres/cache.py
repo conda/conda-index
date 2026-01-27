@@ -347,9 +347,9 @@ class PsqlCache(BaseCondaIndexCache):
                     )
                 ).first()
                 if not row:
-                    raise TypeError()
+                    raise KeyError(fn)
                 mtime = row.mtime
-            except TypeError:  # .fetchone() was None
+            except KeyError:  # .fetchone() was None
                 log.warning("%s mtime not found in cache", fn)
                 return {}
 
