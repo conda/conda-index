@@ -139,3 +139,20 @@ def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_databa
 
     found = {row.path: (row.mtime, row.size) for row in rows}
     assert found == {foo: (2, 20), bar: (3, 30)}
+
+
+def test_psql_bad_channel_id(tmp_path: Path):
+    """
+    Error if channel_id doesn't match a pattern.
+    """
+    assert PsqlCache
+    db_filename = tmp_path / ".cache" / "cache.json"
+    db_filename.parent.mkdir()
+    db_filename.write_text('{"channel_id": "%"}')
+    with pytest.raises(ValueError, match="invalid channel_id"):
+        PsqlCache(
+            tmp_path,
+            "noarch",
+            update_only=False,
+            db_url="",  # doesn't eagerly connect
+        )
