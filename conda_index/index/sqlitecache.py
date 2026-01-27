@@ -73,6 +73,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        **kwargs,
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -88,6 +89,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            **kwargs,
         )
 
         self.db_filename = Path(self.cache_dir, "cache.db")

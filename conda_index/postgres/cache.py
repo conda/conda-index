@@ -49,6 +49,7 @@ class PsqlCache(BaseCondaIndexCache):
         channel_url: str | None = None,
         upstream_stage: str = "fs",
         db_url="postgresql://conda_index_test@localhost/conda_index_test",
+        **kwargs,
     ):
         super().__init__(
             channel_root,
@@ -56,6 +57,7 @@ class PsqlCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            **kwargs,
         )
         self.db_filename = self.channel_root / ".cache" / "cache.json"
         self.db_url = db_url
