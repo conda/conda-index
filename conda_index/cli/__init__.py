@@ -109,7 +109,7 @@ from .. import yaml
         add local files to repodata.json without having the complete set of
         packages on disk. (Experimental)
         """,
-    default=True,
+    default=False,
     show_default=True,
 )
 @click.option(
