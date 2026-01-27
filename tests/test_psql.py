@@ -283,3 +283,20 @@ def test_psql_model_create_calls_metadata(monkeypatch):
     engine = object()
     model.create(engine)
     assert called["engine"] is engine
+
+
+def test_psql_bad_channel_id(tmp_path: Path):
+    """
+    Error if channel_id doesn't match a pattern.
+    """
+    assert PsqlCache
+    db_filename = tmp_path / ".cache" / "cache.json"
+    db_filename.parent.mkdir()
+    db_filename.write_text('{"channel_id": "%"}')
+    with pytest.raises(ValueError, match="invalid channel_id"):
+        PsqlCache(
+            tmp_path,
+            "noarch",
+            update_only=False,
+            db_url="",  # doesn't eagerly connect
+        )
