@@ -1,4 +1,5 @@
 ### Enhancements
 
-* Add a flag `--add-only` that adds new packages to the index database, but
-  keeps packages not on the filesystem in the same database.
+* Add a flag `--update-only` that adds new or changed packages to the index database, but
+  keeps already-indexed packages in the database and output `repodata.json` even
+  if those are missing from the filesystem.
