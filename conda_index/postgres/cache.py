@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable
 
 import sqlalchemy
 from psycopg2 import OperationalError
@@ -112,7 +112,7 @@ class PsqlCache(BaseCondaIndexCache):
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
-    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
+    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         """
         Write {path, mtime, size} into database.
         """
@@ -196,7 +196,7 @@ class PsqlCache(BaseCondaIndexCache):
                     insert(index_json_table)
                     .values(path=database_path, index_json=index_json)
                     .on_conflict_do_update(
-                        index_elements=[table_obj.c.path],
+                        index_elements=[index_json_table.c.path],
                         set_={table: insert_obj.excluded.index_json},
                     )  # it will cast to jsonb automatically
                 )
