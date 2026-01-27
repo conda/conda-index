@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterator
 
+import sqlalchemy
 from psycopg2 import OperationalError
 from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
