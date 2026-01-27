@@ -132,8 +132,8 @@ class PsqlCache(BaseCondaIndexCache):
                     insert_statement.on_conflict_do_update(
                         index_elements=[stat.c.stage, stat.c.path],
                         set_={
-                            "mtime": insert_statement.column.mtime,
-                            "size": insert_statement.column.mtime,
+                            "mtime": insert_statement.excluded.mtime,
+                            "size": insert_statement.excluded.size,
                         },
                     ),
                     {**item, "stage": "fs"},
