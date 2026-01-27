@@ -81,6 +81,7 @@ class PsqlCache(BaseCondaIndexCache):
         """
         Remove db connection when pickled.
         """
+        # probably no longer an issue since it is using a global _engine
         return {k: self.__dict__[k] for k in self.__dict__ if k not in ("engine",)}
 
     @property
