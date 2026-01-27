@@ -11,7 +11,7 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable
 
 import msgpack
 
@@ -284,7 +284,7 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return data
 
-    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
+    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
