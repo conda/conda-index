@@ -11,7 +11,7 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 import msgpack
 
@@ -398,7 +398,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 
-    def run_exports(self):
+    def run_exports(self) -> Iterator[tuple[str, dict]]:
         """
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()

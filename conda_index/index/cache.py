@@ -376,7 +376,10 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
     def run_exports(self) -> Iterator[tuple[str, dict]]:
         """
         Return run_exports data, to be formatted by
-        ChannelIndex.build_run_exports_data()
+        ChannelIndex.build_run_exports_data().
+
+        Include every package, with a default run_exports of {} if not present
+        for that package.
         """
 
 

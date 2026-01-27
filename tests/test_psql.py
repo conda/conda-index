@@ -1,13 +1,16 @@
 """
-Test ability to index off diverse filesystems using fsspec.
+Test postgresql support.
 """
 
+import hashlib
 import json
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import pytest
 
 from conda_index.index import ChannelIndex
+from conda_index.index.sqlitecache import ICON_PATH
 
 try:
     from sqlalchemy import select
@@ -41,7 +44,7 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
         write_bz2=False,
         write_zst=False,
         threads=1,
-        write_run_exports=False,
+        write_run_exports=True,
         compact_json=True,
         cache_class=PsqlCache,
         cache_kwargs={"db_url": postgresql_database.url},
@@ -52,6 +55,8 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     channel_index.index(
         patch_generator=None, current_index_versions=None, progress=False
     )
+
+    channel_index.update_channeldata(rss=True)
 
     print("Done")
 
@@ -143,12 +148,13 @@ def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_databa
 
 
 class _DummyConnection:
-    def __init__(self) -> None:
+    def __init__(self, results_factory=list[Any]) -> None:
         self.calls: list[tuple[object, dict | None]] = []
+        self.results_factory = results_factory
 
     def execute(self, statement, params=None):
         self.calls.append((statement, params))
-        return []
+        return self.results_factory()
 
 
 class _DummyBegin:
@@ -227,33 +233,13 @@ def test_psql_cache_invalid_channel_id(tmp_path: Path):
 
 
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
-def test_psql_store_fs_state_calls_update_only(tmp_path: Path):
-    assert PsqlCache
-    cache = PsqlCache(
-        tmp_path, "noarch", update_only=True, db_url="postgresql://example"
-    )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
-
-    listdir_stat = [
-        {"path": cache.database_path("foo-1.0-0.conda"), "mtime": 1, "size": 10},
-        {"path": cache.database_path("bar-1.0-0.conda"), "mtime": 2, "size": 20},
-    ]
-
-    cache.store_fs_state(listdir_stat)
-
-    assert len(connection.calls) == 2
-    insert_params = [params for _, params in connection.calls if params]
-    assert all(param["stage"] == "fs" for param in insert_params)
-
-
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
-def test_psql_store_fs_state_calls_delete(tmp_path: Path):
+@pytest.mark.parametrize("update_only", (True, False))
+def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
     assert PsqlCache
     cache = PsqlCache(
         tmp_path,
         "noarch",
-        update_only=False,
+        update_only=update_only,
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
@@ -266,10 +252,16 @@ def test_psql_store_fs_state_calls_delete(tmp_path: Path):
 
     cache.store_fs_state(listdir_stat)
 
-    assert len(connection.calls) == 3
-    assert connection.calls[0][1] is None
-    insert_params = [params for _, params in connection.calls[1:] if params]
-    assert all(param["stage"] == "fs" for param in insert_params)
+    if update_only:
+        assert len(connection.calls) == 2  # no delete and 2 inserts
+        insert_params = [params for _, params in connection.calls if params]
+        assert all(param["stage"] == "fs" for param in insert_params)
+    else:
+        assert len(connection.calls) == 3  # a Delete followed by 2 inserts
+        assert "Delete" in str(connection.calls[0])
+        assert connection.calls[0][1] is None
+        insert_params = [params for _, params in connection.calls[1:] if params]
+        assert all(param["stage"] == "fs" for param in insert_params)
 
 
 @pytest.mark.skipif(model is None, reason="Could not import postgres model")
@@ -300,3 +292,98 @@ def test_psql_bad_channel_id(tmp_path: Path):
             update_only=False,
             db_url="",  # doesn't eagerly connect
         )
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_psql_no_parse_icon_bad_package(tmp_path: Path):
+    """
+    Coverage for 'doesn't parse ICON_PATH as json', OperationalError
+    """
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = _DummyConnection()
+    cache.engine = _DummyEngine(connection)
+
+    import conda_index.postgres.cache
+
+    def raise_error():
+        raise conda_index.postgres.cache.OperationalError()
+
+    connection.results_factory = raise_error
+
+    with pytest.raises(conda_index.postgres.cache.OperationalError):
+        # test not parsing icon, inserting the wrong extension, raising error on
+        # insert.
+        cache.store(
+            "package.notconda",
+            size=1,
+            mtime=1,
+            members={ICON_PATH: b""},
+            index_json={
+                "sha256": hashlib.sha256().hexdigest(),
+                "md5": hashlib.md5().hexdigest(),
+            },
+        )
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_psql_skip_unknown_extension(tmp_path: Path):
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = _DummyConnection()
+    cache.engine = _DummyEngine(connection)
+
+    class DummyResult(NamedTuple):
+        name: str
+        path: str
+        record: object
+
+    # no index.json validation at this step, empty {} as record is passed on.
+    connection.results_factory = lambda: [
+        DummyResult("package", "package.notconda", {}),
+        DummyResult("package", "package.conda", {}),
+        DummyResult("package", "package.tar.bz2", {}),
+    ]
+    shards = list(cache.indexed_shards())
+    assert len(shards) == 1
+    shards0 = shards[0]
+    name, data = shards0
+    assert name == "package"
+    assert len(data["packages"]) == 1
+    assert len(data["packages.conda"]) == 1
+
+    packages, packages_conda = cache.indexed_packages()
+    assert len(packages) == 1
+    assert len(packages_conda) == 1
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_psql_run_exports(tmp_path: Path):
+    # XXX this should be tested end-to-end
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = _DummyConnection()
+    cache.engine = _DummyEngine(connection)
+
+    class DummyResult(NamedTuple):
+        path: str
+        run_exports: object
+
+    # no index.json validation at this step, empty {} as record is passed on.
+    connection.results_factory = lambda: [
+        DummyResult("package.conda", {}),
+    ]
+    run_exports = list(cache.run_exports())
+    assert run_exports == [("package.conda", {})]

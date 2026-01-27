@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
@@ -424,17 +424,19 @@ class PsqlCache(BaseCondaIndexCache):
 
         return data
 
-    def run_exports(self):
+    def run_exports(self) -> Iterator[tuple[str, dict]]:
         """
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()
         """
         stat = model.Base.metadata.tables["stat"]
         run_exports = model.Base.metadata.tables["run_exports"]
-        query = stat.join(run_exports, onclause=stat.c.path == run_exports.c.path)
+        query = stat.join(
+            run_exports, onclause=stat.c.path == run_exports.c.path, isouter=True
+        )
         connection: Connection
         with self.engine.begin() as connection:
             for row in connection.execute(
                 select(query).where(stat.c.stage == self.upstream_stage)
             ):
-                yield (self.plain_path(row.path), json.dumps(row.run_exports))
+                yield (self.plain_path(row.path), row.run_exports or {})
