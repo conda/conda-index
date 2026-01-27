@@ -64,6 +64,8 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_store_fs_state_update_only_true(tmp_path: Path, postgresql_database):
     assert PsqlCache
+    assert model
+    assert select
     cache = PsqlCache(
         tmp_path,
         "noarch",
@@ -107,6 +109,8 @@ def test_psql_store_fs_state_update_only_true(tmp_path: Path, postgresql_databas
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_database):
     assert PsqlCache
+    assert model
+    assert select
     cache = PsqlCache(
         tmp_path,
         "noarch",
@@ -209,7 +213,7 @@ def test_psql_cache_engine_is_cached(tmp_path: Path, monkeypatch):
 def test_psql_cache_getstate_omits_engine(tmp_path: Path):
     assert PsqlCache
     cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
-    cache.engine = object()
+    cache.engine = object()  # type: ignore
     state = cache.__getstate__()
     assert "engine" not in state
 
@@ -243,7 +247,7 @@ def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
+    cache.engine = _DummyEngine(connection)  # type: ignore
 
     listdir_stat = [
         {"path": cache.database_path("foo-1.0-0.conda"), "mtime": 1, "size": 10},
@@ -266,6 +270,7 @@ def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
 
 @pytest.mark.skipif(model is None, reason="Could not import postgres model")
 def test_psql_model_create_calls_metadata(monkeypatch):
+    assert model
     called = {}
 
     def fake_create_all(engine):
@@ -306,7 +311,7 @@ def test_psql_no_parse_icon_bad_package(tmp_path: Path):
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
+    cache.engine = _DummyEngine(connection)  # type: ignore
 
     import conda_index.postgres.cache
 
@@ -339,7 +344,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
+    cache.engine = _DummyEngine(connection)  # type: ignore
 
     class DummyResult(NamedTuple):
         name: str
@@ -375,7 +380,7 @@ def test_psql_run_exports(tmp_path: Path):
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
+    cache.engine = _DummyEngine(connection)  # type: ignore
 
     class DummyResult(NamedTuple):
         path: str
@@ -398,7 +403,7 @@ def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
         db_url="postgresql://example",
     )
     connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)
+    cache.engine = _DummyEngine(connection)  # type: ignore
 
     class result:
         def first(self):
@@ -406,5 +411,5 @@ def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
 
     connection.results_factory = result
 
-    result = cache.load_all_from_cache("missing.conda")
-    assert result == {}
+    missing = cache.load_all_from_cache("missing.conda")
+    assert missing == {}
