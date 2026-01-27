@@ -1,0 +1,4 @@
+### Enhancements
+
+* Add a flag `--add-only` that adds new packages to the index database, but
+  keeps packages not on the filesystem in the same database.

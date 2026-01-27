@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 from typing import Any, Iterator
 
-import sqlalchemy
 from psycopg2 import OperationalError
 from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
@@ -116,13 +115,26 @@ class PsqlCache(BaseCondaIndexCache):
         connection: Connection
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
-            connection.execute(
-                stat.delete()
-                .where(stat.c.stage == "fs")
-                .where(stat.c.path.startswith(self.database_prefix, autoescape=True))
-            )
+            if not self.update_only:
+                connection.execute(
+                    stat.delete()
+                    .where(stat.c.stage == "fs")
+                    .where(
+                        stat.c.path.startswith(self.database_prefix, autoescape=True)
+                    )
+                )
+            insert_statement = insert(stat)
             for item in listdir_stat:
-                connection.execute(stat.insert(), {**item, "stage": "fs"})
+                connection.execute(
+                    insert_statement.on_conflict_do_update(
+                        index_elements=[stat.c.stage, stat.c.path],
+                        set_={
+                            "mtime": insert_statement.column.mtime,
+                            "size": insert_statement.column.mtime,
+                        },
+                    ),
+                    {**item, "stage": "fs"},
+                )
 
     def store(
         self,

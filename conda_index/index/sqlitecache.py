@@ -286,14 +286,17 @@ class CondaIndexCache(BaseCondaIndexCache):
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
-            self.db.execute(
-                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": self.database_path_like},
-            )
+            if not self.update_only:
+                self.db.execute(
+                    "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
+                    {"path_like": self.database_path_like},
+                )
             self.db.executemany(
                 """
             INSERT INTO STAT (stage, path, mtime, size)
             VALUES ('fs', :path, :mtime, :size)
+            ON CONFLICT (stage, path) DO UPDATE SET
+            mtime=excluded.mtime, size=excluded.size
             """,
                 listdir_stat,
             )

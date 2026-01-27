@@ -91,6 +91,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        update_only: bool = False,
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -98,6 +99,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
         upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
+        update_only: skip "delete from stat where stage='fs'" operation.
         """
 
         self.subdir = subdir
@@ -105,6 +107,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.update_only = update_only
 
         self.fs = fs or MinimalFS()
         self.channel_url = channel_url or str(channel_root)
