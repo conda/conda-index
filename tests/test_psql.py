@@ -18,12 +18,9 @@ try:
     from conda_index.postgres import model
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
-    PsqlCache = None
-    model = None
-    select = None
+    pytest.skip("Could not import PsqlCache", allow_module_level=True)
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.
@@ -61,7 +58,6 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     print("Done")
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_store_fs_state_update_only_true(tmp_path: Path, postgresql_database):
     assert PsqlCache
     assert model
@@ -106,7 +102,6 @@ def test_psql_store_fs_state_update_only_true(tmp_path: Path, postgresql_databas
     assert found == {foo: (2, 20), bar: (3, 30), stale: (1, 11)}
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_database):
     assert PsqlCache
     assert model
@@ -180,7 +175,6 @@ class _DummyEngine:
         return _DummyBegin(self.connection)
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_cache_engine_is_cached(tmp_path: Path, monkeypatch):
     assert PsqlCache
     import conda_index.postgres.cache as cache_module
@@ -209,7 +203,6 @@ def test_psql_cache_engine_is_cached(tmp_path: Path, monkeypatch):
     assert calls == {"create_engine": 1, "create": 1}
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_cache_getstate_omits_engine(tmp_path: Path):
     assert PsqlCache
     cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
@@ -218,7 +211,6 @@ def test_psql_cache_getstate_omits_engine(tmp_path: Path):
     assert "engine" not in state
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_cache_database_prefix_root(tmp_path: Path):
     assert PsqlCache
     cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
@@ -226,7 +218,6 @@ def test_psql_cache_database_prefix_root(tmp_path: Path):
     assert cache.database_prefix == f"{cache.channel_id}/_ROOT/"
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_cache_invalid_channel_id(tmp_path: Path):
     assert PsqlCache
     cache_dir = tmp_path / ".cache"
@@ -236,7 +227,6 @@ def test_psql_cache_invalid_channel_id(tmp_path: Path):
         PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 @pytest.mark.parametrize("update_only", (True, False))
 def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
     assert PsqlCache
@@ -299,7 +289,6 @@ def test_psql_bad_channel_id(tmp_path: Path):
         )
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
     """
     Coverage for 'doesn't parse ICON_PATH as json', OperationalError
@@ -335,7 +324,6 @@ def test_psql_no_parse_icon_bad_package(tmp_path: Path):
         )
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_skip_unknown_extension(tmp_path: Path):
     assert PsqlCache
     cache = PsqlCache(
@@ -370,7 +358,6 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert len(packages_conda) == 1
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_run_exports(tmp_path: Path):
     # XXX this should be tested end-to-end
     assert PsqlCache
@@ -394,7 +381,6 @@ def test_psql_run_exports(tmp_path: Path):
     assert run_exports == [("package.conda", {})]
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
 def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
     assert PsqlCache
     cache = PsqlCache(
