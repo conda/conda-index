@@ -148,7 +148,7 @@ def test_psql_store_fs_state_update_only_false(tmp_path: Path, postgresql_databa
 
 
 class _DummyConnection:
-    def __init__(self, results_factory=Callable) -> None:
+    def __init__(self, results_factory: Callable) -> None:
         self.calls: list[tuple[object, dict | None]] = []
         self.results_factory = results_factory
 
