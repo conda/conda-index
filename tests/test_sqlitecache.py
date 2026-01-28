@@ -44,6 +44,68 @@ def test_cache_extract_without_stat_result(index_data):
     )
 
 
+def test_store_fs_state_update_only_true(tmp_path):
+    cache = CondaIndexCache(tmp_path, "noarch", update_only=True)
+
+    foo = cache.database_path("foo-1.0-0.conda")
+    stale = cache.database_path("stale-1.0-0.conda")
+    bar = cache.database_path("bar-1.0-0.conda")
+
+    with cache.db:
+        cache.db.executemany(
+            "INSERT INTO stat (stage, path, mtime, size) VALUES (:stage, :path, :mtime, :size)",
+            [
+                {"stage": "fs", "path": foo, "mtime": 1, "size": 10},
+                {"stage": "fs", "path": stale, "mtime": 1, "size": 11},
+            ],
+        )
+
+    listdir_stat = [
+        {"path": foo, "mtime": 2, "size": 20},
+        {"path": bar, "mtime": 3, "size": 30},
+    ]
+
+    cache.store_fs_state(listdir_stat)
+
+    rows = cache.db.execute(
+        "SELECT path, mtime, size FROM stat WHERE stage='fs' ORDER BY path"
+    ).fetchall()
+    found = {row["path"]: (row["mtime"], row["size"]) for row in rows}
+
+    assert found == {foo: (2, 20), bar: (3, 30), stale: (1, 11)}
+
+
+def test_store_fs_state_update_only_false(tmp_path):
+    cache = CondaIndexCache(tmp_path, "noarch", update_only=False)
+
+    foo = cache.database_path("foo-1.0-0.conda")
+    stale = cache.database_path("stale-1.0-0.conda")
+    bar = cache.database_path("bar-1.0-0.conda")
+
+    with cache.db:
+        cache.db.executemany(
+            "INSERT INTO stat (stage, path, mtime, size) VALUES (:stage, :path, :mtime, :size)",
+            [
+                {"stage": "fs", "path": foo, "mtime": 1, "size": 10},
+                {"stage": "fs", "path": stale, "mtime": 1, "size": 11},
+            ],
+        )
+
+    listdir_stat = [
+        {"path": foo, "mtime": 2, "size": 20},
+        {"path": bar, "mtime": 3, "size": 30},
+    ]
+
+    cache.store_fs_state(listdir_stat)
+
+    rows = cache.db.execute(
+        "SELECT path, mtime, size FROM stat WHERE stage='fs' ORDER BY path"
+    ).fetchall()
+    found = {row["path"]: (row["mtime"], row["size"]) for row in rows}
+
+    assert found == {foo: (2, 20), bar: (3, 30)}
+
+
 def test_cache_unusual_files(tmp_path):
     """
     Cover error when metadata happens to be a device file; cover cache mtime

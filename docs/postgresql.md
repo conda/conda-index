@@ -45,8 +45,22 @@ format `<prefix>/<subdir>/<package>.conda` in a single database.
 Advanced users can use the CLI or the API to run `conda_index` on a partial
 local package repository. It is possible to add a few local packages to a much
 larger index instead of keeping every package on the machine running
-`conda-index`. For example, by inserting packages into the `stat` table and then
-running `python -m conda_index --db postgresql --no-update-cache [DIR]`,
-`conda-index` can add or update packages in `[DIR]` to repodata without
-necessarily storing either the entire set of packages or the `conda-index`
-database on that machine.
+`conda-index`.
+
+For example, by running `python -m conda_index --db postgresql --update-only
+[DIR]`, `conda-index` will add or update packages in `[DIR]` to repodata, while
+keeping already-indexed packages in the output `repodata.json`. The output
+repodata can then be copied to a server that has every package.
+
+If `--update-only` is used, the `stat` table must be altered to remove packages
+from `repodata.json`, e.g. `DELETE FROM stat WHERE path =
+'<prefix>/<subdir>/package.conda' AND stage = 'fs'`.
+
+Additionally if conda-index is used this way to aggregate a large
+`repoadata.json`, and `--update-only` is not used every time, then all packages
+not present on the local system will be removed from the database and the output
+`repodata.json`.
+
+A future improvement could add flags to toggle each stage of conda-index
+(populate list of packages; compare list of packages to indexed packages and
+cache any changed metadata; output repodata by querying the database).

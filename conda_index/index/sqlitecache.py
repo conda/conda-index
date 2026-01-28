@@ -11,7 +11,7 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 import msgpack
 
@@ -73,6 +73,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        **kwargs,
     ):
         """
         channel_root: directory containing platform subdir's, e.g. /clones/conda-forge
@@ -88,6 +89,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            **kwargs,
         )
 
         self.db_filename = Path(self.cache_dir, "cache.db")
@@ -282,18 +284,21 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return data
 
-    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
+    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
-            self.db.execute(
-                "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                {"path_like": self.database_path_like},
-            )
+            if not self.update_only:
+                self.db.execute(
+                    "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
+                    {"path_like": self.database_path_like},
+                )
             self.db.executemany(
                 """
             INSERT INTO STAT (stage, path, mtime, size)
             VALUES ('fs', :path, :mtime, :size)
+            ON CONFLICT (stage, path) DO UPDATE SET
+            mtime=excluded.mtime, size=excluded.size
             """,
                 listdir_stat,
             )
@@ -393,7 +398,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 
-    def run_exports(self):
+    def run_exports(self) -> Iterator[tuple[str, dict]]:
         """
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()

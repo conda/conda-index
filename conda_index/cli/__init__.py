@@ -103,6 +103,16 @@ from .. import yaml
     show_default=True,
 )
 @click.option(
+    "--update-only/--no-update-only",
+    help="""
+        Control whether missing files are deleted from repodata.json. Used to
+        add local files to repodata.json without having the complete set of
+        packages on disk. (Experimental)
+        """,
+    default=False,
+    show_default=True,
+)
+@click.option(
     "--upstream-stage",
     help="""
     Set to 'clone' to generate example repodata from conda-forge test database.
@@ -199,6 +209,7 @@ def cli(
     db="sqlite3",
     db_url="",
     html_dependencies=False,
+    update_only=False,
 ):
     logutil.configure()
     if verbose:
@@ -257,6 +268,7 @@ def cli(
         cache_class=cache_class,
         cache_kwargs=cache_kwargs,
         html_dependencies=html_dependencies,
+        update_only=update_only,
     )
 
     if update_cache is False:
