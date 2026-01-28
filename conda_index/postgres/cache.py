@@ -107,7 +107,7 @@ class PsqlCache(BaseCondaIndexCache):
 
     def convert(self, force=False):
         """
-        Load filesystem cache into sqlite.
+        Load filesystem cache into database.
         """
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
