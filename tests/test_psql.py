@@ -13,8 +13,6 @@ from conda_index.index import ChannelIndex
 from conda_index.index.sqlitecache import ICON_PATH
 
 try:
-    from sqlalchemy import select
-
     from conda_index.postgres import model
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
