@@ -2,15 +2,11 @@ import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from conda.base.constants import (  # noqa: F401
-    CONDA_PACKAGE_EXTENSION_V1,
-    CONDA_PACKAGE_EXTENSION_V2,
-    CONDA_PACKAGE_EXTENSIONS,
-)
+from conda.base.constants import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
 
 DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
-
+CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
 
 # multithreaded checksums
 
