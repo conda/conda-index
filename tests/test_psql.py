@@ -168,7 +168,6 @@ def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
         assert all(param["stage"] == "fs" for param in insert_params)
 
 
-@pytest.mark.skipif(model is None, reason="Could not import postgres model")
 def test_psql_model_create_calls_metadata(monkeypatch):
     assert model
     called = {}
