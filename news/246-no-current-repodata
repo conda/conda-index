@@ -1,0 +1,6 @@
+### Deprecations
+
+* Default to `--no-current-repodata` in the CLI. This is faster by skipping a
+  file that can only be used by conda's "classic" solver. Pass
+  `--current-repodata` if you still need `current_repodata.json`. API users are
+  not affected by this change. (#246)
