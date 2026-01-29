@@ -2,15 +2,22 @@ import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from conda.base.constants import (  # noqa: F401
-    CONDA_PACKAGE_EXTENSION_V1,
+from conda_index._vendor.constants import KNOWN_SUBDIRS as DEFAULT_SUBDIRS
+
+from .utils_build import ensure_list as ensure_list
+from .utils_build import get_lock as get_lock
+from .utils_build import merge_or_update_dict as merge_or_update_dict
+from .utils_build import move_with_fallback as move_with_fallback
+from .utils_build import try_acquire_locks as try_acquire_locks
+
+DEFAULT_SUBDIRS = DEFAULT_SUBDIRS
+
+CONDA_PACKAGE_EXTENSION_V1 = ".tar.bz2"
+CONDA_PACKAGE_EXTENSION_V2 = ".conda"
+CONDA_PACKAGE_EXTENSIONS = (
     CONDA_PACKAGE_EXTENSION_V2,
-    CONDA_PACKAGE_EXTENSIONS,
+    CONDA_PACKAGE_EXTENSION_V1,
 )
-from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
-
-DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
-
 
 # multithreaded checksums
 
@@ -40,15 +47,6 @@ def checksums(fn, algorithms, buffersize=1 << 18):
             e.submit(checksum, fn, algorithm, buffersize) for algorithm in algorithms
         ]
     return [result.result() for result in results]
-
-
-from .utils_build import (  # noqa: F401
-    ensure_list,
-    get_lock,
-    merge_or_update_dict,
-    move_with_fallback,
-    try_acquire_locks,
-)
 
 
 def file_contents_match(pathA, pathB):
