@@ -3,6 +3,7 @@ from __future__ import annotations
 import bz2
 import json
 import os
+import re
 import shutil
 import tarfile
 import urllib.parse
