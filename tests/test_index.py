@@ -1449,16 +1449,16 @@ def test_index_format(tmp_path):
     """
     (tmp_path / "noarch").mkdir()
 
-    index = conda_index.index.ChannelIndex(tmp_path, "noarch")
-    shards_index = index.index_subdir_shards("noarch")
-    # created_at is dynamic, so check it separately
-    created_at = shards_index["info"].pop("created_at")
-    import re
+    CREATED_AT = "2022-01-01T00:00:00Z"
 
-    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", created_at)
+    index = conda_index.index.ChannelIndex(tmp_path, "noarch")
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", index.created_at)
+    index.created_at = CREATED_AT
+    shards_index = index.index_subdir_shards("noarch")
+
     assert shards_index == {
         "version": 1,
-        "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch"},
+        "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch", "created_at": CREATED_AT},
         "shards": {},
     }
 
