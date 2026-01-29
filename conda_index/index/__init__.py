@@ -682,11 +682,9 @@ class ChannelIndex:
 
         shards = {}
 
-        # Format timestamp with nanosecond precision and Z suffix
-        now_ns = time.time_ns()
-        now_dt = datetime.fromtimestamp(now_ns // 1_000_000_000, tz=timezone.utc)
-        nanoseconds = now_ns % 1_000_000_000
-        created_at = f"{now_dt.strftime('%Y-%m-%dT%H:%M:%S')}.{nanoseconds:09d}Z"
+        # Format timestamp as ISO 8601 with Z suffix
+        now_dt = datetime.now(tz=timezone.utc)
+        created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         shards_index = {
             "version": REPODATA_SHARDS_VERSION,

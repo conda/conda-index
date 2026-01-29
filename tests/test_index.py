@@ -1455,7 +1455,7 @@ def test_index_format(tmp_path):
     created_at = shards_index["info"].pop("created_at")
     import re
 
-    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z$", created_at)
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", created_at)
     assert shards_index == {
         "version": 1,
         "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch"},
