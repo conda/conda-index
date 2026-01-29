@@ -28,9 +28,9 @@ def update_index(
     # we basically expect there to be one path now
     dir_paths = [os.path.abspath(path) for path in ensure_list(dir_paths)]
 
-    assert output_dir is None or len(dir_paths) == 1, (
-        "Cannot combine output_dir with multiple paths"
-    )
+    assert (
+        output_dir is None or len(dir_paths) == 1
+    ), "Cannot combine output_dir with multiple paths"
 
     if isinstance(current_index_versions, str):
         with open(current_index_versions) as f:
