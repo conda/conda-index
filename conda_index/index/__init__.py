@@ -430,6 +430,10 @@ class ChannelIndex:
 
         self.cache_kwargs = cache_kwargs
 
+        # Timestamp for this indexing run (consistent across all subdirs)
+        now_dt = datetime.now(tz=timezone.utc)
+        self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def cache_for_subdir(self, subdir):
         cache = self.cache_class(
             channel_root=self.channel_root,
@@ -682,9 +686,7 @@ class ChannelIndex:
 
         shards = {}
 
-        # Format timestamp as ISO 8601 with Z suffix
-        now_dt = datetime.now(tz=timezone.utc)
-        created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        created_at = self.created_at
 
         shards_index = {
             "version": REPODATA_SHARDS_VERSION,
