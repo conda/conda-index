@@ -13,7 +13,6 @@ from os import stat
 from os.path import isdir, isfile, islink
 
 import filelock
-from conda.exports import root_dir
 
 log = logging.getLogger(__name__)
 
@@ -117,10 +116,7 @@ def islist(arg, uniform=False, include_dict=True):
 # purpose here is that we want *one* lock per location on disk.  It can be
 # locked or unlocked at any time, but the lock within this process should all be
 # tied to the same tracking mechanism.
-_lock_folders = (
-    os.path.join(root_dir, "locks"),
-    os.path.expanduser(os.path.join("~", ".conda_build_locks")),
-)
+_lock_folders = (os.path.expanduser(os.path.join("~", ".conda_build_locks")),)
 
 
 def get_lock(folder, timeout=900):
@@ -229,7 +225,7 @@ def merge_or_update_dict(
 
 
 @contextlib.contextmanager
-def try_acquire_locks(locks, timeout):
+def try_acquire_locks(locks: list[filelock.FileLock], timeout):
     """Try to acquire all locks.
 
     If any lock can't be immediately acquired, free all locks.
