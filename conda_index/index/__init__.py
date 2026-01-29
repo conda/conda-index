@@ -20,13 +20,13 @@ from uuid import uuid4
 
 import msgpack
 import zstandard
-from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
 from conda_index.index.cache import BaseCondaIndexCache
 
 from .. import utils
+from .._vendor.models.version import VersionOrder
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
