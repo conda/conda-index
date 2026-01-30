@@ -365,6 +365,7 @@ class ChannelIndex:
     :param write_monolithic: Pass True to write large 'repodata.json' with all packages.
     :param write_shards: Pass True to write sharded repodata.msgpack and per-package fragments.
     :param html_dependencies: Pass True to include dependency popups in generated HTML index files.
+    :param strict: Pass True to raise exceptions instead of logging them.
     """
 
     fs: MinimalFS | None = None
@@ -395,6 +396,7 @@ class ChannelIndex:
         write_current_repodata=True,
         upstream_stage: str = "fs",
         cache_kwargs=None,
+        strict: bool = False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -427,6 +429,7 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
+        self.strict = strict
 
         self.cache_kwargs = cache_kwargs
 
@@ -441,6 +444,7 @@ class ChannelIndex:
             fs=self.fs,
             channel_url=self.channel_url,
             upstream_stage=self.upstream_stage,
+            strict=self.strict,
             **self.cache_kwargs or {},
         )  # type: ignore
         if cache.cache_is_brand_new:

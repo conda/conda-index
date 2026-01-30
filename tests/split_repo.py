@@ -295,6 +295,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--all-subdirs", help="Whether to clone all subdirs", action="store_true"
     )
+    parser.add_argument(
+        "--no-upload", help="Skip upload", action="store_true"
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -324,6 +327,9 @@ if __name__ == "__main__":
     for subdir in subdirs:
         channel_url = f"https://conda.anaconda.org/{channel_name}/"
         split_repo(channel_url, subdir, outpath)
+
+        if args.no_upload:
+            continue
 
         files = files_to_upload(outpath, timestamp, subdir, channel_name)
 
