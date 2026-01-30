@@ -127,13 +127,13 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @property
-    def database_prefix(self):
+    def database_prefix(self) -> str:
         """
         All paths must be prefixed with this string.
         """
         return ""
 
-    def database_path(self, fn):
+    def database_path(self, fn) -> str:
         """
         Return filename with database prefix added.
         """

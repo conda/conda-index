@@ -194,6 +194,19 @@ def index_data(tmp_path: Path):
     return tmp_path / "index_data"
 
 
+@pytest.fixture()
+def archives_data(tmp_path: Path):
+    """
+    Copy tests/archives as a second indexable subdir.
+    """
+    archives_data = Path(__file__).parents[0] / "archives"
+    archives_channel = tmp_path / "archives"
+    archives_channel.mkdir()
+    (archives_channel / "noarch").mkdir(exist_ok=True)  # should put something here
+    shutil.copytree(archives_data, archives_channel / "linux-64")
+    return archives_channel
+
+
 @pytest.fixture(scope="session")
 def http_package_server():
     """Open a local web server to test remote support files."""
