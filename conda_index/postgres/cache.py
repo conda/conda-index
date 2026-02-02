@@ -121,8 +121,9 @@ class PsqlCache(BaseCondaIndexCache):
                 .where(stat.c.stage == "fs")
                 .where(stat.c.path.startswith(self.database_prefix, autoescape=True))
             )
-            for item in listdir_stat:
-                connection.execute(stat.insert(), {**item, "stage": "fs"})
+            items = [{**item, "stage": "fs"} for item in listdir_stat]
+            if items:
+                connection.execute(stat.insert(), items)
 
     def store(
         self,
