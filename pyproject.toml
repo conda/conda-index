@@ -68,6 +68,7 @@ filterwarnings = [
   # elevate conda-index's deprecated warning to an error
   "error::PendingDeprecationWarning:conda_index",
   "error::DeprecationWarning:conda_index",
+  "ignore:conda.base.constants.CONDA_PACKAGE_EXTENSIONS:PendingDeprecationWarning",
 ]
 
 [tool.coverage.run]
