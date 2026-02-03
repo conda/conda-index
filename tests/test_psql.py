@@ -1,5 +1,5 @@
 """
-Test ability to index off diverse filesystems using fsspec.
+Test postgresql support.
 """
 
 from pathlib import Path
@@ -12,6 +12,54 @@ try:
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
     PsqlCache = None
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
+    """
+    Verify load_all_from_cache() filters by both stage AND path.
+    """
+
+    class MockResult:
+        def first(self):
+            return None
+
+    class MockConnection:
+        def __init__(self):
+            self.executed = []
+
+        def execute(self, query, *args, **kwargs):
+            self.executed.append(query)
+            return MockResult()
+
+    class MockBegin:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def __enter__(self):
+            return self.conn
+
+        def __exit__(self, *args):
+            return False
+
+    class MockEngine:
+        def __init__(self):
+            self.connection = MockConnection()
+
+        def begin(self):
+            return MockBegin(self.connection)
+
+    cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
+    mock_engine = MockEngine()
+    cache.engine = mock_engine  # type: ignore
+
+    cache.load_all_from_cache("test-package.conda")
+
+    assert len(mock_engine.connection.executed) == 1
+    query = str(mock_engine.connection.executed[0])
+    # Both stage and path conditions must be in the WHERE clause
+    assert "stat.stage" in query
+    assert "stat.path" in query
 
 
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
