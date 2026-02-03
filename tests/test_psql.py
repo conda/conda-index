@@ -14,22 +14,18 @@ except ImportError:
     PsqlCache = None
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
-def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
-    """
-    Verify load_all_from_cache() filters by both stage AND path.
-    """
+@pytest.fixture
+def mock_engine():
+    """Mock SQLAlchemy engine that captures executed queries."""
+    executed = []
 
     class MockResult:
         def first(self):
             return None
 
     class MockConnection:
-        def __init__(self):
-            self.executed = []
-
         def execute(self, query, *args, **kwargs):
-            self.executed.append(query)
+            executed.append(query)
             return MockResult()
 
     class MockBegin:
@@ -43,20 +39,26 @@ def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
             return False
 
     class MockEngine:
-        def __init__(self):
-            self.connection = MockConnection()
-
         def begin(self):
-            return MockBegin(self.connection)
+            return MockBegin(MockConnection())
 
+    engine = MockEngine()
+    engine.executed = executed  # type: ignore
+    return engine
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path, mock_engine):
+    """
+    Verify load_all_from_cache() filters by both stage AND path.
+    """
     cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
-    mock_engine = MockEngine()
     cache.engine = mock_engine  # type: ignore
 
     cache.load_all_from_cache("test-package.conda")
 
-    assert len(mock_engine.connection.executed) == 1
-    query = str(mock_engine.connection.executed[0])
+    assert len(mock_engine.executed) == 1
+    query = str(mock_engine.executed[0])
     # Both stage and path conditions must be in the WHERE clause
     assert "stat.stage" in query
     assert "stat.path" in query
