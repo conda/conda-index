@@ -59,9 +59,9 @@ def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path, mock_engi
 
     assert len(mock_engine.executed) == 1
     query = str(mock_engine.executed[0])
-    # Both stage and path conditions must be in the WHERE clause
-    assert "stat.stage" in query
-    assert "stat.path" in query
+    # Both conditions must be in the WHERE clause (joined by AND)
+    assert "WHERE stat.stage" in query
+    assert "AND stat.path" in query
 
 
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
