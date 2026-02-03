@@ -1,5 +1,5 @@
 """
-Test ability to index off diverse filesystems using fsspec.
+Test postgresql support.
 """
 
 from pathlib import Path
@@ -12,6 +12,56 @@ try:
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
     PsqlCache = None
+
+
+@pytest.fixture
+def mock_engine():
+    """Mock SQLAlchemy engine that captures executed queries."""
+    executed = []
+
+    class MockResult:
+        def first(self):
+            return None
+
+    class MockConnection:
+        def execute(self, query, *args, **kwargs):
+            executed.append(query)
+            return MockResult()
+
+    class MockBegin:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def __enter__(self):
+            return self.conn
+
+        def __exit__(self, *args):
+            return False
+
+    class MockEngine:
+        def begin(self):
+            return MockBegin(MockConnection())
+
+    engine = MockEngine()
+    engine.executed = executed  # type: ignore
+    return engine
+
+
+@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path, mock_engine):
+    """
+    Verify load_all_from_cache() filters by both stage AND path.
+    """
+    cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
+    cache.engine = mock_engine  # type: ignore
+
+    cache.load_all_from_cache("test-package.conda")
+
+    assert len(mock_engine.executed) == 1
+    query = str(mock_engine.executed[0])
+    # Both conditions must be in the WHERE clause (joined by AND)
+    assert "WHERE stat.stage" in query
+    assert "AND stat.path" in query
 
 
 @pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
