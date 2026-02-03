@@ -30,7 +30,7 @@ __all__ = [
     "move_with_fallback",
     "try_acquire_locks",
 ]
-CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
+CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V2, CONDA_PACKAGE_EXTENSION_V1)
 
 # multithreaded checksums
 
