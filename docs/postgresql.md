@@ -48,10 +48,15 @@ local package repository. It is possible to add a few local packages to a much
 larger index instead of keeping every package on the machine running
 `conda-index`.
 
-The `--update-only` command line option has been added for this use case, where
-conda-index will scan the filesystem for new packages, but not remove "missing"
-packages from the database. When using this option, care must be taken to never
+For example, by running `python -m conda_index --db postgresql --update-only
+[DIR]`, `conda-index` will add or update packages in `[DIR]` to repodata, while
+keeping already-indexed packages in the output `repodata.json`. The output
+repodata can then be copied to a server that has every package.
+
+If `--update-only` is used, the `stat` table must be altered to remove packages
+from `repodata.json`, e.g. `DELETE FROM stat WHERE path =
+'<prefix>/<subdir>/package.conda' AND stage = 'fs'`.
+
+When using this option, care must be taken to never
 run `conda-index` without `--update-only` or all the "missing" packages will be
-dropped from the index. To remove a package from the index in this mode the user
-would edit the `stat` table e.g. `DELETE FROM stat WHERE stage='fs' AND path =
-'<channel prefix>/<subdir>/<package.conda>'`.
+dropped from the index.
