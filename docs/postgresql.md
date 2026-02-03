@@ -1,9 +1,10 @@
 # PostgreSQL Support in conda-index
 
 As of `conda-index 0.7.0`, `conda-index` can use a PostgreSQL database.
-`conda-index` uses a database to store package metadata, creating repodata from
-a query. By default, it will use a sqlite3 database stored alongside the package
-files, but it can optionally use PostgreSQL.
+`conda-index` uses a database to store package metadata. Once all the metadata
+is stored, it creates repodata from a query. By default it uses a sqlite3
+database stored alongside the package files, but it can optionally use
+PostgreSQL.
 
 The database backend is controlled by the `--db <backend>` and `--db-url`
 command line arguments, or the `CONDA_INDEX_DBURL` environment variable replaces
@@ -15,7 +16,7 @@ To use a PostgreSQL database with `conda-index`, install `conda-index`'s Postgre
 conda install sqlalchemy psycopg2
 ```
 
-Then, install a local PostgreSQL with conda:
+Then, one way to get a PostgreSQL server is to install it with conda:
 ```sh
 # Create a local PostgreSQL installation and conda_index database
 conda install postgresql
@@ -45,8 +46,12 @@ format `<prefix>/<subdir>/<package>.conda` in a single database.
 Advanced users can use the CLI or the API to run `conda_index` on a partial
 local package repository. It is possible to add a few local packages to a much
 larger index instead of keeping every package on the machine running
-`conda-index`. For example, by inserting packages into the `stat` table and then
-running `python -m conda_index --db postgresql --no-update-cache [DIR]`,
-`conda-index` can add or update packages in `[DIR]` to repodata without
-necessarily storing either the entire set of packages or the `conda-index`
-database on that machine.
+`conda-index`.
+
+The `--update-only` command line option has been added for this use case, where
+conda-index will scan the filesystem for new packages, but not remove "missing"
+packages from the database. When using this option, care must be taken to never
+run `conda-index` without `--update-only` or all the "missing" packages will be
+dropped from the index. To remove a package from the index in this mode the user
+would edit the `stat` table e.g. `DELETE FROM stat WHERE stage='fs' AND path =
+'<channel prefix>/<subdir>/<package.conda>'`.
