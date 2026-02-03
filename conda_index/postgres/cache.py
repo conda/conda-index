@@ -121,8 +121,9 @@ class PsqlCache(BaseCondaIndexCache):
                 .where(stat.c.stage == "fs")
                 .where(stat.c.path.startswith(self.database_prefix, autoescape=True))
             )
-            for item in listdir_stat:
-                connection.execute(stat.insert(), {**item, "stage": "fs"})
+            items = [{**item, "stage": "fs"} for item in listdir_stat]
+            if items:
+                connection.execute(stat.insert(), items)
 
     def store(
         self,
@@ -251,7 +252,9 @@ class PsqlCache(BaseCondaIndexCache):
         by name, path i.o.w. filename.
 
         :param desired: If not None, set of desired package names.
-        :param pack_record: Function passed each record, returning a modified record. Override to change the default hex to bytes hash conversions.
+        :param pack_record: Function passed each record, returning a modified
+            record. Override to change the default hex to bytes hash
+            conversions.
         """
         index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
@@ -270,6 +273,7 @@ class PsqlCache(BaseCondaIndexCache):
                 )
             )
             .where(stat_table.c.stage == self.upstream_stage)
+            .where(stat_table.c.path.startswith(self.database_prefix, autoescape=True))
             .order_by(
                 index_json_table.c.name,
                 index_json_table.c.path,

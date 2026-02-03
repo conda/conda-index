@@ -1459,7 +1459,12 @@ def test_index_format(tmp_path):
 
     assert shards_index == {
         "version": 1,
-        "info": {"base_url": "", "shards_base_url": "", "subdir": "noarch", "created_at": CREATED_AT},
+        "info": {
+            "base_url": "",
+            "shards_base_url": "",
+            "subdir": "noarch",
+            "created_at": CREATED_AT,
+        },
         "shards": {},
     }
 
