@@ -57,7 +57,7 @@ from `repodata.json`, e.g. `DELETE FROM stat WHERE path =
 '<prefix>/<subdir>/package.conda' AND stage = 'fs'`.
 
 Additionally if conda-index is used this way to aggregate a large
-`repoadata.json`, and `--update-only` is not used every time, then all packages
+`repodata.json`, and `--update-only` is not used every time, then all packages
 not present on the local system will be removed from the database and the output
 `repodata.json`.
 
