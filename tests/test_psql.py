@@ -19,8 +19,13 @@ except ImportError:
     pytest.skip("Could not import PsqlCache", allow_module_level=True)
 
 
-class _DummyConnection:
-    def __init__(self, results_factory: Callable = list) -> None:
+class MockResult:
+    def first(self):
+        return None
+
+
+class MockConnection:
+    def __init__(self, results_factory: Callable = MockResult) -> None:
         self.calls: list[tuple[object, dict | None]] = []
         self.results_factory = results_factory
 
@@ -29,69 +34,38 @@ class _DummyConnection:
         return self.results_factory()
 
 
-class _DummyBegin:
-    def __init__(self, connection: _DummyConnection) -> None:
+class MockBegin:
+    def __init__(self, connection: MockConnection) -> None:
         self.connection = connection
 
-    def __enter__(self) -> _DummyConnection:
+    def __enter__(self) -> MockConnection:
         return self.connection
 
     def __exit__(self, exc_type, exc, tb) -> bool:
         return False
 
 
-class _DummyEngine:
-    def __init__(self, connection: _DummyConnection) -> None:
+class MockEngine:
+    def __init__(self, connection: MockConnection) -> None:
         self.connection = connection
 
-    def begin(self) -> _DummyBegin:
-        return _DummyBegin(self.connection)
+    def begin(self) -> MockBegin:
+        return MockBegin(self.connection)
 
 
-@pytest.fixture
-def mock_engine():
-    """Mock SQLAlchemy engine that captures executed queries."""
-    executed = []
-
-    class MockResult:
-        def first(self):
-            return None
-
-    class MockConnection:
-        def execute(self, query, *args, **kwargs):
-            executed.append(query)
-            return MockResult()
-
-    class MockBegin:
-        def __init__(self, conn):
-            self.conn = conn
-
-        def __enter__(self):
-            return self.conn
-
-        def __exit__(self, *args):
-            return False
-
-    class MockEngine:
-        def begin(self):
-            return MockBegin(MockConnection())
-
-    engine = MockEngine()
-    engine.executed = executed  # type: ignore
-    return engine
-
-
-def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path, mock_engine):
+def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
     """
     Verify load_all_from_cache() filters by both stage AND path.
     """
     cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
-    cache.engine = mock_engine  # type: ignore
+
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     cache.load_all_from_cache("test-package.conda")
 
-    assert len(mock_engine.executed) == 1
-    query = str(mock_engine.executed[0])
+    assert len(connection.calls) == 1
+    query = str(connection.calls[0][0])
     # Both conditions must be in the WHERE clause (joined by AND)
     assert "WHERE stat.stage" in query
     assert "AND stat.path" in query
@@ -196,8 +170,8 @@ def test_psql_store_fs_state_update_only(tmp_path: Path, update_only):
         update_only=update_only,
         db_url="postgresql://example",
     )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)  # type: ignore
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     listdir_stat = [
         {"path": cache.database_path("foo-1.0-0.conda"), "mtime": 1, "size": 10},
@@ -258,8 +232,8 @@ def test_psql_no_parse_icon_bad_package(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)  # type: ignore
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     import conda_index.postgres.cache
 
@@ -290,8 +264,8 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)  # type: ignore
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     class DummyResult(NamedTuple):
         name: str
@@ -325,8 +299,8 @@ def test_psql_run_exports(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)  # type: ignore
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     class DummyResult(NamedTuple):
         path: str
@@ -347,8 +321,8 @@ def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = _DummyConnection()
-    cache.engine = _DummyEngine(connection)  # type: ignore
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
 
     class result:
         def first(self):
