@@ -342,8 +342,8 @@ class PsqlCache(BaseCondaIndexCache):
                 stat_table = model.Base.metadata.tables["stat"]
                 row = connection.execute(
                     select(stat_table).where(
-                        stat_table.c.stage == self.upstream_stage
-                        and stat_table.c.path == self.database_path(fn)
+                        stat_table.c.stage == self.upstream_stage,
+                        stat_table.c.path == self.database_path(fn),
                     )
                 ).first()
                 if not row:
