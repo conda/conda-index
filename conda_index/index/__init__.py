@@ -430,6 +430,10 @@ class ChannelIndex:
 
         self.cache_kwargs = cache_kwargs
 
+        # Timestamp for this indexing run (consistent across all subdirs)
+        now_dt = datetime.now(tz=timezone.utc)
+        self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def cache_for_subdir(self, subdir):
         cache = self.cache_class(
             channel_root=self.channel_root,
@@ -682,12 +686,14 @@ class ChannelIndex:
 
         shards = {}
 
+        created_at = self.created_at
+
         shards_index = {
             "version": REPODATA_SHARDS_VERSION,
             "info": {
                 "base_url": "",  # pixi requires this key
                 "shards_base_url": "",  # and this one
-                # "created_at": "2022-01-01T00:00:00Z", # but not this one
+                "created_at": created_at,
                 "subdir": subdir,
             },
             "shards": shards,
