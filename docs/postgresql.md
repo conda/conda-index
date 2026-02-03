@@ -1,9 +1,10 @@
 # PostgreSQL Support in conda-index
 
 As of `conda-index 0.7.0`, `conda-index` can use a PostgreSQL database.
-`conda-index` uses a database to store package metadata, creating repodata from
-a query. By default, it will use a sqlite3 database stored alongside the package
-files, but it can optionally use PostgreSQL.
+`conda-index` uses a database to store package metadata. Once all the metadata
+is stored, it creates repodata from a query. By default it uses a sqlite3
+database stored alongside the package files, but it can optionally use
+PostgreSQL.
 
 The database backend is controlled by the `--db <backend>` and `--db-url`
 command line arguments, or the `CONDA_INDEX_DBURL` environment variable replaces
@@ -15,7 +16,7 @@ To use a PostgreSQL database with `conda-index`, install `conda-index`'s Postgre
 conda install sqlalchemy psycopg2
 ```
 
-Then, install a local PostgreSQL with conda:
+Then, one way to get a PostgreSQL server is to install it with conda:
 ```sh
 # Create a local PostgreSQL installation and conda_index database
 conda install postgresql
@@ -56,11 +57,6 @@ If `--update-only` is used, the `stat` table must be altered to remove packages
 from `repodata.json`, e.g. `DELETE FROM stat WHERE path =
 '<prefix>/<subdir>/package.conda' AND stage = 'fs'`.
 
-Additionally if conda-index is used this way to aggregate a large
-`repodata.json`, and `--update-only` is not used every time, then all packages
-not present on the local system will be removed from the database and the output
-`repodata.json`.
-
-A future improvement could add flags to toggle each stage of conda-index
-(populate list of packages; compare list of packages to indexed packages and
-cache any changed metadata; output repodata by querying the database).
+When using this option, care must be taken to never
+run `conda-index` without `--update-only` or all the "missing" packages will be
+dropped from the index.
