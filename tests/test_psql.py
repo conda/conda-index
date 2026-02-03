@@ -314,7 +314,10 @@ def test_psql_run_exports(tmp_path: Path):
     assert run_exports == [("package.conda", {})]
 
 
-def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
+def test_psql_load_all_from_cache_coverage(tmp_path: Path):
+    """
+    Test load_all_from_cache() edge cases. Missing packages, bad types, etc.
+    """
     assert PsqlCache
     cache = PsqlCache(
         tmp_path,
@@ -324,11 +327,33 @@ def test_psql_load_all_from_cache_missing_package(tmp_path: Path):
     connection = MockConnection()
     cache.engine = MockEngine(connection)  # type: ignore
 
+    class stat_result:
+        mtime = 0
+
     class result:
         def first(self):
-            return None
+            return next(results)
 
     connection.results_factory = result
 
+    # not in stat table
+    results = iter([None])
+
     missing = cache.load_all_from_cache("missing.conda")
     assert missing == {}
+
+    # in stat table, not in index_json table
+    results = iter([stat_result, None])
+    missing = cache.load_all_from_cache("missing.conda")
+    assert missing == {}
+
+    # catch error when source is not a dict
+    class about:
+        recipe = {}
+        post_install = {}
+        index_json = {}
+        about = {"source": []}
+
+    results = iter([stat_result, about])
+    channeldata = cache.load_all_from_cache("source_is_list.conda")
+    assert channeldata == {"source": [], "mtime": 0, "run_exports": {}}

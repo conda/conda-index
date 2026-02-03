@@ -395,18 +395,14 @@ class PsqlCache(BaseCondaIndexCache):
                 return {}
 
             data = {}
-            try:
-                # This order matches the old implementation. clobber recipe, about fields with index_json.
-                for column in ("recipe", "about", "post_install", "index_json"):
-                    if column_data := getattr(row, column):  # is not null or empty
-                        if not isinstance(column_data, dict):  # pragma: no cover
-                            log.warning(
-                                f"scalar {column_data} found in {column} for {fn}"
-                            )
-                            continue
-                        data.update(column_data)
-            except IndexError:
-                row = None
+
+            # This order matches the old implementation. clobber recipe, about fields with index_json.
+            for column in ("recipe", "about", "post_install", "index_json"):
+                if column_data := getattr(row, column):  # is not null or empty
+                    if not isinstance(column_data, dict):  # pragma: no cover
+                        log.warning(f"scalar {column_data} found in {column} for {fn}")
+                        continue
+                    data.update(column_data)
 
             data["mtime"] = mtime
 
