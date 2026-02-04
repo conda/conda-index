@@ -119,16 +119,18 @@ class PsqlCache(BaseCondaIndexCache):
         connection: Connection
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
+
             if not self.update_only:
                 connection.execute(
-                    stat.delete()
-                    .where(stat.c.stage == "fs")
-                    .where(
-                        stat.c.path.startswith(self.database_prefix, autoescape=True)
+                    stat.delete().where(
+                        stat.c.stage == "fs",
+                        stat.c.path.startswith(self.database_prefix, autoescape=True),
                     )
                 )
-            insert_statement = insert(stat)
-            for item in listdir_stat:
+
+            items = [{**item, "stage": "fs"} for item in listdir_stat]
+            if items:
+                insert_statement = insert(stat)
                 connection.execute(
                     insert_statement.on_conflict_do_update(
                         index_elements=[stat.c.stage, stat.c.path],
@@ -137,7 +139,7 @@ class PsqlCache(BaseCondaIndexCache):
                             "size": insert_statement.excluded.size,
                         },
                     ),
-                    {**item, "stage": "fs"},
+                    items,
                 )
 
     def store(
@@ -267,7 +269,9 @@ class PsqlCache(BaseCondaIndexCache):
         by name, path i.o.w. filename.
 
         :param desired: If not None, set of desired package names.
-        :param pack_record: Function passed each record, returning a modified record. Override to change the default hex to bytes hash conversions.
+        :param pack_record: Function passed each record, returning a modified
+            record. Override to change the default hex to bytes hash
+            conversions.
         """
         index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
@@ -286,6 +290,7 @@ class PsqlCache(BaseCondaIndexCache):
                 )
             )
             .where(stat_table.c.stage == self.upstream_stage)
+            .where(stat_table.c.path.startswith(self.database_prefix, autoescape=True))
             .order_by(
                 index_json_table.c.name,
                 index_json_table.c.path,

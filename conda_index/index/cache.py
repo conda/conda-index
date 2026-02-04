@@ -136,7 +136,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         return ""
 
-    def database_path(self, fn):
+    def database_path(self, fn) -> str:
         """
         Return filename with database prefix added.
         """
