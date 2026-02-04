@@ -127,7 +127,7 @@ from .. import yaml
         versions of all packages and their dependencies, only used by the
         classic solver. Conflicts with --no-write-monolithic.
         """,
-    default=True,
+    default=False,
     show_default=True,
 )
 @click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
