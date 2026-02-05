@@ -1,5 +1,47 @@
 [//]: # (current developments)
 
+## 0.10.0 (2026-02-05)
+
+### Enhancements
+
+* Add a flag `--update-only` that adds new or changed packages to the index database, but
+  keeps already-indexed packages in the database and output `repodata.json` even
+  if those are missing from the filesystem.
+
+### Bug Fixes
+
+* Improve `run_exports` support for PostgreSQL cache.
+
+### Bug fixes
+
+* Use correct `"version": 1` field in `repodata_shards` instead of
+  `"repodata_version": 2`. Remove json-only `"repodata_version"` key from shards
+  index. (#231)
+* Add `.info.created_at` field to shards index. (#237)
+* Fix bug where postgresql cache would not filter packages by channel when
+  writing repodata. (#240)
+* Fix PostgreSQL cache `load_all_from_cache()` to use both conditions in the query.
+
+### Deprecations
+
+* Default to `--no-current-repodata` in the CLI. This file is slow to generate
+  for large channels and can only be used by conda's "classic" solver. Pass
+  `--current-repodata` if you still need `current_repodata.json`. API users are
+  not affected by this change. (#246)
+
+### Other
+
+* Require Python >= 3.10
+
+### Contributors
+
+* @dholth
+* @jezdez
+* @kodegard
+* @pavelzw
+
+
+
 ## 0.7.0 (2025-10-13)
 
 ### Enhancements
