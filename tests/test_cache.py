@@ -9,7 +9,7 @@ from typing import Any
 from conda_index.index import cache
 
 
-class TestCache(cache.BaseCondaIndexCache):
+class DummyCache(cache.BaseCondaIndexCache):
     @property
     def database_prefix(self):
         """
@@ -54,7 +54,7 @@ def test_cache(tmp_path):
     Code coverage.
     """
 
-    c = TestCache(str(tmp_path), "linux-64")
+    c = DummyCache(str(tmp_path), "linux-64")
 
     package = "foo.conda"
     db_path = c.database_path(package)

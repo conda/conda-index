@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
@@ -50,6 +50,7 @@ class PsqlCache(BaseCondaIndexCache):
         channel_url: str | None = None,
         upstream_stage: str = "fs",
         db_url="postgresql://conda_index_test@localhost/conda_index_test",
+        **kwargs,
     ):
         super().__init__(
             channel_root,
@@ -57,6 +58,7 @@ class PsqlCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            **kwargs,
         )
         self.db_filename = self.channel_root / ".cache" / "cache.json"
         self.db_url = db_url
@@ -79,6 +81,7 @@ class PsqlCache(BaseCondaIndexCache):
         """
         Remove db connection when pickled.
         """
+        # probably no longer an issue since it is using a global _engine
         return {k: self.__dict__[k] for k in self.__dict__ if k not in ("engine",)}
 
     @property
@@ -104,26 +107,40 @@ class PsqlCache(BaseCondaIndexCache):
 
     def convert(self, force=False):
         """
-        Load filesystem cache into sqlite.
+        Load filesystem cache into database.
         """
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
-    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
+    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         """
         Write {path, mtime, size} into database.
         """
         connection: Connection
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
-            connection.execute(
-                stat.delete()
-                .where(stat.c.stage == "fs")
-                .where(stat.c.path.startswith(self.database_prefix, autoescape=True))
-            )
+
+            if not self.update_only:
+                connection.execute(
+                    stat.delete().where(
+                        stat.c.stage == "fs",
+                        stat.c.path.startswith(self.database_prefix, autoescape=True),
+                    )
+                )
+
             items = [{**item, "stage": "fs"} for item in listdir_stat]
             if items:
-                connection.execute(stat.insert(), items)
+                insert_statement = insert(stat)
+                connection.execute(
+                    insert_statement.on_conflict_do_update(
+                        index_elements=[stat.c.stage, stat.c.path],
+                        set_={
+                            "mtime": insert_statement.excluded.mtime,
+                            "size": insert_statement.excluded.size,
+                        },
+                    ),
+                    items,
+                )
 
     def store(
         self,
@@ -181,7 +198,7 @@ class PsqlCache(BaseCondaIndexCache):
                     insert(index_json_table)
                     .values(path=database_path, index_json=index_json)
                     .on_conflict_do_update(
-                        index_elements=[table_obj.c.path],
+                        index_elements=[index_json_table.c.path],
                         set_={table: insert_obj.excluded.index_json},
                     )  # it will cast to jsonb automatically
                 )
@@ -335,9 +352,9 @@ class PsqlCache(BaseCondaIndexCache):
                     )
                 ).first()
                 if not row:
-                    raise TypeError()
+                    raise KeyError(fn)
                 mtime = row.mtime
-            except TypeError:  # .fetchone() was None
+            except KeyError:  # .fetchone() was None
                 log.warning("%s mtime not found in cache", fn)
                 return {}
 
@@ -383,18 +400,14 @@ class PsqlCache(BaseCondaIndexCache):
                 return {}
 
             data = {}
-            try:
-                # This order matches the old implementation. clobber recipe, about fields with index_json.
-                for column in ("recipe", "about", "post_install", "index_json"):
-                    if column_data := getattr(row, column):  # is not null or empty
-                        if not isinstance(column_data, dict):  # pragma: no cover
-                            log.warning(
-                                f"scalar {column_data} found in {column} for {fn}"
-                            )
-                            continue
-                        data.update(column_data)
-            except IndexError:
-                row = None
+
+            # This order matches the old implementation. clobber recipe, about fields with index_json.
+            for column in ("recipe", "about", "post_install", "index_json"):
+                if column_data := getattr(row, column):  # is not null or empty
+                    if not isinstance(column_data, dict):  # pragma: no cover
+                        log.warning(f"scalar {column_data} found in {column} for {fn}")
+                        continue
+                    data.update(column_data)
 
             data["mtime"] = mtime
 
@@ -412,17 +425,19 @@ class PsqlCache(BaseCondaIndexCache):
 
         return data
 
-    def run_exports(self):
+    def run_exports(self) -> Iterator[tuple[str, dict]]:
         """
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()
         """
         stat = model.Base.metadata.tables["stat"]
         run_exports = model.Base.metadata.tables["run_exports"]
-        query = stat.join(run_exports, onclause=stat.c.path == run_exports.c.path)
+        query = stat.join(
+            run_exports, onclause=stat.c.path == run_exports.c.path, isouter=True
+        )
         connection: Connection
         with self.engine.begin() as connection:
             for row in connection.execute(
                 select(query).where(stat.c.stage == self.upstream_stage)
             ):
-                yield (self.plain_path(row.path), json.dumps(row.run_exports))
+                yield (self.plain_path(row.path), row.run_exports or {})
