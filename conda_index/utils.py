@@ -2,9 +2,7 @@ import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from conda.base.constants import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
-from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
-
+from ._vendor.constants import KNOWN_SUBDIRS as DEFAULT_SUBDIRS
 from .utils_build import (
     ensure_list,
     get_lock,
@@ -12,8 +10,6 @@ from .utils_build import (
     move_with_fallback,
     try_acquire_locks,
 )
-
-DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
 
 __all__ = [
     "CONDA_PACKAGE_EXTENSIONS",
@@ -30,6 +26,8 @@ __all__ = [
     "move_with_fallback",
     "try_acquire_locks",
 ]
+CONDA_PACKAGE_EXTENSION_V2 = ".conda"
+CONDA_PACKAGE_EXTENSION_V1 = ".tar.bz2"
 CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V2, CONDA_PACKAGE_EXTENSION_V1)
 
 # multithreaded checksums
