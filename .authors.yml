@@ -10,7 +10,7 @@
   github: AndrewValette
 - name: Daniel Holth
   email: dholth@anaconda.com
-  num_commits: 98
+  num_commits: 104
   first_commit: 2022-05-18 19:49:18
   github: dholth
 - name: jaimergp
@@ -27,7 +27,7 @@
   - 18747875+conda-bot@users.noreply.github.com
 - name: Jannis Leidel
   email: jannis@leidel.info
-  num_commits: 11
+  num_commits: 12
   first_commit: 2022-05-17 13:35:54
   github: jezdez
 - name: conda-bot
@@ -37,7 +37,7 @@
   github: conda-bot
 - name: Ken Odegard
   email: kodegard@anaconda.com
-  num_commits: 1
+  num_commits: 3
   first_commit: 2024-08-14 18:14:55
   github: kodegard
 - name: Klaus Zimmermann
@@ -49,7 +49,7 @@
   github: ryanskeith
   aliases:
   - Ryan
-  num_commits: 1
+  num_commits: 2
   first_commit: 2025-09-26 16:01:11
 - name: Jay Roebuck
   email: jroebuck@esri.com

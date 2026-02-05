@@ -9,6 +9,7 @@ Authors are sorted alphabetically.
 * Jay Roebuck
 * Ken Odegard
 * Klaus Zimmermann
+* Pavel Zwerschke
 * Ryan Keith
 * conda-bot
 * jaimergp
