@@ -431,6 +431,7 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
+        self.update_only = update_only
 
         self.cache_kwargs = cache_kwargs
 
