@@ -6,21 +6,18 @@
 
 * Add a flag `--update-only` that adds new or changed packages to the index database, but
   keeps already-indexed packages in the database and output `repodata.json` even
-  if those are missing from the filesystem.
-
-### Bug Fixes
-
-* Improve `run_exports` support for PostgreSQL cache.
+  if those are missing from the filesystem. (#239)
 
 ### Bug fixes
 
+* Improve `run_exports` support for PostgreSQL cache. (#239)
 * Use correct `"version": 1` field in `repodata_shards` instead of
   `"repodata_version": 2`. Remove json-only `"repodata_version"` key from shards
   index. (#231)
 * Add `.info.created_at` field to shards index. (#237)
 * Fix bug where postgresql cache would not filter packages by channel when
   writing repodata. (#240)
-* Fix PostgreSQL cache `load_all_from_cache()` to use both conditions in the query.
+* Fix PostgreSQL cache `load_all_from_cache()` to use both conditions in the query. (#253)
 
 ### Deprecations
 
@@ -31,7 +28,7 @@
 
 ### Other
 
-* Require Python >= 3.10
+* Require Python >= 3.10 (#250)
 
 ### Contributors
 
