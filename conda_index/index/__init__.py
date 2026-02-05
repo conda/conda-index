@@ -12,6 +12,7 @@ import os
 import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
@@ -20,7 +21,7 @@ from uuid import uuid4
 
 import msgpack
 import zstandard
-from conda.exports import VersionOrder  # sole remaining conda dependency here?
+from conda.exports import VersionOrder
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
@@ -33,7 +34,6 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .current_repodata import build_current_repodata
 from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
@@ -45,6 +45,8 @@ log = logging.getLogger(__name__)
 # 17#repodata.json     : 229527083 ->  23358438 (x9.826),   30.2 MB/s, 3977.2 MB/s
 ZSTD_COMPRESS_LEVEL = 16
 ZSTD_COMPRESS_THREADS = -1  # automatic
+
+USE_LOCKING = False
 
 
 def logging_config():
@@ -429,7 +431,6 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
-        self.update_only = update_only
 
         self.cache_kwargs = cache_kwargs
 
@@ -471,8 +472,15 @@ class ChannelIndex:
 
         subdirs = self.detect_subdirs()
 
-        # Lock local channel.
-        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
+        if USE_LOCKING:
+            # Lock local channel.
+            context = utils.try_acquire_locks(
+                [utils.get_lock(self.channel_root)], timeout=900
+            )
+        else:
+            context = nullcontext()
+
+        with context:
             # begin non-stop "extract packages into cache";
             # extract_subdir_to_cache manages subprocesses. Keeps cores busy
             # during write/patch/update channeldata steps.
@@ -583,16 +591,11 @@ class ChannelIndex:
 
         if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
-
-            current_repodata = build_current_repodata(
-                subdir, patched_repodata, pins=current_index_versions
-            )
-
-            log.info("%s Writing current_repodata subset", subdir)
-
             self._write_repodata(
                 subdir,
-                current_repodata,
+                self._build_current_repodata(
+                    subdir, patched_repodata, current_index_versions
+                ),
                 json_filename="current_repodata.json",
             )
         else:
@@ -616,6 +619,17 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
+
+    def _build_current_repodata(self, subdir, patched_repodata, current_index_versions):
+        """
+        Isolate call to build_current_repodata(), skipping import if not used.
+        """
+        from .current_repodata import build_current_repodata
+
+        current_repodata = build_current_repodata(
+            subdir, patched_repodata, pins=current_index_versions
+        )
+        return current_repodata
 
     def index_patch_subdir_shards(
         self,
@@ -1361,7 +1375,7 @@ class ChannelIndex:
                 os.unlink(output_temp_path)
                 return False
 
-        utils.move_with_fallback(output_temp_path, output_path)
+        utils.move_with_fallback_nolock(output_temp_path, output_path)
         return True
 
     def _maybe_remove(self, path):
