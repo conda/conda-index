@@ -1,7 +1,7 @@
 ### Enhancements
 
 * Remove locking. `conda-index` will no longer try to prevent concurrent
-  `conda-index` processes from indexing the same channel.
+  `conda-index` processes from indexing the same channel. (#256)
 
 ### Bug fixes
 
