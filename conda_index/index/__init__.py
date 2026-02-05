@@ -582,16 +582,11 @@ class ChannelIndex:
 
         if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
-
-            current_repodata = build_current_repodata(
-                subdir, patched_repodata, pins=current_index_versions
-            )
-
-            log.info("%s Writing current_repodata subset", subdir)
-
             self._write_repodata(
                 subdir,
-                current_repodata,
+                self._build_current_repodata(
+                    subdir, patched_repodata, current_index_versions
+                ),
                 json_filename="current_repodata.json",
             )
         else:
@@ -615,6 +610,17 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
+
+    def _build_current_repodata(self, subdir, patched_repodata, current_index_versions):
+        """
+        Isolate call to build_current_repodata(), skipping import if not used.
+        """
+        from .current_repodata import build_current_repodata
+
+        current_repodata = build_current_repodata(
+            subdir, patched_repodata, pins=current_index_versions
+        )
+        return current_repodata
 
     def index_patch_subdir_shards(
         self,
