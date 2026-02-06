@@ -4,9 +4,9 @@
 
 ### Enhancements
 
-* Add a flag `--update-only` that adds new or changed packages to the index database, but
-  keeps already-indexed packages in the database and output `repodata.json` even
-  if those are missing from the filesystem. (#239)
+* Add a flag `--update-only` that adds new or changed packages to the index, but
+  keeps already-indexed packages in `repodata` even if they are missing from the
+  filesystem. (#239)
 
 ### Bug fixes
 
