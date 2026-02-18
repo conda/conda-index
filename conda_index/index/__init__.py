@@ -20,20 +20,19 @@ from uuid import uuid4
 
 import msgpack
 import zstandard
-from conda.exports import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
 from conda_index.index.cache import BaseCondaIndexCache
 
 from .. import utils
+from .._vendor.models.version import VersionOrder
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .current_repodata import build_current_repodata
 from .fs import FileInfo, MinimalFS
 
 log = logging.getLogger(__name__)
@@ -583,16 +582,11 @@ class ChannelIndex:
 
         if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
-
-            current_repodata = build_current_repodata(
-                subdir, patched_repodata, pins=current_index_versions
-            )
-
-            log.info("%s Writing current_repodata subset", subdir)
-
             self._write_repodata(
                 subdir,
-                current_repodata,
+                self._build_current_repodata(
+                    subdir, patched_repodata, current_index_versions
+                ),
                 json_filename="current_repodata.json",
             )
         else:
@@ -616,6 +610,17 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
+
+    def _build_current_repodata(self, subdir, patched_repodata, current_index_versions):
+        """
+        Isolate call to build_current_repodata(), skipping import if not used.
+        """
+        from .current_repodata import build_current_repodata
+
+        current_repodata = build_current_repodata(
+            subdir, patched_repodata, pins=current_index_versions
+        )
+        return current_repodata
 
     def index_patch_subdir_shards(
         self,
