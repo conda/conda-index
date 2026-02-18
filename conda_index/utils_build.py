@@ -13,7 +13,6 @@ from os import stat
 from os.path import isdir, isfile, islink
 
 import filelock
-from conda.exports import root_dir
 
 log = logging.getLogger(__name__)
 
@@ -117,10 +116,7 @@ def islist(arg, uniform=False, include_dict=True):
 # purpose here is that we want *one* lock per location on disk.  It can be
 # locked or unlocked at any time, but the lock within this process should all be
 # tied to the same tracking mechanism.
-_lock_folders = (
-    os.path.join(root_dir, "locks"),
-    os.path.expanduser(os.path.join("~", ".conda_build_locks")),
-)
+_lock_folders = (os.path.expanduser(os.path.join("~", ".conda_build_locks")),)
 
 
 def get_lock(folder, timeout=900):
@@ -229,7 +225,7 @@ def merge_or_update_dict(
 
 
 @contextlib.contextmanager
-def try_acquire_locks(locks, timeout):
+def try_acquire_locks(locks: list[filelock.FileLock], timeout):
     """Try to acquire all locks.
 
     If any lock can't be immediately acquired, free all locks.
@@ -370,6 +366,23 @@ def merge_tree(
         copytree(src, dst, symlinks=symlinks)
 
 
+def merge_tree_nolock(
+    src, dst, symlinks=False, timeout=900, lock=None, locking=False, clobber=False
+):
+    """
+    merge_tree() with locking=False
+    """
+    return merge_tree(
+        src,
+        dst,
+        symlinks=symlinks,
+        timeout=timeout,
+        lock=None,
+        locking=locking,
+        clobber=clobber,
+    )
+
+
 def get_prefix_replacement_paths(src, dst):
     ssplit = src.split(os.path.sep)
     dsplit = dst.split(os.path.sep)
@@ -451,12 +464,45 @@ def copy_into(
                 )
 
 
+def copy_into_nolock(
+    src, dst, timeout=900, symlinks=False, lock=None, locking=False, clobber=False
+):
+    """
+    copy_into() with locking=False.
+    """
+    return copy_into(
+        src,
+        dst,
+        timeout=timeout,
+        symlinks=symlinks,
+        lock=None,
+        locking=locking,
+        clobber=clobber,
+    )
+
+
 def move_with_fallback(src, dst):
     try:
         shutil.move(src, dst)
     except PermissionError:
         try:
             copy_into(src, dst)
+            os.unlink(src)
+        except PermissionError:
+            log.debug(
+                f"Failed to copy/remove path from {src} to {dst} due to permission error"
+            )
+
+
+def move_with_fallback_nolock(src, dst):
+    """
+    Call shutil.move(src, dst) and try own implementation on PermissionError.
+    """
+    try:
+        shutil.move(src, dst)
+    except PermissionError:
+        try:
+            copy_into_nolock(src, dst)
             os.unlink(src)
         except PermissionError:
             log.debug(
