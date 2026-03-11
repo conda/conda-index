@@ -6,5 +6,6 @@
 :maxdepth: 4
 
 index_module
+cache
 fs
 ```

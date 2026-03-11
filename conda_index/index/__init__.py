@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import bz2
+import copy
 import functools
 import hashlib
 import json
@@ -12,6 +13,7 @@ import os
 import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
@@ -213,6 +215,44 @@ CHANNELDATA_FIELDS = (
     "recipe_origin",
     "commits",
 )
+
+
+@dataclass(frozen=True)
+class SnapshotResult:
+    subdir: str
+    save_fs_state: bool
+
+
+@dataclass(frozen=True)
+class ExtractChangedResult:
+    subdir: str
+
+
+@dataclass(frozen=True)
+class RepodataBuildResult:
+    subdir: str
+    repodata_format: str
+    repodata: dict
+
+
+@dataclass(frozen=True)
+class PatchResult:
+    subdir: str
+    repodata_format: str
+    patched_repodata: dict
+    instructions: dict
+
+
+@dataclass(frozen=True)
+class WriteSubdirOutputsResult:
+    subdir: str
+    repodata_format: str
+    artifacts: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ChanneldataResult:
+    subdirs: tuple[str, ...]
 
 
 def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
@@ -460,8 +500,25 @@ class ChannelIndex:
         current_index_versions=None,
     ):
         """
+        Backward-compatible entry point for full indexing pipeline.
+        """
+        self.run_pipeline(
+            patch_generator=patch_generator,
+            verbose=verbose,
+            progress=progress,
+            current_index_versions=current_index_versions,
+        )
+
+    def run_pipeline(
+        self,
+        patch_generator,
+        verbose=False,
+        progress=False,
+        current_index_versions=None,
+    ):
+        """
         Examine all changed packages under ``self.channel_root``, updating
-        ``index.html`` for each subdir.
+        repodata for each subdir.
         """
         if verbose:
             log.debug(
@@ -469,14 +526,12 @@ class ChannelIndex:
                 __name__,
             )
 
-        subdirs = self.detect_subdirs()
+        subdirs = self.discover_subdirs()
 
         # Lock local channel.
         with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
-            # begin non-stop "extract packages into cache";
-            # extract_subdir_to_cache manages subprocesses. Keeps cores busy
-            # during write/patch/update channeldata steps.
-            def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
+
+            def extract_subdirs_to_cache():
                 executor = ThreadPoolExecutor(max_workers=1)
 
                 def extract_args():
@@ -489,13 +544,9 @@ class ChannelIndex:
                 def extract_wrapper(args: tuple):
                     # runs in thread
                     subdir, verbose, progress, subdir_path = args
-                    cache = self.cache_for_subdir(subdir)
-                    # exactly these packages (unless they are un-indexable) will
-                    # be in the output repodata
-                    if self.save_fs_state:
-                        cache.save_fs_state(subdir_path)
-                    return self.extract_subdir_to_cache(
-                        subdir, verbose, progress, subdir_path, cache
+                    self.snapshot_upstream(subdir, subdir_path=subdir_path)
+                    return self.extract_changed(
+                        subdir, verbose=verbose, progress=progress
                     )
 
                 # map() gives results in order passed, not in order of
@@ -507,7 +558,8 @@ class ChannelIndex:
             # REPODATA_FROM_PKGS_JSON_FN file
             with self.thread_executor_factory() as index_process:
                 futures = []
-                for subdir in extract_subdirs_to_cache():
+                for extract_result in extract_subdirs_to_cache():
+                    subdir = extract_result.subdir
                     for indexer, condition in (
                         (self.index_patch_subdir, self.write_monolithic),
                         (self.index_patch_subdir_shards, self.write_shards),
@@ -529,6 +581,229 @@ class ChannelIndex:
                 for future in futures:
                     result = future.result()
                     log.info(f"Completed {result}")
+
+    def discover_subdirs(self):
+        """
+        Return the ordered set of subdirs to index.
+
+        This is a public, pipeline-phase alias for ``detect_subdirs``.
+        """
+        return self.detect_subdirs()
+
+    def snapshot_upstream(self, subdir: str, subdir_path=None) -> SnapshotResult:
+        """
+        Save upstream package state for ``subdir`` into cache.
+
+        If ``save_fs_state`` is False, this phase is a no-op.
+        """
+        cache = self.cache_for_subdir(subdir)
+        if self.save_fs_state:
+            cache.save_fs_state(subdir_path)
+        return SnapshotResult(subdir=subdir, save_fs_state=self.save_fs_state)
+
+    def extract_changed(
+        self, subdir: str, verbose=False, progress=False
+    ) -> ExtractChangedResult:
+        """
+        Extract changed packages into cache for a subdir.
+
+        This phase requires that ``snapshot_upstream`` has run at least once, or
+        that cache state is already available.
+        """
+        cache = self.cache_for_subdir(subdir)
+        subdir_path = join(self.channel_root, subdir)
+        self.extract_subdir_to_cache(
+            subdir=subdir,
+            verbose=verbose,
+            progress=progress,
+            subdir_path=subdir_path,
+            cache=cache,
+        )
+        return ExtractChangedResult(subdir=subdir)
+
+    def build_repodata_from_cache(
+        self,
+        subdir: str,
+        repodata_format: str = "monolithic",
+        verbose=False,
+        progress=False,
+    ) -> RepodataBuildResult:
+        """
+        Build pre-patch repodata from cache for ``subdir``.
+        """
+        if repodata_format == "monolithic":
+            repodata = self.index_subdir(subdir, verbose=verbose, progress=progress)
+            return RepodataBuildResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                repodata=repodata,
+            )
+        if repodata_format == "shards":
+            repodata = self.index_subdir_shards(
+                subdir, verbose=verbose, progress=progress
+            )
+            return RepodataBuildResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                repodata=repodata,
+            )
+        raise ValueError(f"Unknown repodata_format {repodata_format!r}")
+
+    def apply_patches(
+        self,
+        subdir: str,
+        repodata,
+        patch_generator=None,
+        *,
+        repodata_format: str = "monolithic",
+    ) -> PatchResult:
+        """
+        Apply patch instructions for ``subdir``.
+        """
+        if repodata_format == "monolithic":
+            patched, instructions = self._patch_repodata(
+                subdir, copy.deepcopy(repodata), patch_generator
+            )
+            return PatchResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                patched_repodata=patched,
+                instructions=instructions,
+            )
+        if repodata_format == "shards":
+            patched, instructions = self._patch_repodata_shards(
+                subdir, repodata, patch_generator
+            )
+            return PatchResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                patched_repodata=patched,
+                instructions=instructions,
+            )
+        raise ValueError(f"Unknown repodata_format {repodata_format!r}")
+
+    def write_subdir_outputs(
+        self,
+        subdir: str,
+        patched_repodata,
+        *,
+        prepatch_repodata=None,
+        repodata_format: str = "monolithic",
+        current_index_versions=None,
+    ) -> WriteSubdirOutputsResult:
+        """
+        Write final artifacts for ``subdir``.
+
+        For ``monolithic`` format, ``patched_repodata`` is repodata dict and
+        ``prepatch_repodata`` is optional repodata_from_packages dict.
+        For ``shards`` format, ``patched_repodata`` is patched shard payloads
+        and ``prepatch_repodata`` is required shards index from packages.
+        """
+        if repodata_format == "monolithic":
+            artifacts = []
+            if prepatch_repodata is not None:
+                log.info("%s Writing pre-patch repodata", subdir)
+                self._write_repodata(
+                    subdir,
+                    prepatch_repodata,
+                    REPODATA_FROM_PKGS_JSON_FN,
+                )
+                artifacts.append(REPODATA_FROM_PKGS_JSON_FN)
+
+            log.info("%s Writing patched repodata", subdir)
+            self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
+            artifacts.append(REPODATA_JSON_FN)
+
+            if self.write_current_repodata:
+                log.info("%s Building current_repodata subset", subdir)
+                current_repodata = build_current_repodata(
+                    subdir, patched_repodata, pins=current_index_versions
+                )
+
+                log.info("%s Writing current_repodata subset", subdir)
+                self._write_repodata(
+                    subdir,
+                    current_repodata,
+                    json_filename="current_repodata.json",
+                )
+                artifacts.append("current_repodata.json")
+            else:
+                self._remove_repodata(subdir, "current_repodata.json")
+
+            if self.write_run_exports:
+                log.info("%s Building run_exports data", subdir)
+                run_exports_data = self.build_run_exports_data(subdir)
+
+                log.info("%s Writing run_exports.json", subdir)
+                self._write_repodata(
+                    subdir,
+                    run_exports_data,
+                    json_filename=RUN_EXPORTS_JSON_FN,
+                )
+                artifacts.append(RUN_EXPORTS_JSON_FN)
+
+            log.info("%s Writing index HTML", subdir)
+            self._write_subdir_index_html(subdir, patched_repodata)
+            artifacts.append("index.html")
+            return WriteSubdirOutputsResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                artifacts=tuple(artifacts),
+            )
+
+        if repodata_format == "shards":
+            if prepatch_repodata is None:
+                raise ValueError(
+                    "prepatch_repodata is required for shards write_subdir_outputs"
+                )
+
+            compressor = zstandard.ZstdCompressor()
+            artifacts = []
+
+            log.info("%s Writing pre-patch shards", subdir)
+            prepatch_path = self.channel_root / subdir / REPODATA_SHARDS_FROM_PKGS_FN
+            self._maybe_write(
+                prepatch_path,
+                compressor.compress(sqlitecache.packb_typed(prepatch_repodata)),
+            )  # type: ignore
+            artifacts.append(REPODATA_SHARDS_FROM_PKGS_FN)
+
+            log.info("%s Writing patched repodata", subdir)
+            repodata_shards = prepatch_repodata.copy()
+            repodata_shards["shards"] = {}
+
+            for pkg, record in patched_repodata.items():
+                shard_data = compressor.compress(sqlitecache.packb_typed(record))
+                shard_hash = hashlib.sha256(shard_data).digest()
+                repodata_shards["shards"][pkg] = shard_hash
+                output_path = (
+                    self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
+                )
+                if not output_path.exists():
+                    output_path.write_bytes(shard_data)
+
+            patched_path = self.channel_root / subdir / REPODATA_SHARDS_FN
+            self._maybe_write(
+                patched_path,
+                compressor.compress(sqlitecache.packb_typed(repodata_shards)),
+            )  # type: ignore
+            artifacts.append(REPODATA_SHARDS_FN)
+            return WriteSubdirOutputsResult(
+                subdir=subdir,
+                repodata_format=repodata_format,
+                artifacts=tuple(artifacts),
+            )
+
+        raise ValueError(f"Unknown repodata_format {repodata_format!r}")
+
+    def build_channeldata(self, subdirs=None, rss=False) -> ChanneldataResult:
+        """
+        Public phase wrapper for channeldata generation.
+        """
+        self.update_channeldata(rss=rss, subdirs=subdirs)
+        if subdirs is None:
+            subdirs = self.detect_subdirs()
+        return ChanneldataResult(subdirs=tuple(sorted(subdirs)))
 
     # old name
     def index_prepared_subdir(
@@ -556,62 +831,31 @@ class ChannelIndex:
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
-        repodata_from_packages = self.index_subdir(
-            subdir, verbose=verbose, progress=progress
-        )
-
-        log.info("%s Writing pre-patch repodata", subdir)
-        self._write_repodata(
+        repodata_from_packages_result = self.build_repodata_from_cache(
             subdir,
-            repodata_from_packages,
-            REPODATA_FROM_PKGS_JSON_FN,
+            repodata_format="monolithic",
+            verbose=verbose,
+            progress=progress,
         )
+        repodata_from_packages = repodata_from_packages_result.repodata
 
         # Apply patch instructions.
         log.info("%s Applying patch instructions", subdir)
-        patched_repodata, _ = self._patch_repodata(
-            subdir, repodata_from_packages, patch_generator
+        patch_result = self.apply_patches(
+            subdir,
+            repodata_from_packages,
+            patch_generator,
+            repodata_format="monolithic",
         )
+        patched_repodata = patch_result.patched_repodata
 
-        # Save patched and augmented repodata. If the contents
-        # of repodata have changed, write a new repodata.json.
-        # Create associated index.html.
-
-        log.info("%s Writing patched repodata", subdir)
-
-        self._write_repodata(subdir, patched_repodata, REPODATA_JSON_FN)
-
-        if self.write_current_repodata:
-            log.info("%s Building current_repodata subset", subdir)
-
-            current_repodata = build_current_repodata(
-                subdir, patched_repodata, pins=current_index_versions
-            )
-
-            log.info("%s Writing current_repodata subset", subdir)
-
-            self._write_repodata(
-                subdir,
-                current_repodata,
-                json_filename="current_repodata.json",
-            )
-        else:
-            self._remove_repodata(subdir, "current_repodata.json")
-
-        if self.write_run_exports:
-            log.info("%s Building run_exports data", subdir)
-            run_exports_data = self.build_run_exports_data(subdir)
-
-            log.info("%s Writing run_exports.json", subdir)
-            self._write_repodata(
-                subdir,
-                run_exports_data,
-                json_filename=RUN_EXPORTS_JSON_FN,
-            )
-
-        log.info("%s Writing index HTML", subdir)
-
-        self._write_subdir_index_html(subdir, patched_repodata)
+        self.write_subdir_outputs(
+            subdir,
+            patched_repodata,
+            prepatch_repodata=repodata_from_packages,
+            repodata_format="monolithic",
+            current_index_versions=current_index_versions,
+        )
 
         log.debug("%s finish", subdir)
 
@@ -630,48 +874,30 @@ class ChannelIndex:
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
-        compressor = zstandard.ZstdCompressor()
-
-        shards_from_packages = self.index_subdir_shards(
-            subdir, verbose=verbose, progress=progress
+        shards_from_packages_result = self.build_repodata_from_cache(
+            subdir,
+            repodata_format="shards",
+            verbose=verbose,
+            progress=progress,
         )
-
-        log.info("%s Writing pre-patch shards", subdir)
-
-        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FROM_PKGS_FN
-        self._maybe_write(
-            patched_path,
-            compressor.compress(sqlitecache.packb_typed(shards_from_packages)),
-        )  # type: ignore
+        shards_from_packages = shards_from_packages_result.repodata
 
         # Apply patch instructions.
         log.info("%s Applying patch instructions", subdir)
-        patched_packages, _ = self._patch_repodata_shards(
-            subdir, shards_from_packages, patch_generator
+        patch_result = self.apply_patches(
+            subdir,
+            shards_from_packages,
+            patch_generator,
+            repodata_format="shards",
         )
+        patched_packages = patch_result.patched_repodata
 
-        # Save patched and augmented repodata. If the contents
-        # of repodata have changed, write a new repodata.json.
-        # Create associated index.html.
-
-        log.info("%s Writing patched repodata", subdir)
-
-        repodata_shards = shards_from_packages.copy()
-        repodata_shards["shards"] = {}
-
-        for pkg, record in patched_packages.items():
-            shard_data = compressor.compress(sqlitecache.packb_typed(record))
-            shard_hash = hashlib.sha256(shard_data).digest()
-            repodata_shards["shards"][pkg] = shard_hash
-            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
-            if not output_path.exists():
-                output_path.write_bytes(shard_data)
-
-        patched_path = self.channel_root / subdir / REPODATA_SHARDS_FN
-        self._maybe_write(
-            patched_path,
-            compressor.compress(sqlitecache.packb_typed(repodata_shards)),
-        )  # type: ignore
+        self.write_subdir_outputs(
+            subdir,
+            patched_packages,
+            prepatch_repodata=shards_from_packages,
+            repodata_format="shards",
+        )
 
         log.debug("%s finish", subdir)
 
@@ -713,7 +939,9 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        for name, shard in cache.indexed_shards():
+        indexed_shards = cache.indexed_shards() or []
+
+        for name, shard in indexed_shards:
             shard_data = compressor.compress(sqlitecache.packb_typed(shard))
             shard_hash = hashlib.sha256(shard_data).digest()
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
@@ -758,8 +986,8 @@ class ChannelIndex:
         subdir: str,
         verbose,
         progress,
-        subdir_path,
-        cache: sqlitecache.CondaIndexCache,
+        subdir_path: str | Path,
+        cache: BaseCondaIndexCache,
     ) -> str:
         """
         Extract all changed packages into the subdir cache.
@@ -828,12 +1056,12 @@ class ChannelIndex:
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
         return channeldata_file
 
-    def update_channeldata(self, rss=False):
+    def update_channeldata(self, rss=False, subdirs=None):
         """
         Update channeldata based on re-reading output `repodata.json` and existing
         `channeldata.json`. Call after index() if channeldata is needed.
         """
-        subdirs = self.detect_subdirs()
+        subdirs = sorted(subdirs) if subdirs is not None else self.detect_subdirs()
 
         # Skip locking; only writes the channeldata.
 
