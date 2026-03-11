@@ -11,6 +11,7 @@ import pytest
 
 from conda_index.index import ChannelIndex
 from conda_index.index.sqlitecache import ICON_PATH
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres import model
@@ -286,9 +287,39 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert len(data["packages"]) == 1
     assert len(data["packages.conda"]) == 1
 
-    packages, packages_conda = cache.indexed_packages()
-    assert len(packages) == 1
-    assert len(packages_conda) == 1
+    indexed_packages = cache.indexed_packages()
+    assert len(indexed_packages.packages) == 1
+    assert len(indexed_packages.packages_conda) == 1
+    assert indexed_packages.packages_whl == {}
+
+
+def test_psql_include_wheel_extension(tmp_path: Path):
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
+    )
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    class DummyResult(NamedTuple):
+        name: str
+        path: str
+        record: object
+
+    connection.results_factory = lambda: [
+        DummyResult("package", "package.whl", {}),
+        DummyResult("package", "package.conda", {}),
+    ]
+    shards = list(cache.indexed_shards())
+    _, data = shards[0]
+    assert len(data["packages.whl"]) == 1
+    assert len(data["packages.conda"]) == 1
+
+    indexed_packages = cache.indexed_packages()
+    assert len(indexed_packages.packages_whl) == 1
 
 
 def test_psql_run_exports(tmp_path: Path):

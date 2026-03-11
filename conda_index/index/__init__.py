@@ -734,17 +734,20 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
+        indexed_packages = cache.indexed_packages()
 
         new_repodata = {
-            "packages": new_repodata_packages,
-            "packages.conda": new_repodata_conda_packages,
+            "packages": indexed_packages.packages,
+            "packages.conda": indexed_packages.packages_conda,
             "info": {
                 "subdir": subdir,
             },
             "repodata_version": REPODATA_VERSION,
             "removed": [],  # can be added by patch/hotfix process
         }
+
+        if indexed_packages.packages_whl:
+            new_repodata["packages.whl"] = indexed_packages.packages_whl
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md

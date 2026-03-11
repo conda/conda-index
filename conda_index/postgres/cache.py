@@ -17,7 +17,11 @@ from psycopg2 import OperationalError
 from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index.cache import BaseCondaIndexCache, clear_newline_chars
+from conda_index.index.cache import (
+    BaseCondaIndexCache,
+    IndexedPackages,
+    clear_newline_chars,
+)
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
@@ -307,23 +311,27 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in rows:
                     name, path, record = row
                     path = self.plain_path(path)
-                    if not path.endswith((".tar.bz2", ".conda")):
+                    if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
-                    key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+                    key = self.package_section_for_path(path)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
                     # This will be passed to the patch function, which we hope
                     # does not look for hex hash values.
-                    shard[key][path] = pack_record(record)
+                    shard.setdefault(key, {})[path] = pack_record(record)
 
                 if not desired or name in desired:
                     yield (name, shard)
 
-    def indexed_packages(self):
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
         packages = {}
         packages_conda = {}
+        packages_whl = {}
 
         def nopack_record(record):
             return record
@@ -331,8 +339,13 @@ class PsqlCache(BaseCondaIndexCache):
         for _, shard in self.indexed_shards(pack_record=nopack_record):
             packages.update(shard["packages"])
             packages_conda.update(shard["packages.conda"])
+            packages_whl.update(shard.get("packages.whl", {}))
 
-        return packages, packages_conda
+        return IndexedPackages(
+            packages=packages,
+            packages_conda=packages_conda,
+            packages_whl=packages_whl,
+        )
 
     def load_all_from_cache(self, fn: str):
         """

@@ -9,6 +9,8 @@ import abc
 import fnmatch
 import json
 import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
@@ -86,6 +88,13 @@ class ChangedPackage(TypedDict):
     size: int
 
 
+@dataclass
+class IndexedPackages:
+    packages: dict[str, dict[str, Any]]
+    packages_conda: dict[str, dict[str, Any]]
+    packages_whl: dict[str, dict[str, Any]]
+
+
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
     def __init__(
         self,
@@ -95,6 +104,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
         """
@@ -111,6 +121,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.package_extensions = package_extensions
         self.update_only = update_only
 
         self.fs = fs or MinimalFS()
@@ -151,6 +162,25 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         Return filename with any database-specfic prefix stripped off.
         """
         return path.rsplit("/", 1)[-1]
+
+    @cacher
+    def _package_section_re(self):
+        extension_pattern = "|".join(
+            re.escape(extension)
+            for extension in sorted(self.package_extensions, key=len, reverse=True)
+        )
+        return re.compile(f"({extension_pattern})$")
+
+    def package_section_for_path(self, path: str) -> str | None:
+        package_sections = {
+            ".tar.bz2": "packages",
+            ".conda": "packages.conda",
+            ".whl": "packages.whl",
+        }
+        match = self._package_section_re.search(path)
+        if match is None:
+            return None
+        return package_sections.get(match.group(1))
 
     def open(self, fn: str) -> IO[bytes]:
         """
@@ -343,7 +373,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         def listdir_stat() -> Iterator[dict[str, Any]]:
             # Gather conda package filenames in subdir
             for entry in self.fs.listdir(subdir_url):
-                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
+                if not entry["name"].endswith(self.package_extensions):
                     continue
                 if "mtime" not in entry or "size" not in entry:
                     entry.update(self.fs.stat(entry["name"]))
@@ -371,10 +401,10 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def indexed_packages(self) -> tuple[dict, dict]:
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache for
-        "monolithic repodata.json" query.
+        Return package sections from the cache for "monolithic repodata.json"
+        query.
         """
 
     @abc.abstractmethod
