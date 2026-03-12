@@ -17,6 +17,7 @@ def update_index(
     progress=False,
     current_index_versions=None,
     write_run_exports=False,
+    repodata_v3=False,
 ):
     import os
 
@@ -28,9 +29,9 @@ def update_index(
     # we basically expect there to be one path now
     dir_paths = [os.path.abspath(path) for path in ensure_list(dir_paths)]
 
-    assert (
-        output_dir is None or len(dir_paths) == 1
-    ), "Cannot combine output_dir with multiple paths"
+    assert output_dir is None or len(dir_paths) == 1, (
+        "Cannot combine output_dir with multiple paths"
+    )
 
     if isinstance(current_index_versions, str):
         with open(current_index_versions) as f:
@@ -49,4 +50,5 @@ def update_index(
             subdirs=ensure_list(subdir),
             current_index_versions=current_index_versions,
             write_run_exports=write_run_exports,
+            repodata_v3=repodata_v3,
         )

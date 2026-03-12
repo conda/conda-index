@@ -111,6 +111,7 @@ def update_index(
     write_zst=False,
     write_run_exports=False,
     html_dependencies=False,
+    repodata_v3=False,
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
@@ -147,6 +148,7 @@ def update_index(
         write_zst=write_zst,
         write_run_exports=write_run_exports,
         html_dependencies=html_dependencies,
+        repodata_v3=repodata_v3,
     )
 
     channel_index.index(
@@ -177,6 +179,7 @@ REPODATA_SHARDS_VERSION = (
 )
 CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
+REPODATA_REVISION_V3 = 3
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
 REPODATA_SHARDS_FN = "repodata_shards.msgpack.zst"
@@ -397,6 +400,7 @@ class ChannelIndex:
         upstream_stage: str = "fs",
         cache_kwargs=None,
         update_only=False,
+        repodata_v3=False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -430,6 +434,7 @@ class ChannelIndex:
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
         self.update_only = update_only
+        self.repodata_v3 = repodata_v3
 
         self.cache_kwargs = cache_kwargs
 
@@ -713,13 +718,21 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        for name, shard in cache.indexed_shards():
+        for name, shard in cache.indexed_shards(v3=self.repodata_v3):
             shard_data = compressor.compress(sqlitecache.packb_typed(shard))
             shard_hash = hashlib.sha256(shard_data).digest()
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
             if not output_path.exists():
                 output_path.write_bytes(shard_data)
             shards[name] = shard_hash
+
+        if self.repodata_v3:
+            shards_index["info"]["repodata_revisions"] = [
+                {
+                    "revision": REPODATA_REVISION_V3,
+                    "migrated_at": 0,
+                }
+            ]
 
         return shards_index
 
@@ -734,17 +747,29 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
+        indexed_packages = cache.indexed_packages(v3=self.repodata_v3)
 
         new_repodata = {
-            "packages": new_repodata_packages,
-            "packages.conda": new_repodata_conda_packages,
+            "packages": indexed_packages.packages,
+            "packages.conda": indexed_packages.packages_conda,
             "info": {
                 "subdir": subdir,
             },
             "repodata_version": REPODATA_VERSION,
             "removed": [],  # can be added by patch/hotfix process
         }
+
+        if indexed_packages.packages_whl:
+            new_repodata["packages.whl"] = indexed_packages.packages_whl
+
+        if indexed_packages.v3 is not None:
+            new_repodata["v3"] = indexed_packages.v3
+            new_repodata["info"]["repodata_revisions"] = [
+                {
+                    "revision": REPODATA_REVISION_V3,
+                    "migrated_at": 0,
+                }
+            ]
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md

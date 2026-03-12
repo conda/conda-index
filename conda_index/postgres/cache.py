@@ -17,7 +17,11 @@ from psycopg2 import OperationalError
 from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index.cache import BaseCondaIndexCache, clear_newline_chars
+from conda_index.index.cache import (
+    BaseCondaIndexCache,
+    IndexedPackages,
+    clear_newline_chars,
+)
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
@@ -263,7 +267,13 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards(self, desired: set | None = None, *, pack_record=pack_record):
+    def indexed_shards(
+        self,
+        desired: set[str] | None = None,
+        *,
+        v3: bool = False,
+        pack_record=pack_record,
+    ):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -303,36 +313,73 @@ class PsqlCache(BaseCondaIndexCache):
                 connection.execute(query),
                 lambda k: k.name,
             ):
-                shard = {"packages": {}, "packages.conda": {}}
+                shard = (
+                    {
+                        "v3": {
+                            "tar.bz2": {},
+                            "conda": {},
+                            "whl": {},
+                        }
+                    }
+                    if v3
+                    else {"packages": {}, "packages.conda": {}}
+                )
                 for row in rows:
                     name, path, record = row
                     path = self.plain_path(path)
-                    if not path.endswith((".tar.bz2", ".conda")):
+                    if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
-                    key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
-                    # This will be passed to the patch function, which we hope
-                    # does not look for hex hash values.
-                    shard[key][path] = pack_record(record)
+                    if v3:
+                        section_and_key = self.v3_section_and_key_for_path(path)
+                        if section_and_key is None:
+                            log.warning("%s has unsupported package extension", path)
+                            continue
+                        key, v3_path = section_and_key
+                        shard["v3"][key][v3_path] = pack_record(record)
+                    else:
+                        key = self.package_section_for_path(path)
+                        if key is None:
+                            log.warning("%s has unsupported package extension", path)
+                            continue
+                        # This will be passed to the patch function, which we hope
+                        # does not look for hex hash values.
+                        shard.setdefault(key, {})[path] = pack_record(record)
 
                 if not desired or name in desired:
                     yield (name, shard)
 
-    def indexed_packages(self):
+    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
         packages = {}
         packages_conda = {}
+        packages_whl = {}
+        v3_packages = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
 
         def nopack_record(record):
             return record
 
-        for _, shard in self.indexed_shards(pack_record=nopack_record):
-            packages.update(shard["packages"])
-            packages_conda.update(shard["packages.conda"])
+        for _, shard in self.indexed_shards(v3=v3, pack_record=nopack_record):
+            if v3:
+                for section, records in shard["v3"].items():
+                    v3_packages[section].update(records)
+            else:
+                packages.update(shard["packages"])
+                packages_conda.update(shard["packages.conda"])
+                packages_whl.update(shard.get("packages.whl", {}))
 
-        return packages, packages_conda
+        return IndexedPackages(
+            packages=packages,
+            packages_conda=packages_conda,
+            packages_whl=packages_whl,
+            v3=v3_packages if v3 else None,
+        )
 
     def load_all_from_cache(self, fn: str):
         """
