@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 from conda_index.index import cache
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 
 class DummyCache(cache.BaseCondaIndexCache):
@@ -39,10 +40,10 @@ class DummyCache(cache.BaseCondaIndexCache):
     def changed_packages(self) -> list[cache.ChangedPackage]:
         raise NotImplementedError
 
-    def indexed_packages(self) -> cache.IndexedPackages:
+    def indexed_packages(self, *, v3: bool = False) -> cache.IndexedPackages:
         raise NotImplementedError
 
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(self, desired: set[str] | None = None, *, v3: bool = False):
         raise NotImplementedError
 
     def run_exports(self) -> Iterator[tuple[str, dict]]:
@@ -54,7 +55,11 @@ def test_cache(tmp_path):
     Code coverage.
     """
 
-    c = DummyCache(str(tmp_path), "linux-64")
+    c = DummyCache(
+        str(tmp_path),
+        "linux-64",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
+    )
 
     package = "foo.conda"
     db_path = c.database_path(package)

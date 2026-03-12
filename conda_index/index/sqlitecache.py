@@ -332,7 +332,7 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self) -> IndexedPackages:
+    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
         """
         Return package sections from the cache.
         """
@@ -340,6 +340,11 @@ class CondaIndexCache(BaseCondaIndexCache):
             "packages": {},
             "packages.conda": {},
             "packages.whl": {},
+        }
+        new_v3_packages = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
         }
 
         # load cached packages
@@ -357,19 +362,28 @@ class CondaIndexCache(BaseCondaIndexCache):
                 log.warning("%s doesn't look like a conda package", path)
                 continue
 
-            section = self.package_section_for_path(path)
-            if section is None:
-                log.warning("%s has unsupported package extension", path)
-                continue
-            new_packages[section][path] = index_json
+            if v3:
+                section_and_key = self.v3_section_and_key_for_path(path)
+                if section_and_key is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                section, key = section_and_key
+                new_v3_packages[section][key] = index_json
+            else:
+                section = self.package_section_for_path(path)
+                if section is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                new_packages[section][path] = index_json
 
         return IndexedPackages(
             packages=new_packages["packages"],
             packages_conda=new_packages["packages.conda"],
             packages_whl=new_packages["packages.whl"],
+            v3=new_v3_packages if v3 else None,
         )
 
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(self, desired: set[str] | None = None, *, v3: bool = False):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -385,20 +399,38 @@ class CondaIndexCache(BaseCondaIndexCache):
             ),
             lambda k: k[0],
         ):
-            shard = {"packages": {}, "packages.conda": {}}
+            shard = (
+                {
+                    "v3": {
+                        "tar.bz2": {},
+                        "conda": {},
+                        "whl": {},
+                    }
+                }
+                if v3
+                else {"packages": {}, "packages.conda": {}}
+            )
             for row in rows:
                 name, path, index_json = row
                 if not path.endswith(self.package_extensions):
                     log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
-                key = self.package_section_for_path(path)
-                if key is None:
-                    log.warning("%s has unsupported package extension", path)
-                    continue
-                # we may have to pack later for patch functions that look for
-                # hex hashes
-                shard.setdefault(key, {})[path] = pack_record(record)
+                if v3:
+                    section_and_key = self.v3_section_and_key_for_path(path)
+                    if section_and_key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
+                    key, v3_path = section_and_key
+                    shard["v3"][key][v3_path] = pack_record(record)
+                else:
+                    key = self.package_section_for_path(path)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
+                    # we may have to pack later for patch functions that look for
+                    # hex hashes
+                    shard.setdefault(key, {})[path] = pack_record(record)
 
             if not desired or name in desired:
                 yield (name, shard)

@@ -93,6 +93,7 @@ class IndexedPackages:
     packages: dict[str, dict[str, Any]]
     packages_conda: dict[str, dict[str, Any]]
     packages_whl: dict[str, dict[str, Any]]
+    v3: dict[str, dict[str, Any]] | None = None
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -181,6 +182,21 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         if match is None:
             return None
         return package_sections.get(match.group(1))
+
+    def v3_section_and_key_for_path(self, path: str) -> tuple[str, str] | None:
+        package_sections = {
+            ".tar.bz2": "tar.bz2",
+            ".conda": "conda",
+            ".whl": "whl",
+        }
+        match = self._package_section_re.search(path)
+        if match is None:
+            return None
+        extension = match.group(1)
+        section = package_sections.get(extension)
+        if section is None:
+            return None
+        return section, path[: -len(extension)]
 
     def open(self, fn: str) -> IO[bytes]:
         """
@@ -401,7 +417,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def indexed_packages(self) -> IndexedPackages:
+    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
         """
         Return package sections from the cache for "monolithic repodata.json"
         query.
@@ -409,7 +425,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def indexed_shards(
-        self, desired: set[str] | None = None
+        self, desired: set[str] | None = None, *, v3: bool = False
     ) -> Iterator[tuple[str, Any]]:
         """
         Yield (package name, all packages with that name) from database ordered
