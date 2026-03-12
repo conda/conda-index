@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conda Channel Explorer</title>
+  <style>
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: radial-gradient(circle at 20% 0%, #f5f9ff 0%, #e8eff8 48%, #e2eaf4 100%);
+  --panel: rgba(255, 255, 255, 0.88);
+  --panel-border: #c9d7ea;
+  --ink: #13233a;
+  --muted: #4f6280;
+  --accent: #0f6abf;
+  --accent-soft: #dceefd;
+  --good: #1c7a57;
+  --shadow: 0 18px 44px rgba(10, 27, 45, 0.1);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.hero {
+  padding: 24px;
+  border: 1px solid #bfd1e7;
+  border-radius: 18px;
+  background: linear-gradient(130deg, rgba(255, 255, 255, 0.95), rgba(228, 240, 255, 0.92));
+  box-shadow: var(--shadow);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+}
+
+.subtitle {
+  margin: 8px 0 16px;
+  color: var(--muted);
+  max-width: 78ch;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.8fr) minmax(170px, 0.7fr) auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #bed7f3;
+  background: #eef6ff;
+  color: #104272;
+  font-size: 14px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.2fr) minmax(300px, 1fr) minmax(320px, 1.2fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  backdrop-filter: blur(5px);
+}
+
+.panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #d5e3f3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.panel-body {
+  padding: 14px;
+}
+
+input,
+select,
+textarea {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 16px;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #c3d5ea;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+input[type="search"] {
+  margin-bottom: 10px;
+}
+
+button {
+  border: 1px solid #8cb7e0;
+  background: #e8f2fd;
+  color: #114b81;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: Helvetica, Arial, sans-serif;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #d4e8fc;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.list-meta {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.virtual-list {
+  position: relative;
+  height: 480px;
+  overflow: auto;
+  border: 1px solid #d7e5f5;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.virtual-inner {
+  position: relative;
+}
+
+.pkg-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid #eef3fa;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pkg-row:hover {
+  background: #f0f7ff;
+}
+
+.pkg-row.active {
+  background: var(--accent-soft);
+  color: #08457e;
+  font-weight: 700;
+}
+
+.versions {
+  max-height: 528px;
+  overflow: auto;
+  border: 1px solid #d7e5f5;
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf3fb;
+  font-size: 14px;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: #f3f8fe;
+  color: #315174;
+  z-index: 1;
+}
+
+tr.file-row {
+  cursor: pointer;
+}
+
+tr.file-row:hover {
+  background: #f8fbff;
+}
+
+tr.file-row.active {
+  background: #e4f2ff;
+}
+
+.key-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kv {
+  border: 1px solid #d6e4f4;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fbfdff;
+}
+
+.kv .k {
+  font-size: 12px;
+  color: #547194;
+  margin-bottom: 4px;
+}
+
+.kv .v {
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.depends {
+  border: 1px solid #d6e4f4;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdff;
+  margin-bottom: 10px;
+}
+
+ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #d6e4f4;
+  background: #0f1f32;
+  color: #e8f2ff;
+  overflow: auto;
+  max-height: 340px;
+  font-size: 12px;
+}
+
+.json-actions {
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.status {
+  margin-top: 8px;
+  color: var(--good);
+  font-size: 14px;
+}
+
+@media (max-width: 1100px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .virtual-list {
+    height: 300px;
+  }
+}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1 id="channel-title">Conda Channel Explorer</h1>
+      <p class="subtitle">
+        Fast index browsing for sharded repodata (CEP-0016). Enter a channel URL,
+        choose a subdir, search packages, inspect versions, and drill down into CEP-0034 key fields.
+      </p>
+      <form id="channel-form" class="controls">
+        <input id="channel-url" type="text" placeholder="Channel URL (for example: https://prefix.dev/conda-forge/linux-64/)" value="./">
+        <select id="subdir-select" aria-label="Subdir">
+          <option>linux-64</option>
+          <option>noarch</option>
+          <option>osx-64</option>
+          <option>osx-arm64</option>
+          <option>win-64</option>
+          <option>win-arm64</option>
+          <option>linux-aarch64</option>
+          <option>linux-ppc64le</option>
+          <option>linux-s390x</option>
+        </select>
+        <button type="submit">Load channel</button>
+      </form>
+      <div class="stats">
+        <div class="chip" id="subdir-chip">Subdir: -</div>
+        <div class="chip" id="package-count-chip">Packages: -</div>
+        <div class="chip" id="created-chip">Created: -</div>
+        <div class="chip" id="source-chip">Source: -</div>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="layout">
+      <article class="panel">
+        <div class="panel-header">
+          <h2>Packages</h2>
+          <button id="show-index-json">Show shard index JSON</button>
+        </div>
+        <div class="panel-body">
+          <input id="search" type="search" placeholder="Search package names...">
+          <div class="list-meta" id="package-meta">Load a channel to view package names.</div>
+          <div class="virtual-list" id="package-list">
+            <div class="virtual-inner" id="package-list-inner"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <h2>Versions</h2>
+          <span class="muted" id="selected-package">No package selected</span>
+        </div>
+        <div class="panel-body">
+          <div class="versions">
+            <table>
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Version</th>
+                  <th>Build</th>
+                  <th>Size</th>
+                </tr>
+              </thead>
+              <tbody id="versions-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <h2>Record Details</h2>
+          <span class="muted" id="selected-file">No file selected</span>
+        </div>
+        <div class="panel-body">
+          <div id="record-content" class="muted">Pick a package and then a filename.</div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script type="module">
+// code in here should not be indented at the first level
+const commonSubdirs = [
+  "linux-64",
+  "noarch",
+  "osx-64",
+  "osx-arm64",
+  "win-64",
+  "win-arm64",
+  "linux-aarch64",
+  "linux-ppc64le",
+  "linux-s390x"
+];
+
+const state = {
+  shardIndex: null,
+  shardIndexUrl: null,
+  packageNames: [],
+  filteredNames: [],
+  selectedPackage: null,
+  selectedFilename: null,
+  shardCache: new Map(),
+  versionsByPackage: new Map(),
+  rowHeight: 36,
+  activeSubdirUrl: null
+};
+
+const dom = {
+  title: document.getElementById("channel-title"),
+  status: document.getElementById("status"),
+  subdirChip: document.getElementById("subdir-chip"),
+  packageCountChip: document.getElementById("package-count-chip"),
+  createdChip: document.getElementById("created-chip"),
+  sourceChip: document.getElementById("source-chip"),
+  form: document.getElementById("channel-form"),
+  channelUrl: document.getElementById("channel-url"),
+  subdirSelect: document.getElementById("subdir-select"),
+  search: document.getElementById("search"),
+  packageMeta: document.getElementById("package-meta"),
+  packageList: document.getElementById("package-list"),
+  packageListInner: document.getElementById("package-list-inner"),
+  showIndexJson: document.getElementById("show-index-json"),
+  selectedPackage: document.getElementById("selected-package"),
+  versionsBody: document.getElementById("versions-body"),
+  selectedFile: document.getElementById("selected-file"),
+  recordContent: document.getElementById("record-content")
+};
+
+function setStatus(message, isError = false) {
+  dom.status.textContent = message;
+  dom.status.style.color = isError ? "#a12727" : "#1c7a57";
+}
+
+function bytesToHex(value) {
+  if (value instanceof Uint8Array) {
+    return [...value].map((n) => n.toString(16).padStart(2, "0")).join("");
+  }
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return value.map((n) => n.toString(16).padStart(2, "0")).join("");
+  }
+  return value;
+}
+
+function toJsonSafe(value) {
+  if (value instanceof Uint8Array) {
+    return bytesToHex(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonSafe(item));
+  }
+  if (value && typeof value === "object") {
+    const output = {};
+    for (const [key, item] of Object.entries(value)) {
+      output[key] = toJsonSafe(item);
+    }
+    return output;
+  }
+  return value;
+}
+
+function formatSize(bytes) {
+  if (!Number.isFinite(bytes)) {
+    return "-";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatTimestamp(ms) {
+  if (!Number.isFinite(ms)) {
+    return "-";
+  }
+  return new Date(ms).toLocaleString();
+}
+
+function normalizeBaseUrl(raw) {
+  const input = raw.trim() || "./";
+  const parsed = new URL(input, location.href);
+  const parts = parsed.pathname.split("/").filter(Boolean);
+
+  if (parts.length && parts.at(-1).endsWith(".html")) {
+    parts.pop();
+  }
+
+  let detectedSubdir = null;
+  if (parts.length && commonSubdirs.includes(parts.at(-1))) {
+    detectedSubdir = parts.pop();
+  }
+
+  parsed.pathname = `/${parts.join("/")}${parts.length ? "/" : ""}`;
+  parsed.search = "";
+  parsed.hash = "";
+  return { channelBaseUrl: parsed.href, detectedSubdir };
+}
+
+function buildSubdirUrl(channelBaseUrl, subdir) {
+  return new URL(`${subdir.replace(/^\/+|\/+$/g, "")}/`, channelBaseUrl).href;
+}
+
+function resolveShardUrl(hashHex) {
+  const info = state.shardIndex?.info || {};
+  const indexUrl = state.shardIndexUrl;
+  const baseUrl = new URL(info.base_url || ".", indexUrl);
+  const shardsBaseUrl = new URL(info.shards_base_url || ".", baseUrl);
+  return new URL(`${hashHex}.msgpack.zst`, shardsBaseUrl).href;
+}
+
+async function loadCodecs() {
+  const [msgpackMod, zstdMod] = await Promise.all([
+    import("https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3.0.0/+esm"),
+    import("https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm")
+  ]);
+  return {
+    decode: msgpackMod.decode,
+    decompress: zstdMod.decompress || zstdMod.default || zstdMod
+  };
+}
+
+async function fetchMsgpackZst(url, codecs) {
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}: ${response.status}`);
+  }
+  const compressed = new Uint8Array(await response.arrayBuffer());
+  const decompressed = codecs.decompress(compressed);
+  const bytes = decompressed instanceof Uint8Array ? decompressed : new Uint8Array(decompressed);
+  return codecs.decode(bytes);
+}
+
+function clearResults() {
+  state.shardCache.clear();
+  state.versionsByPackage.clear();
+  state.selectedPackage = null;
+  state.selectedFilename = null;
+  state.packageNames = [];
+  state.filteredNames = [];
+  dom.selectedPackage.textContent = "No package selected";
+  dom.selectedFile.textContent = "No file selected";
+  dom.versionsBody.replaceChildren();
+  dom.recordContent.textContent = "Pick a package and then a filename.";
+  dom.packageListInner.replaceChildren();
+  dom.packageListInner.style.height = "0";
+}
+
+function updateFilteredPackages(query) {
+  const q = query.trim().toLowerCase();
+  state.filteredNames = q
+    ? state.packageNames.filter((name) => name.toLowerCase().includes(q))
+    : state.packageNames.slice();
+  dom.packageMeta.textContent = `${state.filteredNames.length.toLocaleString()} packages visible`;
+  renderVirtualList();
+}
+
+function renderVirtualList() {
+  const list = dom.packageList;
+  const inner = dom.packageListInner;
+  const total = state.filteredNames.length;
+  const rowHeight = state.rowHeight;
+  const scrollTop = list.scrollTop;
+  const visibleRows = Math.ceil(list.clientHeight / rowHeight) + 8;
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 4);
+  const end = Math.min(total, start + visibleRows);
+
+  inner.style.height = `${total * rowHeight}px`;
+  inner.replaceChildren();
+
+  for (let i = start; i < end; i += 1) {
+    const name = state.filteredNames[i];
+    const row = document.createElement("div");
+    row.className = `pkg-row${state.selectedPackage === name ? " active" : ""}`;
+    row.style.top = `${i * rowHeight}px`;
+    row.textContent = name;
+    row.title = name;
+    row.addEventListener("click", () => {
+      selectPackage(name);
+    });
+    inner.append(row);
+  }
+}
+
+async function getShardForPackage(packageName, codecs) {
+  if (state.shardCache.has(packageName)) {
+    return state.shardCache.get(packageName);
+  }
+  const hashBytes = state.shardIndex.shards[packageName];
+  const hashHex = bytesToHex(hashBytes);
+  const shardUrl = resolveShardUrl(hashHex);
+  const shard = await fetchMsgpackZst(shardUrl, codecs);
+  state.shardCache.set(packageName, shard);
+  return shard;
+}
+
+function normalizeVersions(shard) {
+  const records = [];
+  for (const [filename, record] of Object.entries(shard.packages || {})) {
+    records.push({ filename, record });
+  }
+  for (const [filename, record] of Object.entries(shard["packages.conda"] || {})) {
+    records.push({ filename, record });
+  }
+  records.sort((a, b) => {
+    const at = a.record.timestamp || 0;
+    const bt = b.record.timestamp || 0;
+    return bt - at;
+  });
+  return records;
+}
+
+function renderVersions(packageName) {
+  const versions = state.versionsByPackage.get(packageName) || [];
+  dom.versionsBody.replaceChildren();
+
+  for (const item of versions) {
+    const row = document.createElement("tr");
+    row.className = `file-row${state.selectedFilename === item.filename ? " active" : ""}`;
+    row.innerHTML = `
+      <td>${item.filename}</td>
+      <td>${item.record.version || "-"}</td>
+      <td>${item.record.build || "-"}</td>
+      <td>${formatSize(item.record.size)}</td>
+    `;
+    row.addEventListener("click", () => {
+      state.selectedFilename = item.filename;
+      dom.selectedFile.textContent = item.filename;
+      renderVersions(packageName);
+      renderRecord(item.record, item.filename);
+    });
+    dom.versionsBody.append(row);
+  }
+}
+
+function renderRecord(record, filename) {
+  const depends = Array.isArray(record.depends) ? record.depends : [];
+  const constrains = Array.isArray(record.constrains) ? record.constrains : [];
+  const keyFields = [
+    ["name", record.name],
+    ["version", record.version],
+    ["build", record.build],
+    ["build_number", record.build_number],
+    ["subdir", record.subdir],
+    ["noarch", record.noarch],
+    ["timestamp", formatTimestamp(record.timestamp)],
+    ["size", formatSize(record.size)],
+    ["sha256", bytesToHex(record.sha256)],
+    ["md5", bytesToHex(record.md5)]
+  ];
+
+  const wrapper = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "key-grid";
+  for (const [key, value] of keyFields) {
+    const kv = document.createElement("div");
+    kv.className = "kv";
+    kv.innerHTML = `<div class="k">${key}</div><div class="v">${value ?? "-"}</div>`;
+    grid.append(kv);
+  }
+
+  const depBox = document.createElement("div");
+  depBox.className = "depends";
+  depBox.innerHTML = "<strong>depends</strong>";
+  const depList = document.createElement("ul");
+  for (const dep of depends) {
+    const item = document.createElement("li");
+    item.textContent = dep;
+    depList.append(item);
+  }
+  if (!depends.length) {
+    const item = document.createElement("li");
+    item.textContent = "none";
+    depList.append(item);
+  }
+  depBox.append(depList);
+
+  const conBox = document.createElement("div");
+  conBox.className = "depends";
+  conBox.innerHTML = "<strong>constrains</strong>";
+  const conList = document.createElement("ul");
+  for (const con of constrains) {
+    const item = document.createElement("li");
+    item.textContent = con;
+    conList.append(item);
+  }
+  if (!constrains.length) {
+    const item = document.createElement("li");
+    item.textContent = "none";
+    conList.append(item);
+  }
+  conBox.append(conList);
+
+  const actions = document.createElement("div");
+  actions.className = "json-actions";
+  const fullJsonButton = document.createElement("button");
+  fullJsonButton.textContent = "Show full package record JSON";
+  const jsonPre = document.createElement("pre");
+  jsonPre.hidden = true;
+
+  fullJsonButton.addEventListener("click", () => {
+    jsonPre.hidden = !jsonPre.hidden;
+    if (!jsonPre.textContent) {
+      jsonPre.textContent = JSON.stringify(toJsonSafe(record), null, 2);
+    }
+    fullJsonButton.textContent = jsonPre.hidden
+      ? "Show full package record JSON"
+      : "Hide full package record JSON";
+  });
+
+  actions.append(fullJsonButton);
+  wrapper.append(grid, depBox, conBox, actions, jsonPre);
+  dom.recordContent.replaceChildren(wrapper);
+  dom.selectedFile.textContent = filename;
+}
+
+async function selectPackage(name) {
+  if (!name || !state.shardIndex) {
+    return;
+  }
+  state.selectedPackage = name;
+  state.selectedFilename = null;
+  dom.selectedPackage.textContent = name;
+  dom.selectedFile.textContent = "No file selected";
+  dom.recordContent.textContent = "Pick a filename to inspect details.";
+  renderVirtualList();
+
+  if (!state.versionsByPackage.has(name)) {
+    setStatus(`Loading shard for ${name}...`);
+    const shard = await getShardForPackage(name, window.__codecs);
+    state.versionsByPackage.set(name, normalizeVersions(shard));
+    setStatus(`Loaded ${name}`);
+  }
+  renderVersions(name);
+}
+
+function showIndexJson() {
+  const actions = document.createElement("div");
+  actions.className = "json-actions";
+  const hideButton = document.createElement("button");
+  hideButton.textContent = "Hide shard index JSON";
+  const pre = document.createElement("pre");
+  pre.textContent = JSON.stringify(toJsonSafe(state.shardIndex), null, 2);
+
+  hideButton.addEventListener("click", () => {
+    dom.recordContent.textContent = "Pick a package and then a filename.";
+    dom.selectedFile.textContent = "No file selected";
+  });
+
+  actions.append(hideButton);
+  dom.recordContent.replaceChildren(actions, pre);
+  dom.selectedFile.textContent = "repodata_shards.msgpack.zst as JSON";
+}
+
+function setSubdirOption(subdir) {
+  const values = [...dom.subdirSelect.options].map((opt) => opt.value);
+  if (!values.includes(subdir)) {
+    const option = document.createElement("option");
+    option.value = subdir;
+    option.textContent = subdir;
+    dom.subdirSelect.append(option);
+  }
+  dom.subdirSelect.value = subdir;
+}
+
+async function loadChannel(rawUrl, selectedSubdir) {
+  clearResults();
+
+  const normalized = normalizeBaseUrl(rawUrl);
+  const subdir = normalized.detectedSubdir || selectedSubdir || "linux-64";
+  setSubdirOption(subdir);
+
+  const subdirUrl = buildSubdirUrl(normalized.channelBaseUrl, subdir);
+  const indexUrl = new URL("repodata_shards.msgpack.zst", subdirUrl).href;
+
+  state.activeSubdirUrl = subdirUrl;
+  state.shardIndexUrl = indexUrl;
+
+  setStatus(`Loading ${indexUrl} ...`);
+  const index = await fetchMsgpackZst(indexUrl, window.__codecs);
+
+  state.shardIndex = index;
+  state.packageNames = Object.keys(index.shards || {}).sort((a, b) => a.localeCompare(b));
+  state.filteredNames = state.packageNames.slice();
+
+  const infoSubdir = index.info?.subdir || subdir;
+  setSubdirOption(infoSubdir);
+
+  dom.title.textContent = `Conda Channel Explorer - ${infoSubdir}`;
+  dom.subdirChip.textContent = `Subdir: ${infoSubdir}`;
+  dom.packageCountChip.textContent = `Packages: ${state.packageNames.length.toLocaleString()}`;
+  dom.createdChip.textContent = `Created: ${index.info?.created_at || "unknown"}`;
+  dom.sourceChip.textContent = `Source: ${subdirUrl}`;
+  dom.packageMeta.textContent = `${state.packageNames.length.toLocaleString()} packages visible`;
+  renderVirtualList();
+  setStatus("Shard index loaded.");
+}
+
+async function init() {
+  try {
+    setStatus("Loading codecs...");
+    window.__codecs = await loadCodecs();
+    setStatus("Codecs ready.");
+    await loadChannel(dom.channelUrl.value, dom.subdirSelect.value);
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      "Failed to load channel. Ensure CORS is enabled for the URL and repodata_shards.msgpack.zst exists.",
+      true
+    );
+  }
+}
+
+dom.form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await loadChannel(dom.channelUrl.value, dom.subdirSelect.value);
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      "Failed to load channel. Check URL/subdir and verify that CORS is enabled.",
+      true
+    );
+  }
+});
+
+dom.search.addEventListener("input", () => {
+  updateFilteredPackages(dom.search.value);
+});
+
+dom.packageList.addEventListener("scroll", () => {
+  renderVirtualList();
+});
+
+dom.showIndexJson.addEventListener("click", () => {
+  if (!state.shardIndex) {
+    return;
+  }
+  showIndexJson();
+});
+
+init();
+  </script>
+</body>
+</html>
