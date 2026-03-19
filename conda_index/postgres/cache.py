@@ -209,7 +209,7 @@ class PsqlCache(BaseCondaIndexCache):
                 "mtime": mtime,
                 "size": size,
                 "sha256": index_json["sha256"],
-                "md5": index_json["md5"],
+                "md5": index_json.get("md5"),
             }
             connection.execute(
                 insert(stat_table)

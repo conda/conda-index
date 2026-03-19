@@ -395,7 +395,13 @@ class CondaIndexCache(BaseCondaIndexCache):
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
                 VALUES ('indexed', ?, ?, ?, ?, ?)""",
-            (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
+            (
+                database_path,
+                mtime,
+                size,
+                index_json["sha256"],
+                index_json.get("md5"),
+            ),
         )
 
     def run_exports(self) -> Iterator[tuple[str, dict]]:
