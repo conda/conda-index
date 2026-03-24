@@ -939,7 +939,7 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        indexed_shards = cache.indexed_shards() or []
+        indexed_shards = cache.indexed_shards()
 
         for name, shard in indexed_shards:
             shard_data = compressor.compress(sqlitecache.packb_typed(shard))
