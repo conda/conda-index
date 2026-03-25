@@ -421,8 +421,8 @@ class CondaIndexCache(BaseCondaIndexCache):
                     if section_and_key is None:
                         log.warning("%s has unsupported package extension", path)
                         continue
-                    key, v3_path = section_and_key
-                    shard["v3"][key][v3_path] = pack_record(record)
+                    section, key = section_and_key
+                    shard["v3"][section][key] = pack_record(record)
                 else:
                     key = self.package_section_for_path(path)
                     if key is None:
