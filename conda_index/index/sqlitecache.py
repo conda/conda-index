@@ -11,15 +11,18 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import msgpack
 
 from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .cache import BaseCondaIndexCache, ChangedPackage, cacher
+from .cache import BaseCondaIndexCache, cacher
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
+
+if TYPE_CHECKING:
+    from .cache import ChangedPackage, HasChecksumsAndSize
 
 log = logging.getLogger(__name__)
 
@@ -171,7 +174,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write cache for a single package to database.
@@ -194,6 +197,9 @@ class CondaIndexCache(BaseCondaIndexCache):
                                 INSERT OR REPLACE INTO {table} (path, {table})
                                 VALUES (:path, json(:data))
                                 """
+                else:
+                    log.warning('No "data" key for %s/%s', fn, table)
+                    continue
                 # Could delete from all metadata tables that we didn't just see.
                 try:
                     self.db.execute(query, parameters)
@@ -391,7 +397,9 @@ class CondaIndexCache(BaseCondaIndexCache):
             if not desired or name in desired:
                 yield (name, shard)
 
-    def store_index_json_stat(self, database_path, mtime, size, index_json):
+    def store_index_json_stat(
+        self, database_path, mtime, size, index_json: HasChecksumsAndSize
+    ):
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
                 VALUES ('indexed', ?, ?, ?, ?, ?)""",

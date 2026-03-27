@@ -1,0 +1,4 @@
+### Bug fixes
+
+* Test `md5=None` in `index_json` when calling `cache.store()` (e.g. PyPI
+  metadata); add type hints to assist callers. (#269)

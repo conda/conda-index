@@ -11,7 +11,7 @@ import json
 import logging
 from numbers import Number
 from pathlib import Path
-from typing import Any, Iterator, TypedDict
+from typing import TYPE_CHECKING, Any, Iterator, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -76,10 +76,21 @@ class cacher:
         return self
 
 
-class ChangedPackage(TypedDict):
-    path: str
-    mtime: Number
-    size: Number
+if TYPE_CHECKING:
+
+    class ChangedPackage(TypedDict):
+        path: str
+        mtime: Number
+        size: Number
+
+    class HasChecksumsAndSize(TypedDict, extra_items=Any):
+        """
+        Enforce keys accessed in conda-index store()
+        """
+
+        md5: str | None
+        sha256: str | None
+        size: int
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -196,7 +207,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             log.exception("Error extracting %s", fn)
         return retval
 
-    def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
+    def extract_to_cache_unconditional(
+        self, fn: str, abs_fn: str, size: int, mtime: int
+    ):
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
@@ -229,8 +242,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
                     # immediately parse index.json, decide whether we need icon
                     if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                        index_json = json.loads(members[member.name])
-                        if index_json.get("icon") is None:
+                        check_icon = json.loads(members[member.name])
+                        if check_icon.get("icon") is None:
                             wanted = wanted - {ICON_PATH}
 
                     if member.name in recipe_want_one:
@@ -258,7 +271,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             # very common for some metadata to be missing
             log.debug(f"{fn} missing {wanted} has {set(members.keys())}")
 
-        index_json = json.loads(members["info/index.json"])
+        raw_index_json: dict = json.loads(members["info/index.json"])
 
         # populate run_exports.json (all False's if there was no
         # paths.json). paths.json should not be needed after this; don't
@@ -284,11 +297,16 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             "operatingsystem",
         }
 
-        index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
+        filtered_index_json = {
+            k: v for k, v in raw_index_json.items() if k not in filter_fields
+        }
 
-        new_info = {"md5": md5, "sha256": sha256, "size": size}
-
-        index_json.update(new_info)
+        index_json: HasChecksumsAndSize = {
+            **filtered_index_json,  # type: ignore
+            "md5": md5,
+            "sha256": sha256,
+            "size": size,
+        }
 
         self.store(fn, size, mtime, members, index_json)
 
@@ -301,7 +319,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write a single package's index data to database.

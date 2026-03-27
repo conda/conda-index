@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
@@ -27,6 +27,9 @@ from conda_index.index.sqlitecache import (
     cacher,
     pack_record,
 )
+
+if TYPE_CHECKING:
+    from ..index.cache import HasChecksumsAndSize
 
 from . import model
 
@@ -148,7 +151,7 @@ class PsqlCache(BaseCondaIndexCache):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write cache for a single package to database.
