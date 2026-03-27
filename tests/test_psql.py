@@ -222,9 +222,9 @@ def test_psql_bad_channel_id(tmp_path: Path):
         )
 
 
-def test_psql_store_tolerates_missing_md5(tmp_path: Path):
+def test_psql_store_tolerates_null_md5(tmp_path: Path):
     """
-    store() accepts index_json without md5 (e.g. PyPI/wheel records).
+    store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
     """
     cache = PsqlCache(
         tmp_path,
@@ -243,6 +243,8 @@ def test_psql_store_tolerates_missing_md5(tmp_path: Path):
             "name": "pkg",
             "version": "1.0",
             "sha256": hashlib.sha256().hexdigest(),
+            "md5": None,
+            "size": 0,
         },
     )
 
@@ -252,7 +254,7 @@ def test_psql_store_tolerates_missing_md5(tmp_path: Path):
     )
     assert stat_insert is not None
     params = stat_insert[1] or {}
-    assert params.get("md5") is None
+    assert params["md5"] is None
 
 
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):

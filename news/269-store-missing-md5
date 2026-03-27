@@ -1,3 +1,4 @@
 ### Bug fixes
 
-* Tolerate missing `md5` in `index_json` when calling `cache.store()` (e.g. PyPI metadata); write NULL to `stat.md5` instead of raising `KeyError`. (#269)
+* Test `md5=None` in `index_json` when calling `cache.store()` (e.g. PyPI
+  metadata); add type hints to assist callers. (#269)

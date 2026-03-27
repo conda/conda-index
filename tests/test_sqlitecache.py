@@ -44,9 +44,9 @@ def test_cache_extract_without_stat_result(index_data):
     )
 
 
-def test_store_tolerates_missing_md5(tmp_path):
+def test_store_tolerates_null_md5(tmp_path):
     """
-    store() accepts index_json without md5 (e.g. PyPI/wheel records).
+    store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
     md5 is stored as NULL in stat table.
     """
     (tmp_path / "noarch").mkdir()
@@ -61,6 +61,8 @@ def test_store_tolerates_missing_md5(tmp_path):
             "name": "pkg",
             "version": "1.0",
             "sha256": "a" * 64,
+            "md5": None,
+            "size": 0,
         },
     )
 
