@@ -242,7 +242,7 @@ def test_psql_store_tolerates_missing_md5(tmp_path: Path):
         index_json={
             "name": "pkg",
             "version": "1.0",
-            "sha256": hashlib.sha256(b"x").hexdigest(),
+            "sha256": hashlib.sha256().hexdigest(),
         },
     )
 
