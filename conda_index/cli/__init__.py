@@ -188,8 +188,8 @@ from .. import yaml
 @click.option(
     "--repodata-v3/--no-repodata-v3",
     help="""
-        Write CEP-XXXX v3 repodata layout with all package records under a
-        top-level v3 key.
+        EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package
+        records under a top-level v3 key.
         """,
     default=False,
     show_default=True,
