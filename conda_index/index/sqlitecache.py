@@ -15,9 +15,8 @@ from typing import Any, Iterable, Iterator
 
 import msgpack
 
-from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .cache import BaseCondaIndexCache, ChangedPackage, cacher
+from .cache import BaseCondaIndexCache, ChangedPackage, IndexedPackages, cacher
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
 
@@ -333,12 +332,20 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self):
+    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
-        new_repodata_packages = {}
-        new_repodata_conda_packages = {}
+        new_packages = {
+            "packages": {},
+            "packages.conda": {},
+            "packages.whl": {},
+        }
+        new_v3_packages = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
 
         # load cached packages
         for row in self.db.execute(
@@ -351,16 +358,32 @@ class CondaIndexCache(BaseCondaIndexCache):
         ):
             path, index_json = row
             index_json = json.loads(index_json)
-            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                new_repodata_packages[path] = index_json
-            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                new_repodata_conda_packages[path] = index_json
-            else:
+            if not path.endswith(self.package_extensions):
                 log.warning("%s doesn't look like a conda package", path)
+                continue
 
-        return new_repodata_packages, new_repodata_conda_packages
+            if v3:
+                section_and_key = self.v3_section_and_key_for_path(path)
+                if section_and_key is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                section, key = section_and_key
+                new_v3_packages[section][key] = index_json
+            else:
+                section = self.package_section_for_path(path)
+                if section is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                new_packages[section][path] = index_json
 
-    def indexed_shards(self, desired: set | None = None):
+        return IndexedPackages(
+            packages=new_packages["packages"],
+            packages_conda=new_packages["packages.conda"],
+            packages_whl=new_packages["packages.whl"],
+            v3=new_v3_packages if v3 else None,
+        )
+
+    def indexed_shards(self, desired: set[str] | None = None, *, v3: bool = False):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -376,17 +399,38 @@ class CondaIndexCache(BaseCondaIndexCache):
             ),
             lambda k: k[0],
         ):
-            shard = {"packages": {}, "packages.conda": {}}
+            shard = (
+                {
+                    "v3": {
+                        "tar.bz2": {},
+                        "conda": {},
+                        "whl": {},
+                    }
+                }
+                if v3
+                else {"packages": {}, "packages.conda": {}}
+            )
             for row in rows:
                 name, path, index_json = row
-                if not path.endswith((".tar.bz2", ".conda")):
+                if not path.endswith(self.package_extensions):
                     log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
-                key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
-                # we may have to pack later for patch functions that look for
-                # hex hashes
-                shard[key][path] = pack_record(record)
+                if v3:
+                    section_and_key = self.v3_section_and_key_for_path(path)
+                    if section_and_key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
+                    section, key = section_and_key
+                    shard["v3"][section][key] = pack_record(record)
+                else:
+                    key = self.package_section_for_path(path)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
+                    # we may have to pack later for patch functions that look for
+                    # hex hashes
+                    shard.setdefault(key, {})[path] = pack_record(record)
 
             if not desired or name in desired:
                 yield (name, shard)

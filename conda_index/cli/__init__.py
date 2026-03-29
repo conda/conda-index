@@ -185,6 +185,15 @@ from .. import yaml
     default=False,
     show_default=True,
 )
+@click.option(
+    "--repodata-v3/--no-repodata-v3",
+    help="""
+        EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package
+        records under a top-level v3 key.
+        """,
+    default=False,
+    show_default=True,
+)
 def cli(
     dir,
     patch_generator=None,
@@ -210,6 +219,7 @@ def cli(
     db_url="",
     html_dependencies=False,
     update_only=False,
+    repodata_v3=False,
 ):
     logutil.configure()
     if verbose:
@@ -269,6 +279,7 @@ def cli(
         cache_kwargs=cache_kwargs,
         html_dependencies=html_dependencies,
         update_only=update_only,
+        repodata_v3=repodata_v3,
     )
 
     if update_cache is False:
