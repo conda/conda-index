@@ -78,6 +78,12 @@ source = ["conda_index"]
 [tool.isort]
 profile = "black"
 
+[tool.ruff]
+exclude = [
+    "tests/split_repo.py",
+    "conda_index/utils_build.py",
+]
+
 [tool.hatch.build]
 include = ["conda_index"]
 

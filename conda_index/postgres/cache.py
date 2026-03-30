@@ -17,7 +17,11 @@ from psycopg2 import OperationalError
 from sqlalchemy import Connection, cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index.cache import BaseCondaIndexCache, clear_newline_chars
+from conda_index.index.cache import (
+    BaseCondaIndexCache,
+    IndexedPackages,
+    clear_newline_chars,
+)
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
@@ -263,7 +267,12 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards(self, desired: set | None = None, *, pack_record=pack_record):
+    def indexed_shards(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -307,20 +316,20 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in rows:
                     name, path, record = row
                     path = self.plain_path(path)
-                    if not path.endswith((".tar.bz2", ".conda")):
+                    if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
                     key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
                     # This will be passed to the patch function, which we hope
                     # does not look for hex hash values.
-                    shard[key][path] = pack_record(record)
+                    shard.setdefault(key, {})[path] = pack_record(record)
 
                 if not desired or name in desired:
                     yield (name, shard)
 
-    def indexed_packages(self):
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
         packages = {}
         packages_conda = {}
@@ -332,7 +341,10 @@ class PsqlCache(BaseCondaIndexCache):
             packages.update(shard["packages"])
             packages_conda.update(shard["packages.conda"])
 
-        return packages, packages_conda
+        return IndexedPackages(
+            packages=packages,
+            packages_conda=packages_conda,
+        )
 
     def load_all_from_cache(self, fn: str):
         """

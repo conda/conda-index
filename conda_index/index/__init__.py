@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import msgpack
 import zstandard
-from conda.exports import VersionOrder  # sole remaining conda dependency here?
+from conda.models.version import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
@@ -734,11 +734,11 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
+        indexed_packages = cache.indexed_packages()
 
         new_repodata = {
-            "packages": new_repodata_packages,
-            "packages.conda": new_repodata_conda_packages,
+            "packages": indexed_packages.packages,
+            "packages.conda": indexed_packages.packages_conda,
             "info": {
                 "subdir": subdir,
             },
