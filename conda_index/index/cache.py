@@ -166,7 +166,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         return path.rsplit("/", 1)[-1]
 
     @cacher
-    def _package_section_re(self):
+    def _package_section_re(self) -> re.Pattern[str]:
         extension_pattern = "|".join(
             re.escape(extension)
             for extension in sorted(self.package_extensions, key=len, reverse=True)
