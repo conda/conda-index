@@ -1,0 +1,21 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* `BaseCondaIndexCache.indexed_packages()` returns dataclass instead of tuple. (#262)
+
+### Docs
+
+* <news item>
+
+### Other
+
+* Many type hints added, updated. (#262)
+* `BaseCondaIndexCache`'s list of valid package extensions can be overridden.
+  (#262)

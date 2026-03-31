@@ -339,7 +339,6 @@ class CondaIndexCache(BaseCondaIndexCache):
         new_packages = {
             "packages": {},
             "packages.conda": {},
-            "packages.whl": {},
         }
         new_v3_packages = {
             "tar.bz2": {},

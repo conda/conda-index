@@ -22,6 +22,7 @@ from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
+    from numbers import Number
     from typing import IO, Any, Iterator
 
     from .fs import FileInfo
@@ -84,7 +85,7 @@ class cacher:
 
 class ChangedPackage(TypedDict):
     path: str
-    mtime: int
+    mtime: Number
     size: int
 
 
@@ -416,6 +417,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         Return packages in upstream that are changed or missing compared to 'indexed'.
         """
 
+    # XXX make v3 a class property to be more friendly to CondaIndexCache subclasses?
     @abc.abstractmethod
     def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
         """
