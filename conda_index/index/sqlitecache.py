@@ -357,9 +357,6 @@ class CondaIndexCache(BaseCondaIndexCache):
                 continue
 
             section = self.package_section_for_path(path)
-            if section is None:
-                log.warning("%s has unsupported package extension", path)
-                continue
             new_packages[section][path] = index_json
 
         return IndexedPackages(
@@ -391,9 +388,6 @@ class CondaIndexCache(BaseCondaIndexCache):
                     continue
                 record = json.loads(index_json)
                 key = self.package_section_for_path(path)
-                if key is None:
-                    log.warning("%s has unsupported package extension", path)
-                    continue
                 # we may have to pack later for patch functions that look for
                 # hex hashes
                 shard.setdefault(key, {})[path] = pack_record(record)

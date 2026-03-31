@@ -319,7 +319,7 @@ class PsqlCache(BaseCondaIndexCache):
                     if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
-                    key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+                    key = self.package_section_for_path(path)
                     # This will be passed to the patch function, which we hope
                     # does not look for hex hash values.
                     shard.setdefault(key, {})[path] = pack_record(record)
