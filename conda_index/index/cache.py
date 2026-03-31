@@ -93,7 +93,6 @@ class ChangedPackage(TypedDict):
 class IndexedPackages:
     packages: dict[str, dict[str, Any]]
     packages_conda: dict[str, dict[str, Any]]
-    packages_whl: dict[str, dict[str, Any]]
     v3: dict[str, dict[str, Any]] | None = None
 
 

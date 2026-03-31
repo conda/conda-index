@@ -355,7 +355,6 @@ class PsqlCache(BaseCondaIndexCache):
         """
         packages = {}
         packages_conda = {}
-        packages_whl = {}
         v3_packages = {
             "tar.bz2": {},
             "conda": {},
@@ -372,12 +371,10 @@ class PsqlCache(BaseCondaIndexCache):
             else:
                 packages.update(shard["packages"])
                 packages_conda.update(shard["packages.conda"])
-                packages_whl.update(shard.get("packages.whl", {}))
 
         return IndexedPackages(
             packages=packages,
             packages_conda=packages_conda,
-            packages_whl=packages_whl,
             v3=v3_packages if v3 else None,
         )
 

@@ -373,12 +373,13 @@ class CondaIndexCache(BaseCondaIndexCache):
                 if section is None:
                     log.warning("%s has unsupported package extension", path)
                     continue
+                if section == "packages.whl":
+                    continue
                 new_packages[section][path] = index_json
 
         return IndexedPackages(
             packages=new_packages["packages"],
             packages_conda=new_packages["packages.conda"],
-            packages_whl=new_packages["packages.whl"],
             v3=new_v3_packages if v3 else None,
         )
 

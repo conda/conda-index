@@ -290,7 +290,6 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     indexed_packages = cache.indexed_packages()
     assert len(indexed_packages.packages) == 1
     assert len(indexed_packages.packages_conda) == 1
-    assert indexed_packages.packages_whl == {}
 
 
 def test_psql_include_wheel_extension(tmp_path: Path):
@@ -319,7 +318,8 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     assert len(data["packages.conda"]) == 1
 
     indexed_packages = cache.indexed_packages()
-    assert len(indexed_packages.packages_whl) == 1
+    assert indexed_packages.packages == {}
+    assert len(indexed_packages.packages_conda) == 1
 
     v3_shards = list(cache.indexed_shards(v3=True))
     _, v3_data = v3_shards[0]
@@ -330,7 +330,6 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     indexed_packages_v3 = cache.indexed_packages(v3=True)
     assert indexed_packages_v3.packages == {}
     assert indexed_packages_v3.packages_conda == {}
-    assert indexed_packages_v3.packages_whl == {}
     assert indexed_packages_v3.v3 is not None
     assert len(indexed_packages_v3.v3["whl"]) == 1
     assert len(indexed_packages_v3.v3["conda"]) == 1

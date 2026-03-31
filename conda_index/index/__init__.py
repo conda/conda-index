@@ -759,9 +759,6 @@ class ChannelIndex:
             "removed": [],  # can be added by patch/hotfix process
         }
 
-        if indexed_packages.packages_whl:
-            new_repodata["packages.whl"] = indexed_packages.packages_whl
-
         if indexed_packages.v3 is not None:
             new_repodata["v3"] = indexed_packages.v3
             new_repodata["info"]["repodata_revisions"] = [
