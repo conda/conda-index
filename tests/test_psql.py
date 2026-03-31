@@ -11,6 +11,7 @@ import pytest
 
 from conda_index.index import ChannelIndex
 from conda_index.index.sqlitecache import ICON_PATH
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres import model
@@ -286,7 +287,9 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert len(data["packages"]) == 1
     assert len(data["packages.conda"]) == 1
 
-    packages, packages_conda = cache.indexed_packages()
+    indexed_packages = cache.indexed_packages()
+    packages = indexed_packages.packages
+    packages_conda = indexed_packages.packages_conda
     assert len(packages) == 1
     assert len(packages_conda) == 1
 
