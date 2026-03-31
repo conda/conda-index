@@ -21,6 +21,7 @@ from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
+    from numbers import Number
     from typing import Any, Iterator
 
     from .fs import FileInfo
@@ -83,8 +84,8 @@ class cacher:
 
 class ChangedPackage(TypedDict):
     path: str
-    mtime: int
-    size: int
+    mtime: Number
+    size: Number
 
 
 @dataclass
