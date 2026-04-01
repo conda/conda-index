@@ -9,16 +9,22 @@ import abc
 import fnmatch
 import json
 import logging
-from numbers import Number
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
 
 from .. import yaml
 from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
-from .fs import FileInfo, MinimalFS
+from .fs import MinimalFS
+
+if TYPE_CHECKING:
+    from numbers import Number
+    from typing import Any, Iterator
+
+    from .fs import FileInfo
 
 log = logging.getLogger(__name__)
 
@@ -75,14 +81,12 @@ class cacher:
             return value
         return self
 
+class ChangedPackage(TypedDict):
+    path: str
+    mtime: Number
+    size: Number
 
 if TYPE_CHECKING:
-
-    class ChangedPackage(TypedDict):
-        path: str
-        mtime: Number
-        size: Number
-
     class HasChecksumsAndSize(TypedDict, extra_items=Any):
         """
         Enforce keys accessed in conda-index store()
@@ -91,6 +95,12 @@ if TYPE_CHECKING:
         md5: str | None
         sha256: str | None
         size: int
+
+
+@dataclass
+class IndexedPackages:
+    packages: dict[str, dict[str, Any]]
+    packages_conda: dict[str, dict[str, Any]]
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -102,6 +112,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
         """
@@ -118,6 +129,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.package_extensions = package_extensions
         self.update_only = update_only
 
         self.fs = fs or MinimalFS()
@@ -130,12 +142,12 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.cache_is_brand_new = False
 
     @abc.abstractmethod
-    def convert(self):
+    def convert(self) -> None:
         """
         Convert filesystem cache to database.
         """
 
-    def close(self):
+    def close(self) -> None:
         """
         Remove and close any database connections.
         """
@@ -147,17 +159,21 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         return ""
 
-    def database_path(self, fn) -> str:
+    def database_path(self, fn: str) -> str:
         """
         Return filename with database prefix added.
         """
         return f"{self.database_prefix}{fn}"
 
-    def plain_path(self, path):
+    def plain_path(self, path: str) -> str:
         """
         Return filename with any database-specfic prefix stripped off.
         """
         return path.rsplit("/", 1)[-1]
+
+    def package_section_for_path(self, path: str) -> str:
+        key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+        return key
 
     def open(self, fn: str):
         """
@@ -168,7 +184,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
         return self.fs.open(abs_fn)
 
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
+    def extract_to_cache_info_object(
+        self, channel_root: Path | str, subdir: str, fn_info: FileInfo
+    ) -> tuple[str, int, int, dict[str, Any] | None]:
         """
         fn_info: avoid having to call stat()  a second time on package file.
         """
@@ -176,7 +194,13 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             channel_root, subdir, fn_info.fn, stat_result=fn_info
         )
 
-    def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
+    def _extract_to_cache(
+        self,
+        channel_root: Path | str,
+        subdir: str,
+        fn: str,
+        stat_result: FileInfo | None = None,
+    ) -> tuple[str, int, int, dict[str, Any] | None]:
         if stat_result is None:
             # this code path is deprecated
             abs_fn = self.fs.join(self.subdir_path, fn)
@@ -209,7 +233,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_unconditional(
         self, fn: str, abs_fn: str, size: int, mtime: int
-    ):
+    ) -> dict[str, Any]:
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
@@ -257,7 +281,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
             # XXX if we are reindexing a channel, provide a way to assert that
             # checksums match the upstream stage.
-            def checksums():
+            def checksums() -> Iterator[str]:
                 """
                 Use utility function that accepts open file instead of filename.
                 """
@@ -317,21 +341,21 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self,
         fn: str,
         size: int,
-        mtime,
+        mtime: int,
         members: dict[str, str | bytes],
         index_json: HasChecksumsAndSize,
-    ):
+    ) -> None:
         """
         Write a single package's index data to database.
         """
 
     @abc.abstractmethod
-    def load_all_from_cache(self, fn) -> dict:
+    def load_all_from_cache(self, fn: str) -> dict[str, Any]:
         """
         Load package data merged into a single dict for channeldata.
         """
 
-    def save_fs_state(self, subdir_path: str | Path | None = None):
+    def save_fs_state(self, subdir_path: str | Path | None = None) -> None:
         """
         stat all files in subdir_path to compare against cached repodata.
 
@@ -344,10 +368,10 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         # Put filesystem 'ground truth' into stat table. Will we eventually stat
         # everything on fs, or can we shortcut for new files?
 
-        def listdir_stat():
+        def listdir_stat() -> Iterator[dict[str, Any]]:
             # Gather conda package filenames in subdir
             for entry in self.fs.listdir(subdir_url):
-                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
+                if not entry["name"].endswith(self.package_extensions):
                     continue
                 if "mtime" not in entry or "size" not in entry:
                     entry.update(self.fs.stat(entry["name"]))
@@ -375,14 +399,16 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def indexed_packages(self) -> tuple[dict, dict]:
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache for
-        "monolithic repodata.json" query.
+        Return package sections from the cache for "monolithic repodata.json"
+        query.
         """
 
     @abc.abstractmethod
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(
+        self, desired: set[str] | None = None
+    ) -> Iterator[tuple[str, Any]]:
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -401,7 +427,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
 
-def _cache_post_install_details(paths_json_str):
+def _cache_post_install_details(paths_json_str: str | bytes) -> str:
     post_install_details_json = {
         "binary_prefix": False,
         "text_prefix": False,
@@ -437,7 +463,7 @@ def _cache_post_install_details(paths_json_str):
     return json.dumps(post_install_details_json)
 
 
-def _cache_recipe(recipe_reader):
+def _cache_recipe(recipe_reader: str | bytes) -> str:
     recipe_json = yaml.determined_load(recipe_reader)
 
     try:
@@ -449,7 +475,7 @@ def _cache_recipe(recipe_reader):
     return recipe_json_str
 
 
-def clear_newline_chars(record, field_name):
+def clear_newline_chars(record: dict[str, Any], field_name: str) -> None:
     if field_name in record:
         try:
             record[field_name] = record[field_name].strip().replace("\n", " ")
