@@ -213,17 +213,25 @@ class PsqlCache(BaseCondaIndexCache):
 
             stat_table = model.Base.metadata.tables["stat"]
             values = {
+                "path": database_path,
+                "stage": "indexed",
                 "mtime": mtime,
                 "size": size,
                 "sha256": index_json["sha256"],
                 "md5": index_json["md5"],
             }
+            stat_insert = insert(stat_table)
             connection.execute(
-                insert(stat_table)
-                .values({"path": database_path, "stage": "indexed", **values})
-                .on_conflict_do_update(
-                    index_elements=[stat_table.c.path, stat_table.c.stage], set_=values
-                )
+                stat_insert.on_conflict_do_update(
+                    index_elements=[stat_table.c.path, stat_table.c.stage],
+                    set_={
+                        "mtime": stat_insert.excluded.mtime,
+                        "size": stat_insert.excluded.size,
+                        "sha256": stat_insert.excluded.sha256,
+                        "md5": stat_insert.excluded.md5,
+                    },
+                ),
+                values,
             )
 
     def changed_packages(self) -> list[ChangedPackage]:  # XXX or FileInfo dataclass
