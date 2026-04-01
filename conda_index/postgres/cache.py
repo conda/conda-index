@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import sqlalchemy
 from psycopg2 import OperationalError
@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index.cache import (
     BaseCondaIndexCache,
+    ChangedPackage,
     IndexedPackages,
     clear_newline_chars,
 )
@@ -27,10 +28,12 @@ from conda_index.index.sqlitecache import (
     ICON_PATH,
     PATH_TO_TABLE,
     TABLE_NO_CACHE,
-    ChangedPackage,
     cacher,
     pack_record,
 )
+
+if TYPE_CHECKING:
+    from ..index.cache import HasChecksumsAndSize
 
 from . import model
 
@@ -152,7 +155,7 @@ class PsqlCache(BaseCondaIndexCache):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write cache for a single package to database.
@@ -210,17 +213,25 @@ class PsqlCache(BaseCondaIndexCache):
 
             stat_table = model.Base.metadata.tables["stat"]
             values = {
+                "path": database_path,
+                "stage": "indexed",
                 "mtime": mtime,
                 "size": size,
                 "sha256": index_json["sha256"],
                 "md5": index_json["md5"],
             }
+            stat_insert = insert(stat_table)
             connection.execute(
-                insert(stat_table)
-                .values({"path": database_path, "stage": "indexed", **values})
-                .on_conflict_do_update(
-                    index_elements=[stat_table.c.path, stat_table.c.stage], set_=values
-                )
+                stat_insert.on_conflict_do_update(
+                    index_elements=[stat_table.c.path, stat_table.c.stage],
+                    set_={
+                        "mtime": stat_insert.excluded.mtime,
+                        "size": stat_insert.excluded.size,
+                        "sha256": stat_insert.excluded.sha256,
+                        "md5": stat_insert.excluded.md5,
+                    },
+                ),
+                values,
             )
 
     def changed_packages(self) -> list[ChangedPackage]:  # XXX or FileInfo dataclass
