@@ -1,4 +1,5 @@
 ### Enhancements
 
 * Support experimental "repodata v3" (package data in `["v3"][<package format>]`
-  dict under the top level) to support conda wheel experiments. (#262)
+  dict under the top level) to support conda wheel experiments. A new
+  `--repodata-next` command line flag places package data under `v3` key. (#262)
