@@ -11,15 +11,17 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import msgpack
 
-from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .cache import BaseCondaIndexCache, ChangedPackage, cacher
+from .cache import BaseCondaIndexCache, IndexedPackages, cacher
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
+
+if TYPE_CHECKING:
+    from .cache import ChangedPackage, HasChecksumsAndSize
 
 log = logging.getLogger(__name__)
 
@@ -171,7 +173,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write cache for a single package to database.
@@ -194,6 +196,9 @@ class CondaIndexCache(BaseCondaIndexCache):
                                 INSERT OR REPLACE INTO {table} (path, {table})
                                 VALUES (:path, json(:data))
                                 """
+                else:
+                    log.warning('No "data" key for %s/%s', fn, table)
+                    continue
                 # Could delete from all metadata tables that we didn't just see.
                 try:
                     self.db.execute(query, parameters)
@@ -333,12 +338,14 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self):
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
-        new_repodata_packages = {}
-        new_repodata_conda_packages = {}
+        new_packages = {
+            "packages": {},
+            "packages.conda": {},
+        }
 
         # load cached packages
         for row in self.db.execute(
@@ -351,16 +358,19 @@ class CondaIndexCache(BaseCondaIndexCache):
         ):
             path, index_json = row
             index_json = json.loads(index_json)
-            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                new_repodata_packages[path] = index_json
-            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                new_repodata_conda_packages[path] = index_json
-            else:
+            if not path.endswith(self.package_extensions):
                 log.warning("%s doesn't look like a conda package", path)
+                continue
 
-        return new_repodata_packages, new_repodata_conda_packages
+            section = self.package_section_for_path(path)
+            new_packages[section][path] = index_json
 
-    def indexed_shards(self, desired: set | None = None):
+        return IndexedPackages(
+            packages=new_packages["packages"],
+            packages_conda=new_packages["packages.conda"],
+        )
+
+    def indexed_shards(self, desired: set[str] | None = None):
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -379,19 +389,21 @@ class CondaIndexCache(BaseCondaIndexCache):
             shard = {"packages": {}, "packages.conda": {}}
             for row in rows:
                 name, path, index_json = row
-                if not path.endswith((".tar.bz2", ".conda")):
+                if not path.endswith(self.package_extensions):
                     log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
-                key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
+                key = self.package_section_for_path(path)
                 # we may have to pack later for patch functions that look for
                 # hex hashes
-                shard[key][path] = pack_record(record)
+                shard.setdefault(key, {})[path] = pack_record(record)
 
             if not desired or name in desired:
                 yield (name, shard)
 
-    def store_index_json_stat(self, database_path, mtime, size, index_json):
+    def store_index_json_stat(
+        self, database_path, mtime, size, index_json: HasChecksumsAndSize
+    ):
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
                 VALUES ('indexed', ?, ?, ?, ?, ?)""",

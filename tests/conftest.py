@@ -73,11 +73,11 @@ def testing_homedir(tmpdir, request):
 
         try:
             shutil.rmtree(new_dir)
-        except:
+        except OSError:
             pass
     try:
         os.makedirs(new_dir)
-    except:
+    except OSError:
         print(f"Failed to create {new_dir}")
         return None
     os.chdir(new_dir)

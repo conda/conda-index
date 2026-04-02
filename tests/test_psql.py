@@ -11,6 +11,7 @@ import pytest
 
 from conda_index.index import ChannelIndex
 from conda_index.index.sqlitecache import ICON_PATH
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres import model
@@ -222,6 +223,41 @@ def test_psql_bad_channel_id(tmp_path: Path):
         )
 
 
+def test_psql_store_tolerates_null_md5(tmp_path: Path):
+    """
+    store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
+    """
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    cache.store(
+        "pkg-1.0-py3_none.whl",
+        size=1234,
+        mtime=1000,
+        members={},
+        index_json={
+            "name": "pkg",
+            "version": "1.0",
+            "sha256": hashlib.sha256().hexdigest(),
+            "md5": None,
+            "size": 0,
+        },
+    )
+
+    stat_insert = next(
+        (c for c in connection.calls if "stat" in str(c[0]).lower()),
+        None,
+    )
+    assert stat_insert is not None
+    params = stat_insert[1] or {}
+    assert params["md5"] is None
+
+
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
     """
     Coverage for 'doesn't parse ICON_PATH as json', OperationalError
@@ -286,7 +322,9 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert len(data["packages"]) == 1
     assert len(data["packages.conda"]) == 1
 
-    packages, packages_conda = cache.indexed_packages()
+    indexed_packages = cache.indexed_packages()
+    packages = indexed_packages.packages
+    packages_conda = indexed_packages.packages_conda
     assert len(packages) == 1
     assert len(packages_conda) == 1
 

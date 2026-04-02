@@ -11,7 +11,6 @@ import os
 import os.path
 import typing
 from dataclasses import dataclass
-from numbers import Number
 from pathlib import Path
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -28,8 +27,8 @@ class FileInfo:
     """
 
     fn: str
-    st_mtime: Number
-    st_size: Number
+    st_mtime: int
+    st_size: int
 
 
 class MinimalFS:

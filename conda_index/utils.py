@@ -20,6 +20,27 @@ CONDA_PACKAGE_EXTENSIONS = (
     CONDA_PACKAGE_EXTENSION_V1,
 )
 
+DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)
+
+__all__ = [
+    "CONDA_PACKAGE_EXTENSIONS",
+    "CONDA_PACKAGE_EXTENSION_V1",
+    "CONDA_PACKAGE_EXTENSION_V2",
+    "DEFAULT_SUBDIRS",
+    "checksum",
+    "checksums",
+    "ensure_list",
+    "file_contents_match",
+    "get_lock",
+    "human_bytes",
+    "merge_or_update_dict",
+    "move_with_fallback",
+    "try_acquire_locks",
+]
+CONDA_PACKAGE_EXTENSION_V2 = ".conda"
+CONDA_PACKAGE_EXTENSION_V1 = ".tar.bz2"
+CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V2, CONDA_PACKAGE_EXTENSION_V1)
+
 # multithreaded checksums
 
 

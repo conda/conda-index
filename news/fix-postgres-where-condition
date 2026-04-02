@@ -1,3 +1,0 @@
-### Bug fixes
-
-* Fix PostgreSQL cache `load_all_from_cache()` to use both conditions in the query.
