@@ -12,7 +12,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -99,7 +99,7 @@ if TYPE_CHECKING:
 
         md5: str | None
         sha256: str | None
-        size: int
+        size: NotRequired[int]
 
 
 @dataclass
@@ -242,7 +242,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_info_object(
         self, channel_root: Path | str, subdir: str, fn_info: FileInfo
-    ) -> tuple[str, int, int, dict[str, Any] | None]:
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         """
         fn_info: avoid having to call stat()  a second time on package file.
         """
@@ -256,7 +256,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         subdir: str,
         fn: str,
         stat_result: FileInfo | None = None,
-    ) -> tuple[str, int, int, dict[str, Any] | None]:
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         if stat_result is None:
             # this code path is deprecated
             abs_fn = self.fs.join(self.subdir_path, fn)
@@ -289,7 +289,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_unconditional(
         self, fn: str, abs_fn: str, size: int, mtime: int
-    ) -> dict[str, Any]:
+    ) -> HasChecksumsAndSize:
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
