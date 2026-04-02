@@ -22,7 +22,6 @@ from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
-    from numbers import Number
     from typing import IO, Any, Iterator
 
     from .fs import FileInfo
