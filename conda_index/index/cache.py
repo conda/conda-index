@@ -12,7 +12,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -84,13 +84,12 @@ class cacher:
         return self
 
 
-class ChangedPackage(TypedDict):
-    path: str
-    mtime: float | int
-    size: int
-
-
 if TYPE_CHECKING:
+
+    class ChangedPackage(TypedDict):
+        path: str
+        mtime: float | int
+        size: int
 
     class HasChecksumsAndSize(TypedDict, extra_items=Any):
         """
@@ -99,7 +98,7 @@ if TYPE_CHECKING:
 
         md5: str | None
         sha256: str | None
-        size: NotRequired[int]
+        size: int
 
 
 @dataclass
