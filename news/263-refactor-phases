@@ -1,0 +1,5 @@
+### Other
+
+* Refactor indexing pipeline into independent `ChannelIndex()` methods than can
+  be called separately for advanced users. API for existing users remains the
+  same. (#263)
