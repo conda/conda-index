@@ -219,7 +219,7 @@ def cli(
     db_url="",
     html_dependencies=False,
     update_only=False,
-    repodata_v3=False,
+    repodata_next=False,
 ):
     logutil.configure()
     if verbose:
@@ -279,7 +279,7 @@ def cli(
         cache_kwargs=cache_kwargs,
         html_dependencies=html_dependencies,
         update_only=update_only,
-        repodata_v3=repodata_v3,
+        repodata_v3=repodata_next,
     )
 
     if update_cache is False:
