@@ -82,12 +82,15 @@ class cacher:
             return value
         return self
 
+
 class ChangedPackage(TypedDict):
     path: str
     mtime: Number
     size: int
 
+
 if TYPE_CHECKING:
+
     class HasChecksumsAndSize(TypedDict, extra_items=Any):
         """
         Enforce keys accessed in conda-index store()
@@ -102,7 +105,16 @@ if TYPE_CHECKING:
 class IndexedPackages:
     packages: dict[str, dict[str, Any]]
     packages_conda: dict[str, dict[str, Any]]
-    v3: dict[str, dict[str, Any]] | None = None
+    packages_whl: dict[str, dict[str, Any]]
+
+
+@dataclass
+class IndexedShard(IndexedPackages):
+    """
+    IndexedPackages for a single package name.
+    """
+
+    name: str
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -430,23 +442,29 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         Return packages in upstream that are changed or missing compared to 'indexed'.
         """
 
-    # XXX make v3 a class property to be more friendly to CondaIndexCache subclasses?
     @abc.abstractmethod
-    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return package sections from the cache for "monolithic repodata.json"
-        query.
+        Return all data for "monolithic repodata.json" query.
         """
 
     @abc.abstractmethod
     def indexed_shards(
-        self, desired: set[str] | None = None, *, v3: bool = False
+        self, desired: set[str] | None = None
     ) -> Iterator[tuple[str, Any]]:
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
 
         :desired: If not None, set of desired package names.
+        """
+
+    @abc.abstractmethod
+    def indexed_shards_2(
+        self, desired: set[str] | None = None
+    ) -> Iterator[IndexedShard]:
+        """
+        indexed_shards with dataclass instead of dict.
         """
 
     @abc.abstractmethod
