@@ -186,7 +186,7 @@ from .. import yaml
     show_default=True,
 )
 @click.option(
-    "--repodata-v3/--no-repodata-v3",
+    "--repodata-next/--no-repodata-next",
     help="""
         EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package
         records under a top-level v3 key.
