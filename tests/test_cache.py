@@ -40,10 +40,16 @@ class DummyCache(cache.BaseCondaIndexCache):
     def changed_packages(self) -> list[cache.ChangedPackage]:
         raise NotImplementedError
 
-    def indexed_packages(self, *, v3: bool = False) -> cache.IndexedPackages:
+    def indexed_packages(self) -> cache.IndexedPackages:
         raise NotImplementedError
 
-    def indexed_shards(self, desired: set[str] | None = None, *, v3: bool = False):
+    def indexed_shards(self, desired: set[str] | None = None):
+        raise NotImplementedError
+
+    def indexed_shards_2(
+        self,
+        desired: set[str] | None = None,
+    ) -> Iterator[cache.IndexedShard]:
         raise NotImplementedError
 
     def run_exports(self) -> Iterator[tuple[str, dict]]:

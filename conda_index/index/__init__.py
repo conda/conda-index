@@ -15,7 +15,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 from uuid import uuid4
 
 import msgpack
@@ -35,6 +35,9 @@ from ..utils import (
 from . import rss, sqlitecache
 from .current_repodata import build_current_repodata
 from .fs import FileInfo, MinimalFS
+
+if TYPE_CHECKING:
+    from .cache import IndexedPackages, IndexedShard
 
 log = logging.getLogger(__name__)
 
@@ -255,15 +258,17 @@ def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
         for key in ("packages", "packages.conda"):
             if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
-            if fn in repodata[key]:
-                repodata[key][fn]["revoked"] = True
-                repodata[key][fn]["depends"].append("package_has_been_revoked")
+            records = repodata.get(key, {})
+            if fn in records:
+                records[fn]["revoked"] = True
+                records[fn]["depends"].append("package_has_been_revoked")
 
     for fn in instructions.get("remove", ()):
         for key in ("packages", "packages.conda"):
             if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
-            popped = repodata[key].pop(fn, None)
+            records = repodata.get(key, {})
+            popped = records.pop(fn, None)
             if popped:
                 repodata["removed"].append(fn)
     repodata["removed"].sort()
@@ -718,20 +723,28 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        for name, shard in cache.indexed_shards(v3=self.repodata_v3):
-            shard_data = compressor.compress(sqlitecache.packb_typed(shard))
-            shard_hash = hashlib.sha256(shard_data).digest()
+        v3_data = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
+
+        for shard in cache.indexed_shards_2():
+            repodata_shard = self._indexed_shard_to_repodata(shard)
+            shard_bytes = compressor.compress(sqlitecache.packb_typed(repodata_shard))
+            shard_hash = hashlib.sha256(shard_bytes).digest()
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
             if not output_path.exists():
-                output_path.write_bytes(shard_data)
-            shards[name] = shard_hash
+                output_path.write_bytes(shard_bytes)
+            shards[shard.name] = shard_hash
+
+            if self.repodata_v3:
+                for section, records in repodata_shard["v3"].items():
+                    v3_data[section].update(records)
 
         if self.repodata_v3:
             shards_index["info"]["repodata_revisions"] = [
-                {
-                    "revision": REPODATA_REVISION_V3,
-                    "migrated_at": 0,
-                }
+                self._make_repodata_revision_data(v3_data)
             ]
 
         return shards_index
@@ -747,7 +760,7 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        indexed_packages = cache.indexed_packages(v3=self.repodata_v3)
+        indexed_packages = cache.indexed_packages()
 
         new_repodata = {
             "packages": indexed_packages.packages,
@@ -759,13 +772,13 @@ class ChannelIndex:
             "removed": [],  # can be added by patch/hotfix process
         }
 
-        if indexed_packages.v3 is not None:
-            new_repodata["v3"] = indexed_packages.v3
+        if self.repodata_v3:
+            v3_packages = self._extract_indexed_packages_v3(indexed_packages)
+            new_repodata["v3"] = v3_packages
+            new_repodata["packages"] = {}
+            new_repodata["packages.conda"] = {}
             new_repodata["info"]["repodata_revisions"] = [
-                {
-                    "revision": REPODATA_REVISION_V3,
-                    "migrated_at": 0,
-                }
+                self._make_repodata_revision_data(v3_packages)
             ]
 
         if self.base_url:
@@ -774,6 +787,91 @@ class ChannelIndex:
             new_repodata["repodata_version"] = 2
 
         return new_repodata
+
+    def _extract_indexed_packages_v3(
+        self, indexed_packages: IndexedPackages
+    ) -> dict[str, dict[str, dict[str, object]]]:
+        v3 = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
+        for section, records in (
+            ("tar.bz2", indexed_packages.packages),
+            ("conda", indexed_packages.packages_conda),
+            ("whl", indexed_packages.packages_whl),
+        ):
+            for filename, record in records.items():
+                key = self._v3_key_for_path(filename)
+                if key is None:
+                    log.warning("%s has unsupported package extension", filename)
+                    continue
+                v3[section][key] = record
+
+        return v3
+
+    def _indexed_shard_to_repodata(self, indexed_shard: IndexedShard) -> dict:
+        if self.repodata_v3:
+            return {
+                "v3": self._v3_section_data_from_indexed_shard(indexed_shard),
+            }
+
+        shard_data = {
+            "packages": indexed_shard.packages,
+            "packages.conda": indexed_shard.packages_conda,
+        }
+        if indexed_shard.packages_whl:
+            shard_data["packages.whl"] = indexed_shard.packages_whl
+        return shard_data
+
+    @staticmethod
+    def _v3_key_for_path(path: str) -> str | None:
+        for extension in (".tar.bz2", ".conda", ".whl"):
+            if path.endswith(extension):
+                return path[: -len(extension)]
+        return None
+
+    @staticmethod
+    def _make_repodata_revision_data(
+        revision_data: dict[str, dict[str, dict]],
+    ) -> dict[str, int | None]:
+        timestamps = []
+        n_packages = 0
+        for section_records in revision_data.values():
+            n_packages += len(section_records)
+            for record in section_records.values():
+                timestamp = record.get("timestamp")
+                if isinstance(timestamp, (int, float)):
+                    timestamps.append(int(timestamp))
+
+        return {
+            "revision": REPODATA_REVISION_V3,
+            "n_packages": n_packages,
+            "oldest": min(timestamps) if timestamps else None,
+            "newest": max(timestamps) if timestamps else None,
+        }
+
+    @staticmethod
+    def _v3_section_data_from_indexed_shard(
+        indexed_shard: IndexedShard,
+    ) -> dict[str, dict[str, dict]]:
+        v3 = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
+        for section, records in (
+            ("tar.bz2", indexed_shard.packages),
+            ("conda", indexed_shard.packages_conda),
+            ("whl", indexed_shard.packages_whl),
+        ):
+            for path, record in records.items():
+                key = ChannelIndex._v3_key_for_path(path)
+                if key is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                v3[section][key] = record
+        return v3
 
     def extract_subdir_to_cache(
         self,

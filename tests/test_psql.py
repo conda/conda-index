@@ -356,18 +356,10 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     assert indexed_packages.packages == {}
     assert len(indexed_packages.packages_conda) == 1
 
-    v3_shards = list(cache.indexed_shards(v3=True))
-    _, v3_data = v3_shards[0]
-    assert set(v3_data) == {"v3"}
-    assert len(v3_data["v3"]["whl"]) == 1
-    assert len(v3_data["v3"]["conda"]) == 1
-
-    indexed_packages_v3 = cache.indexed_packages(v3=True)
-    assert indexed_packages_v3.packages == {}
-    assert indexed_packages_v3.packages_conda == {}
-    assert indexed_packages_v3.v3 is not None
-    assert len(indexed_packages_v3.v3["whl"]) == 1
-    assert len(indexed_packages_v3.v3["conda"]) == 1
+    shards_2 = list(cache.indexed_shards_2())
+    assert len(shards_2) == 1
+    assert len(shards_2[0].packages_whl) == 1
+    assert len(shards_2[0].packages_conda) == 1
 
 
 def test_psql_run_exports(tmp_path: Path):

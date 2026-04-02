@@ -285,15 +285,18 @@ class PsqlCache(BaseCondaIndexCache):
         *,
         pack_record=pack_record,
     ):
-        """ "
+        """
         Yield (package name, all packages with that name as dict) from database ordered
         by name, path i.o.w. filename.
         """
         for shard in self.indexed_shards_2(desired, pack_record=pack_record):
-            yield (
-                shard.name,
-                {"packages": shard.packages, "packages.conda": shard.packages_conda},
-            )
+            shard_data = {
+                "packages": shard.packages,
+                "packages.conda": shard.packages_conda,
+            }
+            if shard.packages_whl:
+                shard_data["packages.whl"] = shard.packages_whl
+            yield (shard.name, shard_data)
 
     def indexed_shards_2(
         self, desired: set[str] | None = None, *, pack_record=pack_record
@@ -365,33 +368,26 @@ class PsqlCache(BaseCondaIndexCache):
                 if not desired or name in desired:
                     yield shard
 
-    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
+    def indexed_packages(self) -> IndexedPackages:
         """
         Return package sections from the cache.
         """
         packages = {}
         packages_conda = {}
-        v3_packages = {
-            "tar.bz2": {},
-            "conda": {},
-            "whl": {},
-        }
+        packages_whl = {}
 
         def nopack_record(record):
             return record
 
-        for _, shard in self.indexed_shards(v3=v3, pack_record=nopack_record):
-            if v3:
-                for section, records in shard["v3"].items():
-                    v3_packages[section].update(records)
-            else:
-                packages.update(shard["packages"])
-                packages_conda.update(shard["packages.conda"])
+        for shard in self.indexed_shards_2(pack_record=nopack_record):
+            packages.update(shard.packages)
+            packages_conda.update(shard.packages_conda)
+            packages_whl.update(shard.packages_whl)
 
         return IndexedPackages(
             packages=packages,
             packages_conda=packages_conda,
-            v3=v3_packages if v3 else None,
+            packages_whl=packages_whl,
         )
 
     def load_all_from_cache(self, fn: str):

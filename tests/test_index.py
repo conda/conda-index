@@ -1377,7 +1377,10 @@ def test_repodata_v3(index_data):
 
     noarch = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
 
-    assert noarch["info"]["repodata_revisions"] == [{"revision": 3, "migrated_at": 0}]
+    assert set(noarch["info"]["repodata_revisions"][0].keys()) == set(
+        ("revision", "n_packages", "oldest", "newest")
+    )
+
     assert "v3" in noarch
     assert set(noarch["v3"]) == {"tar.bz2", "conda", "whl"}
     assert noarch["packages"] == {}

@@ -344,13 +344,14 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self, *, v3: bool = False) -> IndexedPackages:
+    def indexed_packages(self) -> IndexedPackages:
         """
         Return package sections from the cache.
         """
         new_packages = {
             "packages": {},
             "packages.conda": {},
+            "packages.whl": {},
         }
 
         # load cached packages
@@ -377,14 +378,13 @@ class CondaIndexCache(BaseCondaIndexCache):
         return IndexedPackages(
             packages=new_packages["packages"],
             packages_conda=new_packages["packages.conda"],
-            packages_whl=new_packages.get("packages.whl"),
+            packages_whl=new_packages["packages.whl"],
         )
 
     def indexed_shards(
         self,
         desired: set[str] | None = None,
         *,
-        v3: bool = False,
         pack_record=pack_record,
     ):
         """
