@@ -381,29 +381,6 @@ class CondaIndexCache(BaseCondaIndexCache):
             packages_whl=new_packages["packages.whl"],
         )
 
-    def indexed_shards(
-        self,
-        desired: set[str] | None = None,
-        *,
-        pack_record=pack_record,
-    ):
-        """
-        Yield (package name, all packages with that name) from database ordered
-        by name, path i.o.w. filename.
-
-        :desired: If not None, set of desired package names.
-        """
-
-        for shard in self.indexed_shards_2(desired=desired, pack_record=pack_record):
-            shard_dict = {
-                "packages": shard.packages,
-                "packages.conda": shard.packages_conda,
-            }
-            if shard.packages_whl:
-                shard_dict["packages.whl"] = shard.packages_whl
-
-            yield (shard.name, shard_dict)
-
     def indexed_shards_2(
         self, desired: set[str] | None = None, *, pack_record=pack_record
     ) -> Iterator[IndexedShard]:

@@ -117,6 +117,17 @@ class IndexedShard(IndexedPackages):
     name: str
 
 
+def pack_record(record):
+    """
+    Convert hex checksums to bytes.
+    """
+    if sha256 := record.get("sha256"):
+        record["sha256"] = bytes.fromhex(sha256)
+    if md5 := record.get("md5"):
+        record["md5"] = bytes.fromhex(md5)
+    return record
+
+
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
     def __init__(
         self,
@@ -448,20 +459,33 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         Return all data for "monolithic repodata.json" query.
         """
 
-    @abc.abstractmethod
     def indexed_shards(
-        self, desired: set[str] | None = None
-    ) -> Iterator[tuple[str, Any]]:
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ):
         """
-        Yield (package name, all packages with that name) from database ordered
-        by name, path i.o.w. filename.
+        Yield (package name, all packages with that name as dict) from database
+        ordered by name, path i.o.w. filename.
 
         :desired: If not None, set of desired package names.
         """
+        for shard in self.indexed_shards_2(desired, pack_record=pack_record):
+            shard_data = {
+                "packages": shard.packages,
+                "packages.conda": shard.packages_conda,
+            }
+            if shard.packages_whl:
+                shard_data["packages.whl"] = shard.packages_whl
+            yield (shard.name, shard_data)
 
     @abc.abstractmethod
     def indexed_shards_2(
-        self, desired: set[str] | None = None
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
     ) -> Iterator[IndexedShard]:
         """
         indexed_shards with dataclass instead of dict.
@@ -539,14 +563,3 @@ def clear_newline_chars(record: dict[str, Any], field_name: str) -> None:
 
             except TypeError:
                 log.warning("Could not _clear_newline_chars from field %s", field_name)
-
-
-def pack_record(record):
-    """
-    Convert hex checksums to bytes.
-    """
-    if sha256 := record.get("sha256"):
-        record["sha256"] = bytes.fromhex(sha256)
-    if md5 := record.get("md5"):
-        record["md5"] = bytes.fromhex(md5)
-    return record

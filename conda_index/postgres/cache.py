@@ -279,25 +279,6 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards(
-        self,
-        desired: set[str] | None = None,
-        *,
-        pack_record=pack_record,
-    ):
-        """
-        Yield (package name, all packages with that name as dict) from database ordered
-        by name, path i.o.w. filename.
-        """
-        for shard in self.indexed_shards_2(desired, pack_record=pack_record):
-            shard_data = {
-                "packages": shard.packages,
-                "packages.conda": shard.packages_conda,
-            }
-            if shard.packages_whl:
-                shard_data["packages.whl"] = shard.packages_whl
-            yield (shard.name, shard_data)
-
     def indexed_shards_2(
         self, desired: set[str] | None = None, *, pack_record=pack_record
     ) -> Iterator[IndexedShard]:
