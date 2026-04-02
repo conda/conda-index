@@ -23,6 +23,7 @@ from conda_index.index.cache import (
     IndexedPackages,
     IndexedShard,
     clear_newline_chars,
+    pack_record,
 )
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
@@ -30,7 +31,6 @@ from conda_index.index.sqlitecache import (
     PATH_TO_TABLE,
     TABLE_NO_CACHE,
     cacher,
-    pack_record,
 )
 
 if TYPE_CHECKING:

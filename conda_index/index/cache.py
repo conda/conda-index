@@ -539,3 +539,14 @@ def clear_newline_chars(record: dict[str, Any], field_name: str) -> None:
 
             except TypeError:
                 log.warning("Could not _clear_newline_chars from field %s", field_name)
+
+
+def pack_record(record):
+    """
+    Convert hex checksums to bytes.
+    """
+    if sha256 := record.get("sha256"):
+        record["sha256"] = bytes.fromhex(sha256)
+    if md5 := record.get("md5"):
+        record["md5"] = bytes.fromhex(md5)
+    return record
