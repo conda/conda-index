@@ -43,7 +43,12 @@ class DummyCache(cache.BaseCondaIndexCache):
     def indexed_packages(self) -> cache.IndexedPackages:
         raise NotImplementedError
 
-    def indexed_shards(self, desired: set[str] | None = None):
+    def indexed_shards_2(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=None,
+    ) -> Iterator[cache.IndexedShard]:
         raise NotImplementedError
 
     def run_exports(self) -> Iterator[tuple[str, dict]]:
@@ -56,7 +61,9 @@ def test_cache(tmp_path):
     """
 
     c = DummyCache(
-        str(tmp_path), "linux-64", package_extensions=CONDA_PACKAGE_EXTENSIONS
+        str(tmp_path),
+        "linux-64",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
     )
 
     package = "foo.conda"
@@ -66,3 +73,5 @@ def test_cache(tmp_path):
 
     c.convert()
     c.close()
+
+    assert c.package_section_for_path("file.whl") == "packages.whl"

@@ -21,7 +21,9 @@ from conda_index.index.cache import (
     BaseCondaIndexCache,
     ChangedPackage,
     IndexedPackages,
+    IndexedShard,
     clear_newline_chars,
+    pack_record,
 )
 from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
@@ -29,7 +31,6 @@ from conda_index.index.sqlitecache import (
     PATH_TO_TABLE,
     TABLE_NO_CACHE,
     cacher,
-    pack_record,
 )
 
 if TYPE_CHECKING:
@@ -278,12 +279,9 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards(
-        self,
-        desired: set[str] | None = None,
-        *,
-        pack_record=pack_record,
-    ):
+    def indexed_shards_2(
+        self, desired: set[str] | None = None, *, pack_record=pack_record
+    ) -> Iterator[IndexedShard]:
         """
         Yield (package name, all packages with that name) from database ordered
         by name, path i.o.w. filename.
@@ -296,6 +294,8 @@ class PsqlCache(BaseCondaIndexCache):
         index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
 
+        # not optimized for "desired" partial shards case but that's not
+        # currently used.
         query = (
             select(
                 index_json_table.c.name,
@@ -323,20 +323,31 @@ class PsqlCache(BaseCondaIndexCache):
                 connection.execute(query),
                 lambda k: k.name,
             ):
-                shard = {"packages": {}, "packages.conda": {}}
+                shard_dict = {"packages": {}, "packages.conda": {}, "packages.whl": {}}
+                shard = IndexedShard(
+                    name=name,
+                    packages=shard_dict["packages"],
+                    packages_conda=shard_dict["packages.conda"],
+                    packages_whl=shard_dict["packages.whl"],
+                )
                 for row in rows:
                     name, path, record = row
                     path = self.plain_path(path)
                     if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
-                    key = self.package_section_for_path(path)
-                    # This will be passed to the patch function, which we hope
-                    # does not look for hex hash values.
-                    shard.setdefault(key, {})[path] = pack_record(record)
+
+                    else:
+                        key = self.package_section_for_path(path)
+                        if key is None:
+                            log.warning("%s has unsupported package extension", path)
+                            continue
+                        # This will be passed to the patch function, which we hope
+                        # does not look for hex hash values.
+                        shard_dict[key][path] = pack_record(record)
 
                 if not desired or name in desired:
-                    yield (name, shard)
+                    yield shard
 
     def indexed_packages(self) -> IndexedPackages:
         """
@@ -344,17 +355,20 @@ class PsqlCache(BaseCondaIndexCache):
         """
         packages = {}
         packages_conda = {}
+        packages_whl = {}
 
         def nopack_record(record):
             return record
 
-        for _, shard in self.indexed_shards(pack_record=nopack_record):
-            packages.update(shard["packages"])
-            packages_conda.update(shard["packages.conda"])
+        for shard in self.indexed_shards_2(pack_record=nopack_record):
+            packages.update(shard.packages)
+            packages_conda.update(shard.packages_conda)
+            packages_whl.update(shard.packages_whl)
 
         return IndexedPackages(
             packages=packages,
             packages_conda=packages_conda,
+            packages_whl=packages_whl,
         )
 
     def load_all_from_cache(self, fn: str):
