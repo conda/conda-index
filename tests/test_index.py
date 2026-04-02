@@ -19,7 +19,7 @@ from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
-from conda_index.utils_build import copy_into
+from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .utils import archive_dir
 

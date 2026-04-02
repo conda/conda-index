@@ -4,12 +4,20 @@ from concurrent.futures.thread import ThreadPoolExecutor
 
 from conda.base.constants import PLATFORM_DIRECTORIES as DEFAULT_SUBDIRS
 
-from .utils_build import (
-    ensure_list,
-    get_lock,
-    merge_or_update_dict,
-    move_with_fallback,
-    try_acquire_locks,
+from .utils_build import ensure_list as ensure_list
+from .utils_build import get_lock as get_lock
+from .utils_build import merge_or_update_dict as merge_or_update_dict
+from .utils_build import move_with_fallback as move_with_fallback
+from .utils_build import move_with_fallback_nolock as move_with_fallback_nolock
+from .utils_build import try_acquire_locks as try_acquire_locks
+
+DEFAULT_SUBDIRS = DEFAULT_SUBDIRS
+
+CONDA_PACKAGE_EXTENSION_V1 = ".tar.bz2"
+CONDA_PACKAGE_EXTENSION_V2 = ".conda"
+CONDA_PACKAGE_EXTENSIONS = (
+    CONDA_PACKAGE_EXTENSION_V2,
+    CONDA_PACKAGE_EXTENSION_V1,
 )
 
 DEFAULT_SUBDIRS = set(DEFAULT_SUBDIRS)

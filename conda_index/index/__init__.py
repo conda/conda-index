@@ -12,6 +12,7 @@ import os
 import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
@@ -33,7 +34,6 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .current_repodata import build_current_repodata
 from .fs import FileInfo, MinimalFS
 
 if TYPE_CHECKING:
@@ -481,64 +481,62 @@ class ChannelIndex:
 
         subdirs = self.detect_subdirs()
 
-        # Lock local channel.
-        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
-            # begin non-stop "extract packages into cache";
-            # extract_subdir_to_cache manages subprocesses. Keeps cores busy
-            # during write/patch/update channeldata steps.
-            def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
-                executor = ThreadPoolExecutor(max_workers=1)
+        # begin non-stop "extract packages into cache";
+        # extract_subdir_to_cache manages subprocesses. Keeps cores busy
+        # during write/patch/update channeldata steps.
+        def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
+            executor = ThreadPoolExecutor(max_workers=1)
 
-                def extract_args():
-                    for subdir in subdirs:
-                        # .cache is currently in channel_root not output_root
-                        _ensure_valid_channel(self.channel_root, subdir)
-                        subdir_path = join(self.channel_root, subdir)
-                        yield (subdir, verbose, progress, subdir_path)
+            def extract_args():
+                for subdir in subdirs:
+                    # .cache is currently in channel_root not output_root
+                    _ensure_valid_channel(self.channel_root, subdir)
+                    subdir_path = join(self.channel_root, subdir)
+                    yield (subdir, verbose, progress, subdir_path)
 
-                def extract_wrapper(args: tuple):
-                    # runs in thread
-                    subdir, verbose, progress, subdir_path = args
-                    cache = self.cache_for_subdir(subdir)
-                    # exactly these packages (unless they are un-indexable) will
-                    # be in the output repodata
-                    if self.save_fs_state:
-                        cache.save_fs_state(subdir_path)
-                    return self.extract_subdir_to_cache(
-                        subdir, verbose, progress, subdir_path, cache
-                    )
+            def extract_wrapper(args: tuple):
+                # runs in thread
+                subdir, verbose, progress, subdir_path = args
+                cache = self.cache_for_subdir(subdir)
+                # exactly these packages (unless they are un-indexable) will
+                # be in the output repodata
+                if self.save_fs_state:
+                    cache.save_fs_state(subdir_path)
+                return self.extract_subdir_to_cache(
+                    subdir, verbose, progress, subdir_path, cache
+                )
 
-                # map() gives results in order passed, not in order of
-                # completion. If using multiple threads, switch to
-                # submit() / as_completed().
-                return executor.map(extract_wrapper, extract_args())
+            # map() gives results in order passed, not in order of
+            # completion. If using multiple threads, switch to
+            # submit() / as_completed().
+            return executor.map(extract_wrapper, extract_args())
 
-            # Collect repodata from packages, save to
-            # REPODATA_FROM_PKGS_JSON_FN file
-            with self.thread_executor_factory() as index_process:
-                futures = []
-                for subdir in extract_subdirs_to_cache():
-                    for indexer, condition in (
-                        (self.index_patch_subdir, self.write_monolithic),
-                        (self.index_patch_subdir_shards, self.write_shards),
-                    ):
-                        if condition:
-                            futures.append(
-                                index_process.submit(
-                                    functools.partial(
-                                        indexer,
-                                        subdir=subdir,
-                                        verbose=verbose,
-                                        progress=progress,
-                                        patch_generator=patch_generator,
-                                        current_index_versions=current_index_versions,
-                                    )
+        # Collect repodata from packages, save to
+        # REPODATA_FROM_PKGS_JSON_FN file
+        with self.thread_executor_factory() as index_process:
+            futures = []
+            for subdir in extract_subdirs_to_cache():
+                for indexer, condition in (
+                    (self.index_patch_subdir, self.write_monolithic),
+                    (self.index_patch_subdir_shards, self.write_shards),
+                ):
+                    if condition:
+                        futures.append(
+                            index_process.submit(
+                                functools.partial(
+                                    indexer,
+                                    subdir=subdir,
+                                    verbose=verbose,
+                                    progress=progress,
+                                    patch_generator=patch_generator,
+                                    current_index_versions=current_index_versions,
                                 )
                             )
-                # limited API to support DummyExecutor
-                for future in futures:
-                    result = future.result()
-                    log.info(f"Completed {result}")
+                        )
+            # limited API to support DummyExecutor
+            for future in futures:
+                result = future.result()
+                log.info(f"Completed {result}")
 
     # old name
     def index_prepared_subdir(
@@ -593,16 +591,11 @@ class ChannelIndex:
 
         if self.write_current_repodata:
             log.info("%s Building current_repodata subset", subdir)
-
-            current_repodata = build_current_repodata(
-                subdir, patched_repodata, pins=current_index_versions
-            )
-
-            log.info("%s Writing current_repodata subset", subdir)
-
             self._write_repodata(
                 subdir,
-                current_repodata,
+                self._build_current_repodata(
+                    subdir, patched_repodata, current_index_versions
+                ),
                 json_filename="current_repodata.json",
             )
         else:
@@ -626,6 +619,17 @@ class ChannelIndex:
         log.debug("%s finish", subdir)
 
         return subdir
+
+    def _build_current_repodata(self, subdir, patched_repodata, current_index_versions):
+        """
+        Isolate call to build_current_repodata(), skipping import if not used.
+        """
+        from .current_repodata import build_current_repodata
+
+        current_repodata = build_current_repodata(
+            subdir, patched_repodata, pins=current_index_versions
+        )
+        return current_repodata
 
     def index_patch_subdir_shards(
         self,
@@ -1481,7 +1485,7 @@ class ChannelIndex:
                 os.unlink(output_temp_path)
                 return False
 
-        utils.move_with_fallback(output_temp_path, output_path)
+        utils.move_with_fallback_nolock(output_temp_path, output_path)
         return True
 
     def _maybe_remove(self, path):
