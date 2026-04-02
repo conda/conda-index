@@ -347,10 +347,9 @@ def test_psql_include_wheel_extension(tmp_path: Path):
         DummyResult("package", "package.whl", {}),
         DummyResult("package", "package.conda", {}),
     ]
-    shards = list(cache.indexed_shards())
-    _, data = shards[0]
-    assert len(data["packages.whl"]) == 1
-    assert len(data["packages.conda"]) == 1
+    shards = list(cache.indexed_shards_2())
+    data = shards[0]
+    assert len(data.packages_conda) == 1
 
     indexed_packages = cache.indexed_packages()
     assert indexed_packages.packages == {}
