@@ -27,7 +27,7 @@ class FileInfo:
     """
 
     fn: str
-    st_mtime: int
+    st_mtime: float | int
     st_size: int
 
 

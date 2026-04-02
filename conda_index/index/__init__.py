@@ -36,7 +36,25 @@ from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
 
 if TYPE_CHECKING:
+    from typing import Any, NotRequired, TypedDict
+
     from .cache import IndexedPackages, IndexedShard
+
+    V3Section = TypedDict(
+        "V3Section",
+        {"tar.bz2": dict, "conda": dict, "whl": dict},
+    )
+
+    # in this style because "packages.conda" is not a Python identifier
+    ShardDict = TypedDict(
+        "ShardDict",
+        {
+            "packages": dict[str, dict[str, Any]],
+            "packages.conda": dict[str, dict[str, Any]],
+            "v3": NotRequired[V3Section],
+        },
+    )
+
 
 log = logging.getLogger(__name__)
 
@@ -791,10 +809,20 @@ class ChannelIndex:
 
         return new_repodata
 
+    @staticmethod
+    def _v3_key_for_path(path: str) -> str | None:
+        for extension in (".tar.bz2", ".conda", ".whl"):
+            if path.endswith(extension):
+                return path[: -len(extension)]
+        return None
+
     def _extract_indexed_packages_v3(
         self, indexed_packages: IndexedPackages
-    ) -> dict[str, dict[str, dict[str, object]]]:
-        v3 = {
+    ) -> V3Section:
+        """
+        Return all packages from IndexedPackages as the "v3": {...} section.
+        """
+        v3: V3Section = {
             "tar.bz2": {},
             "conda": {},
             "whl": {},
@@ -813,31 +841,28 @@ class ChannelIndex:
 
         return v3
 
-    def _indexed_shard_to_repodata(self, indexed_shard: IndexedShard) -> dict:
+    def _indexed_shard_to_repodata(self, indexed_shard: IndexedShard) -> ShardDict:
         if self.repodata_v3:
-            return {
-                "v3": self._v3_section_data_from_indexed_shard(indexed_shard),
+            shard_data: ShardDict = {
+                "packages": {},
+                "packages.conda": {},
+                "v3": self._extract_indexed_packages_v3(indexed_shard),
             }
-
-        shard_data = {
-            "packages": indexed_shard.packages,
-            "packages.conda": indexed_shard.packages_conda,
-        }
-        if indexed_shard.packages_whl:
-            shard_data["packages.whl"] = indexed_shard.packages_whl
+        else:
+            shard_data = {
+                "packages": indexed_shard.packages,
+                "packages.conda": indexed_shard.packages_conda,
+            }
         return shard_data
-
-    @staticmethod
-    def _v3_key_for_path(path: str) -> str | None:
-        for extension in (".tar.bz2", ".conda", ".whl"):
-            if path.endswith(extension):
-                return path[: -len(extension)]
-        return None
 
     @staticmethod
     def _make_repodata_revision_data(
         revision_data: dict[str, dict[str, dict]],
     ) -> dict[str, int | None]:
+        """
+        Return { "revision": 3, ... } dict with package statistics derived from
+        revision_data, which is similar to monolithic repodata.
+        """
         timestamps = []
         n_packages = 0
         for section_records in revision_data.values():
@@ -853,28 +878,6 @@ class ChannelIndex:
             "oldest": min(timestamps) if timestamps else None,
             "newest": max(timestamps) if timestamps else None,
         }
-
-    @staticmethod
-    def _v3_section_data_from_indexed_shard(
-        indexed_shard: IndexedShard,
-    ) -> dict[str, dict[str, dict]]:
-        v3 = {
-            "tar.bz2": {},
-            "conda": {},
-            "whl": {},
-        }
-        for section, records in (
-            ("tar.bz2", indexed_shard.packages),
-            ("conda", indexed_shard.packages_conda),
-            ("whl", indexed_shard.packages_whl),
-        ):
-            for path, record in records.items():
-                key = ChannelIndex._v3_key_for_path(path)
-                if key is None:
-                    log.warning("%s has unsupported package extension", path)
-                    continue
-                v3[section][key] = record
-        return v3
 
     def extract_subdir_to_cache(
         self,
@@ -945,7 +948,7 @@ class ChannelIndex:
 
         return subdir
 
-    ####
+    # region: channeldata
 
     def channeldata_path(self):
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
@@ -987,6 +990,8 @@ class ChannelIndex:
         self._write_channeldata_index_html(channel_data)
         log.debug("write channeldata")
         self._write_channeldata(channel_data)
+
+    # endregion
 
     def detect_subdirs(self):
         if not self._subdirs:

@@ -85,7 +85,7 @@ class cacher:
 
 class ChangedPackage(TypedDict):
     path: str
-    mtime: Number
+    mtime: float | int
     size: int
 
 
