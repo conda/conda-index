@@ -293,6 +293,7 @@ class PsqlCache(BaseCondaIndexCache):
         """
         index_json_table = model.Base.metadata.tables["index_json"]
         stat_table = model.Base.metadata.tables["stat"]
+        run_exports_table = model.Base.metadata.tables["run_exports"]
 
         # not optimized for "desired" partial shards case but that's not
         # currently used.
@@ -301,12 +302,18 @@ class PsqlCache(BaseCondaIndexCache):
                 index_json_table.c.name,
                 index_json_table.c.path,
                 index_json_table.c.index_json,
+                run_exports_table.c.run_exports,
             )
             .select_from(
                 join(
-                    index_json_table,
-                    stat_table,
-                    index_json_table.c.path == stat_table.c.path,
+                    join(
+                        index_json_table,
+                        stat_table,
+                        index_json_table.c.path == stat_table.c.path,
+                    ),
+                    run_exports_table,
+                    index_json_table.c.path == run_exports_table.c.path,
+                    isouter=True,
                 )
             )
             .where(stat_table.c.stage == self.upstream_stage)
@@ -331,7 +338,8 @@ class PsqlCache(BaseCondaIndexCache):
                     packages_whl=shard_dict["packages.whl"],
                 )
                 for row in rows:
-                    name, path, record = row
+                    name, path, record, run_exports = row
+                    record["run_exports"] = run_exports or {}
                     path = self.plain_path(path)
                     if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
