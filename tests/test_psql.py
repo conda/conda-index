@@ -312,17 +312,18 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     # no index.json validation at this step, empty {} as record is passed on.
     connection.results_factory = lambda: [
         DummyResult("package", "package.notconda", {}, {}),
-        DummyResult("package", "package.conda", {}, {"weak": ["zlib"]}),
-        DummyResult("package", "package.tar.bz2", {}, {}),
-    ]
-    shards = list(cache.indexed_shards())
-    assert len(shards) == 1
-    shards0 = shards[0]
-    name, data = shards0
-    assert name == "package"
-    assert len(data["packages"]) == 1
-    assert len(data["packages.conda"]) == 1
-    assert data["packages.conda"]["package.conda"]["run_exports"] == {"weak": ["zlib"]}
+        DummyResult("package", "package-1.0.notconda", {}, {}),
+        DummyResult("package", "package-1.0.conda", {}, {"weak": ["zlib"]}),
+        DummyResult("package", "package-1.0.tar.bz2", {}, {}),
+]
+shards = list(cache.indexed_shards())
+assert len(shards) == 1
+shards0 = shards[0]
+name, data = shards0
+assert name == "package"
+assert len(data["packages"]) == 1
+assert len(data["packages.conda"]) == 1
+    assert data["packages.conda"]["package-1.0.conda"]["run_exports"] == {"weak": ["zlib"]}
 
     indexed_packages = cache.indexed_packages()
     assert len(indexed_packages.packages) == 1
