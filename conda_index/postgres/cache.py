@@ -331,7 +331,7 @@ class PsqlCache(BaseCondaIndexCache):
                     packages_whl=shard_dict["packages.whl"],
                 )
                 for row in rows:
-                    name, path, record = row
+                    _, path, record = row
                     path = self.plain_path(path)
                     if not path.endswith(self.package_extensions):
                         log.warning("%s doesn't look like a conda package", path)
