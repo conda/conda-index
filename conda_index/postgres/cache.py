@@ -337,14 +337,13 @@ class PsqlCache(BaseCondaIndexCache):
                         log.warning("%s doesn't look like a conda package", path)
                         continue
 
-                    else:
-                        key = self.package_section_for_path(path)
-                        if key is None:
-                            log.warning("%s has unsupported package extension", path)
-                            continue
-                        # This will be passed to the patch function, which we hope
-                        # does not look for hex hash values.
-                        shard_dict[key][path] = pack_record(record)
+                    key = self.package_section_for_path(path)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", path)
+                        continue
+                    # This will be passed to the patch function, which we hope
+                    # does not look for hex hash values.
+                    shard_dict[key][path] = pack_record(record)
 
                 if not desired or name in desired:
                     yield shard
