@@ -333,9 +333,6 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in rows:
                     _, path, record = row
                     path = self.plain_path(path)
-                    if not path.endswith(self.package_extensions):
-                        log.warning("%s doesn't look like a conda package", path)
-                        continue
 
                     key = self.package_section_for_path(path)
                     if key is None:

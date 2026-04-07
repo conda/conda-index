@@ -365,9 +365,6 @@ class CondaIndexCache(BaseCondaIndexCache):
         ):
             path, index_json = row
             index_json = json.loads(index_json)
-            if not path.endswith(self.package_extensions):
-                log.warning("%s doesn't look like a conda package", path)
-                continue
 
             section = self.package_section_for_path(path)
             if section is None:
