@@ -216,21 +216,6 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             return None
         return package_sections.get(match.group(1))
 
-    def v3_section_and_key_for_path(self, path: str) -> tuple[str, str] | None:
-        package_sections = {
-            ".tar.bz2": "tar.bz2",
-            ".conda": "conda",
-            ".whl": "whl",
-        }
-        match = self._package_section_re.search(path)
-        if match is None:
-            return None
-        extension = match.group(1)
-        section = package_sections.get(extension)
-        if section is None:
-            return None
-        return section, path[: -len(extension)]
-
     def open(self, fn: str) -> IO[bytes]:
         """
         Given a base package name "somepackage.conda", return an open, seekable
