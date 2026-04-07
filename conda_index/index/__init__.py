@@ -833,10 +833,23 @@ class ChannelIndex:
             ("whl", indexed_packages.packages_whl),
         ):
             for filename, record in records.items():
-                key = self._v3_key_for_path(filename)
-                if key is None:
-                    log.warning("%s has unsupported package extension", filename)
-                    continue
+                if section == "whl":
+                    name = record.get("name")
+                    version = record.get("version")
+                    build = record.get("build")
+                    if name is None or version is None or build is None:
+                        log.warning(
+                            "%s: v3 whl records require name, version, and build; skipping",
+                            filename,
+                        )
+                        continue
+                    key = f"{name}-{version}-{build}"
+                else:
+                    key = self._v3_key_for_path(filename)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", filename)
+                        continue
+
                 v3[section][key] = record
 
         return v3
