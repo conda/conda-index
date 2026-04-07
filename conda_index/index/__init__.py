@@ -833,7 +833,9 @@ class ChannelIndex:
             ("whl", indexed_packages.packages_whl),
         ):
             for filename, record in records.items():
-            # Per draft wheel-in-conda work, key is conda-like so that some conda-like parsing can occur on the key only. So we derive the key here. `record["fn"]` contains the filename or URL.
+                # Per draft wheel-in-conda work, key is conda-like so that some
+                # conda-like parsing can occur on the key only. So we derive the
+                # key here. `record["fn"]` contains the filename or URL.
                 if section == "whl":
                     name = record.get("name")
                     version = record.get("version")
