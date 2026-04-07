@@ -85,3 +85,8 @@ def test_demonstrate_wheel(tmp_path: Path):
 
     assert list(p.name for p in tmp_path.iterdir()) == ["noarch"]
     assert (tmp_path / "noarch" / "repodata.json").exists()
+
+    output = json.loads((tmp_path / "noarch" / "repodata.json").read_text())
+
+    # other details differ
+    assert output["v3"]["whl"] == input["v3"]["whl"]
