@@ -389,8 +389,11 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         for name, rows in itertools.groupby(
             self.db.execute(
-                """SELECT index_json.name, path, index_json
-                FROM stat JOIN index_json USING (path) WHERE stat.stage = ?
+                """SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
+                FROM stat
+                JOIN index_json USING (path)
+                LEFT JOIN run_exports USING (path)
+                WHERE stat.stage = ?
                 ORDER BY index_json.name, index_json.path""",
                 (self.upstream_stage,),
             ),
@@ -408,11 +411,12 @@ class CondaIndexCache(BaseCondaIndexCache):
                 packages_whl=shard_dict["packages.whl"],
             )
             for row in rows:
-                _, path, index_json = row
+                _, path, index_json, run_exports = row
                 if not path.endswith(self.package_extensions):
                     log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
+                record["run_exports"] = json.loads(run_exports or "{}")
                 key = self.package_section_for_path(path)
                 if key is None:
                     log.warning("%s has unsupported package extension", path)
