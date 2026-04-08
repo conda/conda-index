@@ -9,6 +9,7 @@ import abc
 import fnmatch
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
@@ -21,8 +22,9 @@ from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
-    from numbers import Number
-    from typing import Any, Iterator
+    from typing import IO, Any, Iterator
+
+    from conda_index.index import ShardDict
 
     from .fs import FileInfo
 
@@ -81,12 +83,14 @@ class cacher:
             return value
         return self
 
-class ChangedPackage(TypedDict):
-    path: str
-    mtime: Number
-    size: Number
 
 if TYPE_CHECKING:
+
+    class ChangedPackage(TypedDict):
+        path: str
+        mtime: float | int
+        size: int
+
     class HasChecksumsAndSize(TypedDict, extra_items=Any):
         """
         Enforce keys accessed in conda-index store()
@@ -101,6 +105,27 @@ if TYPE_CHECKING:
 class IndexedPackages:
     packages: dict[str, dict[str, Any]]
     packages_conda: dict[str, dict[str, Any]]
+    packages_whl: dict[str, dict[str, Any]]
+
+
+@dataclass
+class IndexedShard(IndexedPackages):
+    """
+    IndexedPackages for a single package name.
+    """
+
+    name: str
+
+
+def pack_record(record):
+    """
+    Convert hex checksums to bytes.
+    """
+    if sha256 := record.get("sha256"):
+        record["sha256"] = bytes.fromhex(sha256)
+    if md5 := record.get("md5"):
+        record["md5"] = bytes.fromhex(md5)
+    return record
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -171,11 +196,26 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         return path.rsplit("/", 1)[-1]
 
-    def package_section_for_path(self, path: str) -> str:
-        key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
-        return key
+    @cacher
+    def _package_section_re(self) -> re.Pattern[str]:
+        extension_pattern = "|".join(
+            re.escape(extension)
+            for extension in sorted(self.package_extensions, key=len, reverse=True)
+        )
+        return re.compile(f"({extension_pattern})$")
 
-    def open(self, fn: str):
+    def package_section_for_path(self, path: str) -> str | None:
+        package_sections = {
+            ".tar.bz2": "packages",
+            ".conda": "packages.conda",
+            ".whl": "packages.whl",
+        }
+        match = self._package_section_re.search(path)
+        if match is None:
+            return None
+        return package_sections.get(match.group(1))
+
+    def open(self, fn: str) -> IO[bytes]:
         """
         Given a base package name "somepackage.conda", return an open, seekable
         file object from our channel_url/subdir/fn suitable for reading that
@@ -186,7 +226,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_info_object(
         self, channel_root: Path | str, subdir: str, fn_info: FileInfo
-    ) -> tuple[str, int, int, dict[str, Any] | None]:
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         """
         fn_info: avoid having to call stat()  a second time on package file.
         """
@@ -200,7 +240,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         subdir: str,
         fn: str,
         stat_result: FileInfo | None = None,
-    ) -> tuple[str, int, int, dict[str, Any] | None]:
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         if stat_result is None:
             # this code path is deprecated
             abs_fn = self.fs.join(self.subdir_path, fn)
@@ -233,7 +273,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def extract_to_cache_unconditional(
         self, fn: str, abs_fn: str, size: int, mtime: int
-    ) -> dict[str, Any]:
+    ) -> HasChecksumsAndSize:
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
@@ -401,19 +441,37 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def indexed_packages(self) -> IndexedPackages:
         """
-        Return package sections from the cache for "monolithic repodata.json"
-        query.
+        Return all data for "monolithic repodata.json" query.
         """
 
-    @abc.abstractmethod
     def indexed_shards(
-        self, desired: set[str] | None = None
-    ) -> Iterator[tuple[str, Any]]:
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ) -> Iterator[tuple[str, ShardDict]]:
         """
-        Yield (package name, all packages with that name) from database ordered
-        by name, path i.o.w. filename.
+        Yield (package name, all packages with that name as dict) from database
+        ordered by name, path i.o.w. filename.
 
         :desired: If not None, set of desired package names.
+        """
+        for shard in self.indexed_shards_2(desired, pack_record=pack_record):
+            shard_data: ShardDict = {
+                "packages": shard.packages,
+                "packages.conda": shard.packages_conda,
+            }
+            yield (shard.name, shard_data)
+
+    @abc.abstractmethod
+    def indexed_shards_2(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ) -> Iterator[IndexedShard]:
+        """
+        indexed_shards with dataclass instead of dict.
         """
 
     @abc.abstractmethod

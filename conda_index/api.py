@@ -17,6 +17,7 @@ def update_index(
     progress=False,
     current_index_versions=None,
     write_run_exports=False,
+    repodata_v3=False,
 ):
     import os
 
@@ -49,4 +50,5 @@ def update_index(
             subdirs=ensure_list(subdir),
             current_index_versions=current_index_versions,
             write_run_exports=write_run_exports,
+            repodata_v3=repodata_v3,
         )

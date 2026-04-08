@@ -307,12 +307,14 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         name: str
         path: str
         record: object
+        run_exports: object
 
     # no index.json validation at this step, empty {} as record is passed on.
     connection.results_factory = lambda: [
-        DummyResult("package", "package.notconda", {}),
-        DummyResult("package", "package.conda", {}),
-        DummyResult("package", "package.tar.bz2", {}),
+        DummyResult("package", "package.notconda", {}, {}),
+        DummyResult("package", "package-1.0.notconda", {}, {}),
+        DummyResult("package", "package-1.0.conda", {}, {"weak": ["zlib"]}),
+        DummyResult("package", "package-1.0.tar.bz2", {}, {}),
     ]
     shards = list(cache.indexed_shards())
     assert len(shards) == 1
@@ -321,12 +323,49 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert name == "package"
     assert len(data["packages"]) == 1
     assert len(data["packages.conda"]) == 1
+    assert data["packages.conda"]["package-1.0.conda"]["run_exports"] == {
+        "weak": ["zlib"]
+    }
 
     indexed_packages = cache.indexed_packages()
-    packages = indexed_packages.packages
-    packages_conda = indexed_packages.packages_conda
-    assert len(packages) == 1
-    assert len(packages_conda) == 1
+    assert len(indexed_packages.packages) == 1
+    assert len(indexed_packages.packages_conda) == 1
+
+
+def test_psql_include_wheel_extension(tmp_path: Path):
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
+    )
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    class DummyResult(NamedTuple):
+        name: str
+        path: str
+        record: object
+        run_exports: object
+
+    connection.results_factory = lambda: [
+        DummyResult("package", "package.whl", {}, {}),
+        DummyResult("package", "package.conda", {}, {}),
+    ]
+    shards = list(cache.indexed_shards_2())
+    assert len(shards) == 1
+    assert len(shards[0].packages_whl) == 1
+    assert len(shards[0].packages_conda) == 1
+
+    indexed_packages = cache.indexed_packages()
+    assert indexed_packages.packages == {}
+    assert len(indexed_packages.packages_conda) == 1
+
+    shards_2 = list(cache.indexed_shards_2())
+    assert len(shards_2) == 1
+    assert len(shards_2[0].packages_whl) == 1
+    assert len(shards_2[0].packages_conda) == 1
 
 
 def test_psql_run_exports(tmp_path: Path):
