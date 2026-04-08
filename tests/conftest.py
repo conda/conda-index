@@ -18,8 +18,10 @@ from conda_build.config import (
     no_rewrite_stdout_env_default,
 )
 from conda_build.metadata import MetaData
-from conda_build.utils import check_call_env, copy_into, prepend_bin_path
+from conda_build.utils import check_call_env, prepend_bin_path
 from conda_build.variants import get_default_variant
+
+from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .http_test_server import run_test_server
 
@@ -71,11 +73,11 @@ def testing_homedir(tmpdir, request):
 
         try:
             shutil.rmtree(new_dir)
-        except:
+        except OSError:
             pass
     try:
         os.makedirs(new_dir)
-    except:
+    except OSError:
         print(f"Failed to create {new_dir}")
         return None
     os.chdir(new_dir)

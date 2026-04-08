@@ -19,7 +19,7 @@ from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
-from conda_index.utils_build import copy_into
+from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .utils import archive_dir
 
@@ -1358,6 +1358,35 @@ def test_base_url(index_data):
 
     package_url = urllib.parse.urljoin(osx["info"]["base_url"], "package-1.0.conda")
     assert package_url == "https://example.org/somechannel/osx-64/package-1.0.conda"
+
+
+def test_repodata_v3(index_data):
+    pkg_dir = Path(index_data, "packages")
+
+    channel_index = conda_index.index.ChannelIndex(
+        pkg_dir,
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+        repodata_v3=True,
+    )
+
+    channel_index.index(None)
+
+    noarch = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
+
+    assert set(noarch["info"]["repodata_revisions"][0].keys()) == set(
+        ("revision", "n_packages", "oldest", "newest")
+    )
+
+    assert "v3" in noarch
+    assert set(noarch["v3"]) == {"tar.bz2", "conda", "whl"}
+    assert noarch["packages"] == {}
+    assert noarch["packages.conda"] == {}
+    assert "packages.whl" not in noarch
+    assert noarch["v3"]["tar.bz2"] or noarch["v3"]["conda"]
 
 
 def test_write_current_repodata(index_data):

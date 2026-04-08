@@ -11,6 +11,7 @@ import pytest
 
 from conda_index.index import ChannelIndex
 from conda_index.index.sqlitecache import ICON_PATH
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres import model
@@ -222,6 +223,41 @@ def test_psql_bad_channel_id(tmp_path: Path):
         )
 
 
+def test_psql_store_tolerates_null_md5(tmp_path: Path):
+    """
+    store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
+    """
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    cache.store(
+        "pkg-1.0-py3_none.whl",
+        size=1234,
+        mtime=1000,
+        members={},
+        index_json={
+            "name": "pkg",
+            "version": "1.0",
+            "sha256": hashlib.sha256().hexdigest(),
+            "md5": None,
+            "size": 0,
+        },
+    )
+
+    stat_insert = next(
+        (c for c in connection.calls if "stat" in str(c[0]).lower()),
+        None,
+    )
+    assert stat_insert is not None
+    params = stat_insert[1] or {}
+    assert params["md5"] is None
+
+
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
     """
     Coverage for 'doesn't parse ICON_PATH as json', OperationalError
@@ -271,12 +307,14 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         name: str
         path: str
         record: object
+        run_exports: object
 
     # no index.json validation at this step, empty {} as record is passed on.
     connection.results_factory = lambda: [
-        DummyResult("package", "package.notconda", {}),
-        DummyResult("package", "package.conda", {}),
-        DummyResult("package", "package.tar.bz2", {}),
+        DummyResult("package", "package.notconda", {}, {}),
+        DummyResult("package", "package-1.0.notconda", {}, {}),
+        DummyResult("package", "package-1.0.conda", {}, {"weak": ["zlib"]}),
+        DummyResult("package", "package-1.0.tar.bz2", {}, {}),
     ]
     shards = list(cache.indexed_shards())
     assert len(shards) == 1
@@ -285,10 +323,49 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert name == "package"
     assert len(data["packages"]) == 1
     assert len(data["packages.conda"]) == 1
+    assert data["packages.conda"]["package-1.0.conda"]["run_exports"] == {
+        "weak": ["zlib"]
+    }
 
-    packages, packages_conda = cache.indexed_packages()
-    assert len(packages) == 1
-    assert len(packages_conda) == 1
+    indexed_packages = cache.indexed_packages()
+    assert len(indexed_packages.packages) == 1
+    assert len(indexed_packages.packages_conda) == 1
+
+
+def test_psql_include_wheel_extension(tmp_path: Path):
+    assert PsqlCache
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
+    )
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    class DummyResult(NamedTuple):
+        name: str
+        path: str
+        record: object
+        run_exports: object
+
+    connection.results_factory = lambda: [
+        DummyResult("package", "package.whl", {}, {}),
+        DummyResult("package", "package.conda", {}, {}),
+    ]
+    shards = list(cache.indexed_shards_2())
+    assert len(shards) == 1
+    assert len(shards[0].packages_whl) == 1
+    assert len(shards[0].packages_conda) == 1
+
+    indexed_packages = cache.indexed_packages()
+    assert indexed_packages.packages == {}
+    assert len(indexed_packages.packages_conda) == 1
+
+    shards_2 = list(cache.indexed_shards_2())
+    assert len(shards_2) == 1
+    assert len(shards_2[0].packages_whl) == 1
+    assert len(shards_2[0].packages_conda) == 1
 
 
 def test_psql_run_exports(tmp_path: Path):

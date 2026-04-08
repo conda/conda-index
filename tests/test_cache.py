@@ -4,9 +4,10 @@ Tests for abstact BaseCondaIndexCache.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterator
 
 from conda_index.index import cache
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 
 class DummyCache(cache.BaseCondaIndexCache):
@@ -33,19 +34,24 @@ class DummyCache(cache.BaseCondaIndexCache):
     def load_all_from_cache(self, fn):
         raise NotImplementedError
 
-    def store_fs_state(self, listdir_stat: cache.Iterator[dict[str, Any]]):
+    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         raise NotImplementedError
 
     def changed_packages(self) -> list[cache.ChangedPackage]:
         raise NotImplementedError
 
-    def indexed_packages(self) -> tuple[dict, dict]:
+    def indexed_packages(self) -> cache.IndexedPackages:
         raise NotImplementedError
 
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards_2(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=None,
+    ) -> Iterator[cache.IndexedShard]:
         raise NotImplementedError
 
-    def run_exports(self) -> cache.Iterator[tuple[str, dict]]:
+    def run_exports(self) -> Iterator[tuple[str, dict]]:
         raise NotImplementedError
 
 
@@ -54,7 +60,11 @@ def test_cache(tmp_path):
     Code coverage.
     """
 
-    c = DummyCache(str(tmp_path), "linux-64")
+    c = DummyCache(
+        str(tmp_path),
+        "linux-64",
+        package_extensions=CONDA_PACKAGE_EXTENSIONS + (".whl",),
+    )
 
     package = "foo.conda"
     db_path = c.database_path(package)
@@ -63,3 +73,5 @@ def test_cache(tmp_path):
 
     c.convert()
     c.close()
+
+    assert c.package_section_for_path("file.whl") == "packages.whl"

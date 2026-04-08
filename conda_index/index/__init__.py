@@ -15,7 +15,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 from uuid import uuid4
 
 import msgpack
@@ -34,6 +34,27 @@ from ..utils import (
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
+
+if TYPE_CHECKING:
+    from typing import Any, NotRequired, TypedDict
+
+    from .cache import IndexedPackages, IndexedShard
+
+    V3Section = TypedDict(
+        "V3Section",
+        {"tar.bz2": dict, "conda": dict, "whl": dict},
+    )
+
+    # in this style because "packages.conda" is not a Python identifier
+    ShardDict = TypedDict(
+        "ShardDict",
+        {
+            "packages": dict[str, dict[str, Any]],
+            "packages.conda": dict[str, dict[str, Any]],
+            "v3": NotRequired[V3Section],
+        },
+    )
+
 
 log = logging.getLogger(__name__)
 
@@ -110,6 +131,7 @@ def update_index(
     write_zst=False,
     write_run_exports=False,
     html_dependencies=False,
+    repodata_v3=False,
 ):
     """
     High-level interface to ``ChannelIndex``. Index all subdirs under
@@ -146,6 +168,7 @@ def update_index(
         write_zst=write_zst,
         write_run_exports=write_run_exports,
         html_dependencies=html_dependencies,
+        repodata_v3=repodata_v3,
     )
 
     channel_index.index(
@@ -176,6 +199,7 @@ REPODATA_SHARDS_VERSION = (
 )
 CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
+REPODATA_REVISION_V3 = 3
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
 REPODATA_SHARDS_FN = "repodata_shards.msgpack.zst"
@@ -251,15 +275,17 @@ def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
         for key in ("packages", "packages.conda"):
             if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
-            if fn in repodata[key]:
-                repodata[key][fn]["revoked"] = True
-                repodata[key][fn]["depends"].append("package_has_been_revoked")
+            records = repodata.get(key, {})
+            if fn in records:
+                records[fn]["revoked"] = True
+                records[fn]["depends"].append("package_has_been_revoked")
 
     for fn in instructions.get("remove", ()):
         for key in ("packages", "packages.conda"):
             if key == "packages.conda" and fn.endswith(CONDA_PACKAGE_EXTENSION_V1):
                 fn = fn.replace(CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2)
-            popped = repodata[key].pop(fn, None)
+            records = repodata.get(key, {})
+            popped = records.pop(fn, None)
             if popped:
                 repodata["removed"].append(fn)
     repodata["removed"].sort()
@@ -396,6 +422,7 @@ class ChannelIndex:
         upstream_stage: str = "fs",
         cache_kwargs=None,
         update_only=False,
+        repodata_v3=False,
     ):
         if threads is None:
             threads = MAX_THREADS_DEFAULT
@@ -429,6 +456,7 @@ class ChannelIndex:
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
         self.update_only = update_only
+        self.repodata_v3 = repodata_v3
 
         self.cache_kwargs = cache_kwargs
 
@@ -470,64 +498,62 @@ class ChannelIndex:
 
         subdirs = self.detect_subdirs()
 
-        # Lock local channel.
-        with utils.try_acquire_locks([utils.get_lock(self.channel_root)], timeout=900):
-            # begin non-stop "extract packages into cache";
-            # extract_subdir_to_cache manages subprocesses. Keeps cores busy
-            # during write/patch/update channeldata steps.
-            def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
-                executor = ThreadPoolExecutor(max_workers=1)
+        # begin non-stop "extract packages into cache";
+        # extract_subdir_to_cache manages subprocesses. Keeps cores busy
+        # during write/patch/update channeldata steps.
+        def extract_subdirs_to_cache():  # is the 'prepare' step in 'index_prepared_subdir'
+            executor = ThreadPoolExecutor(max_workers=1)
 
-                def extract_args():
-                    for subdir in subdirs:
-                        # .cache is currently in channel_root not output_root
-                        _ensure_valid_channel(self.channel_root, subdir)
-                        subdir_path = join(self.channel_root, subdir)
-                        yield (subdir, verbose, progress, subdir_path)
+            def extract_args():
+                for subdir in subdirs:
+                    # .cache is currently in channel_root not output_root
+                    _ensure_valid_channel(self.channel_root, subdir)
+                    subdir_path = join(self.channel_root, subdir)
+                    yield (subdir, verbose, progress, subdir_path)
 
-                def extract_wrapper(args: tuple):
-                    # runs in thread
-                    subdir, verbose, progress, subdir_path = args
-                    cache = self.cache_for_subdir(subdir)
-                    # exactly these packages (unless they are un-indexable) will
-                    # be in the output repodata
-                    if self.save_fs_state:
-                        cache.save_fs_state(subdir_path)
-                    return self.extract_subdir_to_cache(
-                        subdir, verbose, progress, subdir_path, cache
-                    )
+            def extract_wrapper(args: tuple):
+                # runs in thread
+                subdir, verbose, progress, subdir_path = args
+                cache = self.cache_for_subdir(subdir)
+                # exactly these packages (unless they are un-indexable) will
+                # be in the output repodata
+                if self.save_fs_state:
+                    cache.save_fs_state(subdir_path)
+                return self.extract_subdir_to_cache(
+                    subdir, verbose, progress, subdir_path, cache
+                )
 
-                # map() gives results in order passed, not in order of
-                # completion. If using multiple threads, switch to
-                # submit() / as_completed().
-                return executor.map(extract_wrapper, extract_args())
+            # map() gives results in order passed, not in order of
+            # completion. If using multiple threads, switch to
+            # submit() / as_completed().
+            return executor.map(extract_wrapper, extract_args())
 
-            # Collect repodata from packages, save to
-            # REPODATA_FROM_PKGS_JSON_FN file
-            with self.thread_executor_factory() as index_process:
-                futures = []
-                for subdir in extract_subdirs_to_cache():
-                    for indexer, condition in (
-                        (self.index_patch_subdir, self.write_monolithic),
-                        (self.index_patch_subdir_shards, self.write_shards),
-                    ):
-                        if condition:
-                            futures.append(
-                                index_process.submit(
-                                    functools.partial(
-                                        indexer,
-                                        subdir=subdir,
-                                        verbose=verbose,
-                                        progress=progress,
-                                        patch_generator=patch_generator,
-                                        current_index_versions=current_index_versions,
-                                    )
+        # Collect repodata from packages, save to
+        # REPODATA_FROM_PKGS_JSON_FN file
+        with self.thread_executor_factory() as index_process:
+            futures = []
+            for subdir in extract_subdirs_to_cache():
+                for indexer, condition in (
+                    (self.index_patch_subdir, self.write_monolithic),
+                    (self.index_patch_subdir_shards, self.write_shards),
+                ):
+                    if condition:
+                        futures.append(
+                            index_process.submit(
+                                functools.partial(
+                                    indexer,
+                                    subdir=subdir,
+                                    verbose=verbose,
+                                    progress=progress,
+                                    patch_generator=patch_generator,
+                                    current_index_versions=current_index_versions,
                                 )
                             )
-                # limited API to support DummyExecutor
-                for future in futures:
-                    result = future.result()
-                    log.info(f"Completed {result}")
+                        )
+            # limited API to support DummyExecutor
+            for future in futures:
+                result = future.result()
+                log.info(f"Completed {result}")
 
     # old name
     def index_prepared_subdir(
@@ -718,13 +744,29 @@ class ChannelIndex:
 
         (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        for name, shard in cache.indexed_shards():
-            shard_data = compressor.compress(sqlitecache.packb_typed(shard))
-            shard_hash = hashlib.sha256(shard_data).digest()
+        v3_data = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
+
+        for shard in cache.indexed_shards_2():
+            repodata_shard = self._indexed_shard_to_repodata(shard)
+            shard_bytes = compressor.compress(sqlitecache.packb_typed(repodata_shard))
+            shard_hash = hashlib.sha256(shard_bytes).digest()
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
             if not output_path.exists():
-                output_path.write_bytes(shard_data)
-            shards[name] = shard_hash
+                output_path.write_bytes(shard_bytes)
+            shards[shard.name] = shard_hash
+
+            if self.repodata_v3:
+                for section, records in repodata_shard["v3"].items():
+                    v3_data[section].update(records)
+
+        if self.repodata_v3:
+            shards_index["info"]["repodata_revisions"] = [
+                self._make_repodata_revision_data(v3_data)
+            ]
 
         return shards_index
 
@@ -739,11 +781,11 @@ class ChannelIndex:
 
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        new_repodata_packages, new_repodata_conda_packages = cache.indexed_packages()
+        indexed_packages = cache.indexed_packages()
 
         new_repodata = {
-            "packages": new_repodata_packages,
-            "packages.conda": new_repodata_conda_packages,
+            "packages": indexed_packages.packages,
+            "packages.conda": indexed_packages.packages_conda,
             "info": {
                 "subdir": subdir,
             },
@@ -751,12 +793,107 @@ class ChannelIndex:
             "removed": [],  # can be added by patch/hotfix process
         }
 
+        if self.repodata_v3:
+            v3_packages = self._extract_indexed_packages_v3(indexed_packages)
+            new_repodata["v3"] = v3_packages
+            new_repodata["packages"] = {}
+            new_repodata["packages.conda"] = {}
+            new_repodata["info"]["repodata_revisions"] = [
+                self._make_repodata_revision_data(v3_packages)
+            ]
+
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
             new_repodata["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
             new_repodata["repodata_version"] = 2
 
         return new_repodata
+
+    @staticmethod
+    def _v3_key_for_path(path: str) -> str | None:
+        for extension in (".tar.bz2", ".conda", ".whl"):
+            if path.endswith(extension):
+                return path[: -len(extension)]
+        return None
+
+    def _extract_indexed_packages_v3(
+        self, indexed_packages: IndexedPackages
+    ) -> V3Section:
+        """
+        Return all packages from IndexedPackages as the "v3": {...} section.
+        """
+        v3: V3Section = {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        }
+        for section, records in (
+            ("tar.bz2", indexed_packages.packages),
+            ("conda", indexed_packages.packages_conda),
+            ("whl", indexed_packages.packages_whl),
+        ):
+            for filename, record in records.items():
+                # Per draft wheel-in-conda work, key is conda-like so that some
+                # conda-like parsing can occur on the key only. So we derive the
+                # key here. `record["fn"]` contains the filename or URL.
+                if section == "whl":
+                    name = record.get("name")
+                    version = record.get("version")
+                    build = record.get("build")
+                    if name is None or version is None or build is None:
+                        log.warning(
+                            "%s: v3 whl records require name, version, and build; skipping",
+                            filename,
+                        )
+                        continue
+                    key = f"{name}-{version}-{build}"
+                else:
+                    key = self._v3_key_for_path(filename)
+                    if key is None:
+                        log.warning("%s has unsupported package extension", filename)
+                        continue
+
+                v3[section][key] = record
+
+        return v3
+
+    def _indexed_shard_to_repodata(self, indexed_shard: IndexedShard) -> ShardDict:
+        if self.repodata_v3:
+            shard_data: ShardDict = {
+                "packages": {},
+                "packages.conda": {},
+                "v3": self._extract_indexed_packages_v3(indexed_shard),
+            }
+        else:
+            shard_data = {
+                "packages": indexed_shard.packages,
+                "packages.conda": indexed_shard.packages_conda,
+            }
+        return shard_data
+
+    @staticmethod
+    def _make_repodata_revision_data(
+        revision_data: dict[str, dict[str, dict]],
+    ) -> dict[str, int | None]:
+        """
+        Return { "revision": 3, ... } dict with package statistics derived from
+        revision_data, which is similar to monolithic repodata.
+        """
+        timestamps = []
+        n_packages = 0
+        for section_records in revision_data.values():
+            n_packages += len(section_records)
+            for record in section_records.values():
+                timestamp = record.get("timestamp")
+                if isinstance(timestamp, (int, float)):
+                    timestamps.append(int(timestamp))
+
+        return {
+            "revision": REPODATA_REVISION_V3,
+            "n_packages": n_packages,
+            "oldest": min(timestamps) if timestamps else None,
+            "newest": max(timestamps) if timestamps else None,
+        }
 
     def extract_subdir_to_cache(
         self,
@@ -827,7 +964,7 @@ class ChannelIndex:
 
         return subdir
 
-    ####
+    # region: channeldata
 
     def channeldata_path(self):
         channeldata_file = os.path.join(self.output_root, "channeldata.json")
@@ -869,6 +1006,8 @@ class ChannelIndex:
         self._write_channeldata_index_html(channel_data)
         log.debug("write channeldata")
         self._write_channeldata(channel_data)
+
+    # endregion
 
     def detect_subdirs(self):
         if not self._subdirs:
@@ -1366,7 +1505,7 @@ class ChannelIndex:
                 os.unlink(output_temp_path)
                 return False
 
-        utils.move_with_fallback(output_temp_path, output_path)
+        utils.move_with_fallback_nolock(output_temp_path, output_path)
         return True
 
     def _maybe_remove(self, path):

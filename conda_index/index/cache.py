@@ -9,16 +9,24 @@ import abc
 import fnmatch
 import json
 import logging
-from numbers import Number
+import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
 
 from .. import yaml
 from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
-from .fs import FileInfo, MinimalFS
+from .fs import MinimalFS
+
+if TYPE_CHECKING:
+    from typing import IO, Any, Iterator
+
+    from conda_index.index import ShardDict
+
+    from .fs import FileInfo
 
 log = logging.getLogger(__name__)
 
@@ -76,10 +84,48 @@ class cacher:
         return self
 
 
-class ChangedPackage(TypedDict):
-    path: str
-    mtime: Number
-    size: Number
+if TYPE_CHECKING:
+
+    class ChangedPackage(TypedDict):
+        path: str
+        mtime: float | int
+        size: int
+
+    class HasChecksumsAndSize(TypedDict, extra_items=Any):
+        """
+        Enforce keys accessed in conda-index store()
+        """
+
+        md5: str | None
+        sha256: str | None
+        size: int
+
+
+@dataclass
+class IndexedPackages:
+    packages: dict[str, dict[str, Any]]
+    packages_conda: dict[str, dict[str, Any]]
+    packages_whl: dict[str, dict[str, Any]]
+
+
+@dataclass
+class IndexedShard(IndexedPackages):
+    """
+    IndexedPackages for a single package name.
+    """
+
+    name: str
+
+
+def pack_record(record):
+    """
+    Convert hex checksums to bytes.
+    """
+    if sha256 := record.get("sha256"):
+        record["sha256"] = bytes.fromhex(sha256)
+    if md5 := record.get("md5"):
+        record["md5"] = bytes.fromhex(md5)
+    return record
 
 
 class BaseCondaIndexCache(metaclass=abc.ABCMeta):
@@ -91,6 +137,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
         """
@@ -107,6 +154,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.package_extensions = package_extensions
         self.update_only = update_only
 
         self.fs = fs or MinimalFS()
@@ -119,12 +167,12 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.cache_is_brand_new = False
 
     @abc.abstractmethod
-    def convert(self):
+    def convert(self) -> None:
         """
         Convert filesystem cache to database.
         """
 
-    def close(self):
+    def close(self) -> None:
         """
         Remove and close any database connections.
         """
@@ -136,19 +184,38 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         return ""
 
-    def database_path(self, fn) -> str:
+    def database_path(self, fn: str) -> str:
         """
         Return filename with database prefix added.
         """
         return f"{self.database_prefix}{fn}"
 
-    def plain_path(self, path):
+    def plain_path(self, path: str) -> str:
         """
         Return filename with any database-specfic prefix stripped off.
         """
         return path.rsplit("/", 1)[-1]
 
-    def open(self, fn: str):
+    @cacher
+    def _package_section_re(self) -> re.Pattern[str]:
+        extension_pattern = "|".join(
+            re.escape(extension)
+            for extension in sorted(self.package_extensions, key=len, reverse=True)
+        )
+        return re.compile(f"({extension_pattern})$")
+
+    def package_section_for_path(self, path: str) -> str | None:
+        package_sections = {
+            ".tar.bz2": "packages",
+            ".conda": "packages.conda",
+            ".whl": "packages.whl",
+        }
+        match = self._package_section_re.search(path)
+        if match is None:
+            return None
+        return package_sections.get(match.group(1))
+
+    def open(self, fn: str) -> IO[bytes]:
         """
         Given a base package name "somepackage.conda", return an open, seekable
         file object from our channel_url/subdir/fn suitable for reading that
@@ -157,7 +224,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         abs_fn = self.fs.join(self.channel_url, self.subdir, fn)
         return self.fs.open(abs_fn)
 
-    def extract_to_cache_info_object(self, channel_root, subdir, fn_info: FileInfo):
+    def extract_to_cache_info_object(
+        self, channel_root: Path | str, subdir: str, fn_info: FileInfo
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         """
         fn_info: avoid having to call stat()  a second time on package file.
         """
@@ -165,7 +234,13 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             channel_root, subdir, fn_info.fn, stat_result=fn_info
         )
 
-    def _extract_to_cache(self, channel_root, subdir, fn, stat_result=None):
+    def _extract_to_cache(
+        self,
+        channel_root: Path | str,
+        subdir: str,
+        fn: str,
+        stat_result: FileInfo | None = None,
+    ) -> tuple[str, int, int, HasChecksumsAndSize | None]:
         if stat_result is None:
             # this code path is deprecated
             abs_fn = self.fs.join(self.subdir_path, fn)
@@ -196,7 +271,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             log.exception("Error extracting %s", fn)
         return retval
 
-    def extract_to_cache_unconditional(self, fn, abs_fn, size, mtime):
+    def extract_to_cache_unconditional(
+        self, fn: str, abs_fn: str, size: int, mtime: int
+    ) -> HasChecksumsAndSize:
         """
         Add or replace fn into cache, disregarding whether it is already cached.
 
@@ -229,8 +306,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
                     # immediately parse index.json, decide whether we need icon
                     if member.name == INDEX_JSON_PATH:  # early exit when no icon
-                        index_json = json.loads(members[member.name])
-                        if index_json.get("icon") is None:
+                        check_icon = json.loads(members[member.name])
+                        if check_icon.get("icon") is None:
                             wanted = wanted - {ICON_PATH}
 
                     if member.name in recipe_want_one:
@@ -244,7 +321,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
             # XXX if we are reindexing a channel, provide a way to assert that
             # checksums match the upstream stage.
-            def checksums():
+            def checksums() -> Iterator[str]:
                 """
                 Use utility function that accepts open file instead of filename.
                 """
@@ -258,7 +335,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             # very common for some metadata to be missing
             log.debug(f"{fn} missing {wanted} has {set(members.keys())}")
 
-        index_json = json.loads(members["info/index.json"])
+        raw_index_json: dict = json.loads(members["info/index.json"])
 
         # populate run_exports.json (all False's if there was no
         # paths.json). paths.json should not be needed after this; don't
@@ -284,11 +361,16 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
             "operatingsystem",
         }
 
-        index_json = {k: v for k, v in index_json.items() if k not in filter_fields}
+        filtered_index_json = {
+            k: v for k, v in raw_index_json.items() if k not in filter_fields
+        }
 
-        new_info = {"md5": md5, "sha256": sha256, "size": size}
-
-        index_json.update(new_info)
+        index_json: HasChecksumsAndSize = {
+            **filtered_index_json,  # type: ignore
+            "md5": md5,
+            "sha256": sha256,
+            "size": size,
+        }
 
         self.store(fn, size, mtime, members, index_json)
 
@@ -299,21 +381,21 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self,
         fn: str,
         size: int,
-        mtime,
+        mtime: int,
         members: dict[str, str | bytes],
-        index_json: dict,
-    ):
+        index_json: HasChecksumsAndSize,
+    ) -> None:
         """
         Write a single package's index data to database.
         """
 
     @abc.abstractmethod
-    def load_all_from_cache(self, fn) -> dict:
+    def load_all_from_cache(self, fn: str) -> dict[str, Any]:
         """
         Load package data merged into a single dict for channeldata.
         """
 
-    def save_fs_state(self, subdir_path: str | Path | None = None):
+    def save_fs_state(self, subdir_path: str | Path | None = None) -> None:
         """
         stat all files in subdir_path to compare against cached repodata.
 
@@ -326,10 +408,10 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         # Put filesystem 'ground truth' into stat table. Will we eventually stat
         # everything on fs, or can we shortcut for new files?
 
-        def listdir_stat():
+        def listdir_stat() -> Iterator[dict[str, Any]]:
             # Gather conda package filenames in subdir
             for entry in self.fs.listdir(subdir_url):
-                if not entry["name"].endswith(CONDA_PACKAGE_EXTENSIONS):
+                if not entry["name"].endswith(self.package_extensions):
                     continue
                 if "mtime" not in entry or "size" not in entry:
                     entry.update(self.fs.stat(entry["name"]))
@@ -357,19 +439,39 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def indexed_packages(self) -> tuple[dict, dict]:
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache for
-        "monolithic repodata.json" query.
+        Return all data for "monolithic repodata.json" query.
         """
 
-    @abc.abstractmethod
-    def indexed_shards(self, desired: set | None = None):
+    def indexed_shards(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ) -> Iterator[tuple[str, ShardDict]]:
         """
-        Yield (package name, all packages with that name) from database ordered
-        by name, path i.o.w. filename.
+        Yield (package name, all packages with that name as dict) from database
+        ordered by name, path i.o.w. filename.
 
         :desired: If not None, set of desired package names.
+        """
+        for shard in self.indexed_shards_2(desired, pack_record=pack_record):
+            shard_data: ShardDict = {
+                "packages": shard.packages,
+                "packages.conda": shard.packages_conda,
+            }
+            yield (shard.name, shard_data)
+
+    @abc.abstractmethod
+    def indexed_shards_2(
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+    ) -> Iterator[IndexedShard]:
+        """
+        indexed_shards with dataclass instead of dict.
         """
 
     @abc.abstractmethod
@@ -383,7 +485,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
 
 
-def _cache_post_install_details(paths_json_str):
+def _cache_post_install_details(paths_json_str: str | bytes) -> str:
     post_install_details_json = {
         "binary_prefix": False,
         "text_prefix": False,
@@ -419,7 +521,7 @@ def _cache_post_install_details(paths_json_str):
     return json.dumps(post_install_details_json)
 
 
-def _cache_recipe(recipe_reader):
+def _cache_recipe(recipe_reader: str | bytes) -> str:
     recipe_json = yaml.determined_load(recipe_reader)
 
     try:
@@ -431,7 +533,7 @@ def _cache_recipe(recipe_reader):
     return recipe_json_str
 
 
-def clear_newline_chars(record, field_name):
+def clear_newline_chars(record: dict[str, Any], field_name: str) -> None:
     if field_name in record:
         try:
             record[field_name] = record[field_name].strip().replace("\n", " ")

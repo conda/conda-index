@@ -44,6 +44,36 @@ def test_cache_extract_without_stat_result(index_data):
     )
 
 
+def test_store_tolerates_null_md5(tmp_path):
+    """
+    store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
+    md5 is stored as NULL in stat table.
+    """
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(tmp_path, "noarch")
+
+    cache.store(
+        "pkg-1.0-py3_none.whl",
+        size=1234,
+        mtime=1000,
+        members={},
+        index_json={
+            "name": "pkg",
+            "version": "1.0",
+            "sha256": "a" * 64,
+            "md5": None,
+            "size": 0,
+        },
+    )
+
+    row = cache.db.execute(
+        "SELECT path, sha256, md5 FROM stat WHERE stage='indexed'"
+    ).fetchone()
+    assert row["path"] == "pkg-1.0-py3_none.whl"
+    assert row["sha256"] == "a" * 64
+    assert row["md5"] is None
+
+
 def test_store_fs_state_update_only_true(tmp_path):
     cache = CondaIndexCache(tmp_path, "noarch", update_only=True)
 

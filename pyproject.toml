@@ -18,7 +18,7 @@ dependencies = [
     "click >=8",
     # Disabled due to conda not being available on PyPI
     # "conda",
-    "conda-package-streaming >=0.7.0",
+    "conda-package-streaming >=0.12.0",
     "filelock",
     "jinja2",
     "msgpack",
@@ -28,9 +28,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    # Disabled due to unavailablity on PyPI
-    # "conda-build",
-    "conda-package-handling >=2",
+    # Also not available on PyPI in any current version
+    # "conda-build >=3.21.0",
+    "conda-package-handling >=1.9.0",
     "coverage[toml]",
     "pytest >=7",
     "pytest-cov",
@@ -77,6 +77,12 @@ source = ["conda_index"]
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff]
+exclude = [
+    "tests/split_repo.py",
+    "conda_index/utils_build.py",
+]
 
 [tool.hatch.build]
 include = ["conda_index"]

@@ -11,15 +11,23 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import msgpack
 
-from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 from . import common, convert_cache
-from .cache import BaseCondaIndexCache, ChangedPackage, cacher
+from .cache import (
+    BaseCondaIndexCache,
+    IndexedPackages,
+    IndexedShard,
+    cacher,
+    pack_record,
+)
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
+
+if TYPE_CHECKING:
+    from .cache import ChangedPackage, HasChecksumsAndSize
 
 log = logging.getLogger(__name__)
 
@@ -171,7 +179,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         size: int,
         mtime,
         members: dict[str, str | bytes],
-        index_json: dict,
+        index_json: HasChecksumsAndSize,
     ):
         """
         Write cache for a single package to database.
@@ -194,6 +202,9 @@ class CondaIndexCache(BaseCondaIndexCache):
                                 INSERT OR REPLACE INTO {table} (path, {table})
                                 VALUES (:path, json(:data))
                                 """
+                else:
+                    log.warning('No "data" key for %s/%s', fn, table)
+                    continue
                 # Could delete from all metadata tables that we didn't just see.
                 try:
                     self.db.execute(query, parameters)
@@ -333,12 +344,15 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self):
+    def indexed_packages(self) -> IndexedPackages:
         """
-        Return "packages" and "packages.conda" values from the cache.
+        Return package sections from the cache.
         """
-        new_repodata_packages = {}
-        new_repodata_conda_packages = {}
+        new_packages = {
+            "packages": {},
+            "packages.conda": {},
+            "packages.whl": {},
+        }
 
         # load cached packages
         for row in self.db.execute(
@@ -351,47 +365,70 @@ class CondaIndexCache(BaseCondaIndexCache):
         ):
             path, index_json = row
             index_json = json.loads(index_json)
-            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                new_repodata_packages[path] = index_json
-            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                new_repodata_conda_packages[path] = index_json
-            else:
-                log.warning("%s doesn't look like a conda package", path)
 
-        return new_repodata_packages, new_repodata_conda_packages
+            section = self.package_section_for_path(path)
+            if section is None:
+                log.warning("%s has unsupported package extension", path)
+                continue
+            new_packages[section][path] = index_json
 
-    def indexed_shards(self, desired: set | None = None):
+        return IndexedPackages(
+            packages=new_packages["packages"],
+            packages_conda=new_packages["packages.conda"],
+            packages_whl=new_packages["packages.whl"],
+        )
+
+    def indexed_shards_2(
+        self, desired: set[str] | None = None, *, pack_record=pack_record
+    ) -> Iterator[IndexedShard]:
         """
-        Yield (package name, all packages with that name) from database ordered
-        by name, path i.o.w. filename.
+        Yield package shards as IndexedShard records.
 
         :desired: If not None, set of desired package names.
         """
+
         for name, rows in itertools.groupby(
             self.db.execute(
-                """SELECT index_json.name, path, index_json
-                FROM stat JOIN index_json USING (path) WHERE stat.stage = ?
+                """SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
+                FROM stat
+                JOIN index_json USING (path)
+                LEFT JOIN run_exports USING (path)
+                WHERE stat.stage = ?
                 ORDER BY index_json.name, index_json.path""",
                 (self.upstream_stage,),
             ),
             lambda k: k[0],
         ):
-            shard = {"packages": {}, "packages.conda": {}}
+            shard_dict = {
+                "packages": {},
+                "packages.conda": {},
+                "packages.whl": {},
+            }
+            shard = IndexedShard(
+                name=name,
+                packages=shard_dict["packages"],
+                packages_conda=shard_dict["packages.conda"],
+                packages_whl=shard_dict["packages.whl"],
+            )
             for row in rows:
-                name, path, index_json = row
-                if not path.endswith((".tar.bz2", ".conda")):
+                _, path, index_json, run_exports = row
+                if not path.endswith(self.package_extensions):
                     log.warning("%s doesn't look like a conda package", path)
                     continue
                 record = json.loads(index_json)
-                key = "packages" if path.endswith(".tar.bz2") else "packages.conda"
-                # we may have to pack later for patch functions that look for
-                # hex hashes
-                shard[key][path] = pack_record(record)
+                record["run_exports"] = json.loads(run_exports or "{}")
+                key = self.package_section_for_path(path)
+                if key is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                shard_dict[key][path] = pack_record(record)
 
             if not desired or name in desired:
-                yield (name, shard)
+                yield shard
 
-    def store_index_json_stat(self, database_path, mtime, size, index_json):
+    def store_index_json_stat(
+        self, database_path, mtime, size, index_json: HasChecksumsAndSize
+    ):
         self.db.execute(
             """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
                 VALUES ('indexed', ?, ?, ?, ?, ?)""",
@@ -413,17 +450,6 @@ class CondaIndexCache(BaseCondaIndexCache):
             (self.upstream_stage,),
         ):
             yield (path, json.loads(run_exports or "{}"))
-
-
-def pack_record(record):
-    """
-    Convert hex checksums to bytes.
-    """
-    if sha256 := record.get("sha256"):
-        record["sha256"] = bytes.fromhex(sha256)
-    if md5 := record.get("md5"):
-        record["md5"] = bytes.fromhex(md5)
-    return record
 
 
 def packb_typed(o: Any) -> bytes:

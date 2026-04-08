@@ -1,0 +1,5 @@
+### Deprecations
+
+* Remove experimental `python -m conda_index.json2jlap` script to run after
+  indexing; sharded repodata is the new strategy for incremental repodata
+  transfer. (#273)
