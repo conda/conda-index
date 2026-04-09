@@ -74,6 +74,40 @@ def test_store_tolerates_null_md5(tmp_path):
     assert row["md5"] is None
 
 
+def test_indexed_packages_excludes_run_exports(tmp_path):
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(tmp_path, "noarch", upstream_stage="indexed")
+
+    cache.store(
+        "pkg-1.0-0.conda",
+        size=1234,
+        mtime=1000,
+        members={"info/run_exports.json": '{"weak": ["zlib"]}'},
+        index_json={
+            "name": "pkg",
+            "version": "1.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+            "sha256": "a" * 64,
+            "md5": "b" * 32,
+            "size": 1234,
+        },
+    )
+
+    shards = list(cache.indexed_shards_2())
+    assert len(shards) == 1
+    assert shards[0].packages_conda["pkg-1.0-0.conda"]["run_exports"] == {
+        "weak": ["zlib"]
+    }
+
+    indexed_packages = cache.indexed_packages()
+    assert "run_exports" not in indexed_packages.packages_conda["pkg-1.0-0.conda"]
+
+    run_exports = list(cache.run_exports())
+    assert run_exports == [("pkg-1.0-0.conda", {"weak": ["zlib"]})]
+
+
 def test_store_fs_state_update_only_true(tmp_path):
     cache = CondaIndexCache(tmp_path, "noarch", update_only=True)
 

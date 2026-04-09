@@ -291,38 +291,9 @@ class PsqlCache(BaseCondaIndexCache):
             record. Override to change the default hex to bytes hash
             conversions.
         """
-        index_json_table = model.Base.metadata.tables["index_json"]
-        stat_table = model.Base.metadata.tables["stat"]
-        run_exports_table = model.Base.metadata.tables["run_exports"]
-
         # not optimized for "desired" partial shards case but that's not
         # currently used.
-        query = (
-            select(
-                index_json_table.c.name,
-                index_json_table.c.path,
-                index_json_table.c.index_json,
-                run_exports_table.c.run_exports,
-            )
-            .select_from(
-                join(
-                    join(
-                        index_json_table,
-                        stat_table,
-                        index_json_table.c.path == stat_table.c.path,
-                    ),
-                    run_exports_table,
-                    index_json_table.c.path == run_exports_table.c.path,
-                    isouter=True,
-                )
-            )
-            .where(stat_table.c.stage == self.upstream_stage)
-            .where(stat_table.c.path.startswith(self.database_prefix, autoescape=True))
-            .order_by(
-                index_json_table.c.name,
-                index_json_table.c.path,
-            )
-        )
+        query = self._indexed_records_query(include_run_exports=True)
 
         connection: Connection
         with self.engine.begin() as connection:
@@ -353,26 +324,64 @@ class PsqlCache(BaseCondaIndexCache):
                 if not desired or name in desired:
                     yield shard
 
+    def _indexed_records_query(self, *, include_run_exports: bool):
+        """
+        Query package records from index_json + stat, optionally joining run_exports.
+        """
+        index_json_table = model.Base.metadata.tables["index_json"]
+        stat_table = model.Base.metadata.tables["stat"]
+
+        columns = [
+            index_json_table.c.name,
+            index_json_table.c.path,
+            index_json_table.c.index_json,
+        ]
+        from_clause = join(
+            index_json_table,
+            stat_table,
+            index_json_table.c.path == stat_table.c.path,
+        )
+
+        if include_run_exports:
+            run_exports_table = model.Base.metadata.tables["run_exports"]
+            columns.append(run_exports_table.c.run_exports)
+            from_clause = join(
+                from_clause,
+                run_exports_table,
+                index_json_table.c.path == run_exports_table.c.path,
+                isouter=True,
+            )
+
+        return (
+            select(*columns)
+            .select_from(from_clause)
+            .where(stat_table.c.stage == self.upstream_stage)
+            .where(stat_table.c.path.startswith(self.database_prefix, autoescape=True))
+            .order_by(index_json_table.c.name, index_json_table.c.path)
+        )
+
     def indexed_packages(self) -> IndexedPackages:
         """
         Return package sections from the cache.
         """
-        packages = {}
-        packages_conda = {}
-        packages_whl = {}
+        shard_dict = {"packages": {}, "packages.conda": {}, "packages.whl": {}}
 
-        def nopack_record(record):
-            return record
+        query = self._indexed_records_query(include_run_exports=False)
 
-        for shard in self.indexed_shards_2(pack_record=nopack_record):
-            packages.update(shard.packages)
-            packages_conda.update(shard.packages_conda)
-            packages_whl.update(shard.packages_whl)
+        connection: Connection
+        with self.engine.begin() as connection:
+            for _, path, index_json in connection.execute(query):
+                path = self.plain_path(path)
+                key = self.package_section_for_path(path)
+                if key is None:
+                    log.warning("%s has unsupported package extension", path)
+                    continue
+                shard_dict[key][path] = index_json
 
         return IndexedPackages(
-            packages=packages,
-            packages_conda=packages_conda,
-            packages_whl=packages_whl,
+            packages=shard_dict["packages"],
+            packages_conda=shard_dict["packages.conda"],
+            packages_whl=shard_dict["packages.whl"],
         )
 
     def load_all_from_cache(self, fn: str):

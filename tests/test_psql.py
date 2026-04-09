@@ -330,6 +330,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     indexed_packages = cache.indexed_packages()
     assert len(indexed_packages.packages) == 1
     assert len(indexed_packages.packages_conda) == 1
+    assert "run_exports" not in indexed_packages.packages_conda["package-1.0.conda"]
 
 
 def test_psql_include_wheel_extension(tmp_path: Path):
@@ -385,10 +386,10 @@ def test_psql_run_exports(tmp_path: Path):
 
     # no index.json validation at this step, empty {} as record is passed on.
     connection.results_factory = lambda: [
-        DummyResult("package.conda", {}),
+        DummyResult("package.conda", {"weak": ["zlib"]}),
     ]
     run_exports = list(cache.run_exports())
-    assert run_exports == [("package.conda", {})]
+    assert run_exports == [("package.conda", {"weak": ["zlib"]})]
 
 
 def test_psql_load_all_from_cache_coverage(tmp_path: Path):
