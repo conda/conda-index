@@ -300,11 +300,9 @@ class CondaIndexCache(BaseCondaIndexCache):
     def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         with self.db:
             if not self.update_only:
-                # always stage='fs', not custom upstream_stage which would be
-                # handled in a subclass
                 self.db.execute(
-                    "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                    {"path_like": self.database_path_like},
+                    "DELETE FROM stat WHERE stage=:upstream_stage AND path like :path_like",
+                    {"path_like": self.database_path_like, "upstream_stage": self.upstream_stage},
                 )
             self.db.executemany(
                 """
