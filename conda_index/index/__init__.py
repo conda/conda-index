@@ -31,9 +31,12 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
+    LOCAL_FILE_UPSTREAM_STAGE,
+    METADATA_UPSTREAM_STAGE
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
+from .cache import IndexedPackages
 
 if TYPE_CHECKING:
     from typing import Any, NotRequired, TypedDict
@@ -420,6 +423,7 @@ class ChannelIndex:
         save_fs_state=True,
         write_current_repodata=True,
         upstream_stage: str = "fs",
+        upstream_stages: Iterable[str] = [LOCAL_FILE_UPSTREAM_STAGE],
         cache_kwargs=None,
         update_only=False,
         repodata_v3=False,
@@ -455,6 +459,7 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
+        self.upstream_stages = upstream_stages
         self.update_only = update_only
         self.repodata_v3 = repodata_v3
 
@@ -464,13 +469,14 @@ class ChannelIndex:
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def cache_for_subdir(self, subdir):
+    def cache_for_subdir(self, subdir, stage: str | None = None):
+        stage = stage or self.upstream_stage
         cache = self.cache_class(
             channel_root=self.channel_root,
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
-            upstream_stage=self.upstream_stage,
+            upstream_stage=stage,
             update_only=self.update_only,
             **self.cache_kwargs or {},
         )  # type: ignore
@@ -776,12 +782,12 @@ class ChannelIndex:
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
-
-        cache = self.cache_for_subdir(subdir)
-
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        indexed_packages = cache.indexed_packages()
+        indexed_packages = IndexedPackages(packages={}, packages_conda={}, packages_whl={})
+        for stage in self.upstream_stages:
+            cache = self.cache_for_subdir(subdir, stage=stage)
+            indexed_packages = indexed_packages.merge(cache.indexed_packages())
 
         new_repodata = {
             "packages": indexed_packages.packages,

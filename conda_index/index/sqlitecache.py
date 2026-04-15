@@ -25,6 +25,7 @@ from .cache import (
 )
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
+from ..utils import LOCAL_FILE_UPSTREAM_STAGE
 
 if TYPE_CHECKING:
     from .cache import ChangedPackage, HasChecksumsAndSize
@@ -80,7 +81,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
-        upstream_stage: str = "fs",
+        upstream_stage: str = LOCAL_FILE_UPSTREAM_STAGE,
         **kwargs,
     ):
         """
@@ -186,6 +187,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         """
         database_path = self.database_path(fn)
         with self.db:
+            # import pdb; pdb.set_trace()
             for have_path in members:
                 table = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
@@ -297,9 +299,9 @@ class CondaIndexCache(BaseCondaIndexCache):
 
     def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
         with self.db:
-            # always stage='fs', not custom upstream_stage which would be
-            # handled in a subclass
             if not self.update_only:
+                # always stage='fs', not custom upstream_stage which would be
+                # handled in a subclass
                 self.db.execute(
                     "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
                     {"path_like": self.database_path_like},
@@ -307,7 +309,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             self.db.executemany(
                 """
             INSERT INTO STAT (stage, path, mtime, size)
-            VALUES ('fs', :path, :mtime, :size)
+            VALUES (:stage, :path, :mtime, :size)
             ON CONFLICT (stage, path) DO UPDATE SET
             mtime=excluded.mtime, size=excluded.size
             """,

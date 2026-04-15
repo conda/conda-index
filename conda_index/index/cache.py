@@ -107,6 +107,16 @@ class IndexedPackages:
     packages_conda: dict[str, dict[str, Any]]
     packages_whl: dict[str, dict[str, Any]]
 
+    def merge(self, other: IndexedPackages) -> IndexedPackages:
+        """
+        Merge two IndexedPackages objects, with other taking precedence over self.
+        """
+        return IndexedPackages(
+            packages={**self.packages, **other.packages},
+            packages_conda={**self.packages_conda, **other.packages_conda},
+            packages_whl={**self.packages_whl, **other.packages_whl},
+        )
+
 
 @dataclass
 class IndexedShard(IndexedPackages):
