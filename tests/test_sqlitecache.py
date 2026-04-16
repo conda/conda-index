@@ -3,6 +3,7 @@ Test sqlitecache
 """
 
 import json
+import pickle
 import sqlite3
 import tarfile
 from io import BytesIO
@@ -44,6 +45,21 @@ def test_cache_extract_without_stat_result(index_data):
     )
 
 
+def test_pickle_helpers_drop_and_restore_db(tmp_path):
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(tmp_path, "noarch")
+
+    _ = cache.db
+    payload = pickle.dumps(cache)
+
+    state = cache.__getstate__()
+    assert "db" not in state
+
+    restored = pickle.loads(payload)
+    restored.__setstate__(state)
+    assert restored.__dict__ == state
+
+
 def test_store_tolerates_null_md5(tmp_path):
     """
     store() accepts index_json with None/null md5 (e.g. PyPI/wheel records).
@@ -72,6 +88,29 @@ def test_store_tolerates_null_md5(tmp_path):
     assert row["path"] == "pkg-1.0-py3_none.whl"
     assert row["sha256"] == "a" * 64
     assert row["md5"] is None
+
+
+def test_store_warns_when_member_data_missing(tmp_path, caplog):
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(tmp_path, "noarch")
+
+    cache.store(
+        "pkg-1.0-0.conda",
+        size=1234,
+        mtime=1000,
+        members={"info/about.json": None},
+        index_json={
+            "name": "pkg",
+            "version": "1.0",
+            "sha256": "a" * 64,
+            "md5": "b" * 32,
+            "size": 1234,
+        },
+    )
+
+    assert 'No "data" key for pkg-1.0-0.conda/about' in caplog.text
+    about_row = cache.db.execute("SELECT about FROM about").fetchone()
+    assert about_row is None
 
 
 def test_indexed_packages_excludes_run_exports(tmp_path):
@@ -106,6 +145,51 @@ def test_indexed_packages_excludes_run_exports(tmp_path):
 
     run_exports = list(cache.run_exports())
     assert run_exports == [("pkg-1.0-0.conda", {"weak": ["zlib"]})]
+
+
+def test_indexed_shards_warns_on_unsupported_extension(tmp_path, caplog):
+    """
+    A warning is given if the cache holds a package name that isn't accounted
+    for in the IndexedShard dataclass.
+    """
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(
+        tmp_path,
+        "noarch",
+        upstream_stage="indexed",
+    )
+
+    with cache.db:
+        cache.db.execute(
+            "INSERT INTO stat (stage, path, mtime, size) VALUES ('indexed', ?, ?, ?)",
+            ("pkg-1.0-0.unsupported", 1000, 1234),
+        )
+        cache.db.execute(
+            "INSERT INTO index_json (path, index_json) VALUES (?, json(?))",
+            (
+                "pkg-1.0-0.unsupported",
+                json.dumps(
+                    {
+                        "name": "pkg",
+                        "version": "1.0",
+                        "build": "0",
+                        "build_number": 0,
+                        "subdir": "noarch",
+                        "sha256": "a" * 64,
+                        "md5": "b" * 32,
+                        "size": 1234,
+                    }
+                ),
+            ),
+        )
+
+    shards = list(cache.indexed_shards())
+    assert len(shards) == 1
+    assert shards[0].name == "pkg"
+    assert shards[0].packages == {}
+    assert shards[0].packages_conda == {}
+    assert shards[0].packages_whl == {}
+    assert "pkg-1.0-0.unsupported has unsupported extension" in caplog.text
 
 
 def test_store_fs_state_update_only_true(tmp_path):
