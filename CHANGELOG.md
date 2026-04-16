@@ -1,5 +1,47 @@
 [//]: # (current developments)
 
+## 0.11.0 (2026-04-16)
+
+### Enhancements
+
+* Support CEP 21 "run_exports in shards" (#232)
+* Remove locking. `conda-index` will no longer try to prevent concurrent
+  `conda-index` processes from indexing the same channel. (#256)
+* Support experimental "repodata v3" (package data in `["v3"][<package format>]`
+  dict under the top level) to support conda-pypi wheel repodata generation. A new
+  `--repodata-next` command line flag places package data under `v3` key. (#262)
+
+### Bug fixes
+
+* Test `md5=None` in `index_json` when calling `cache.store()` (e.g. PyPI
+  metadata); add type hints to assist callers. (#269)
+
+### Deprecations
+
+* `BaseCondaIndexCache.indexed_packages()` returns dataclass instead of tuple. (#262)
+* Remove experimental `python -m conda_index.json2jlap` script to run after
+  indexing; sharded repodata is the new strategy for incremental repodata
+  transfer. (#273)
+* `cache.indexed_shards()` yields instances of a dataclass instead of (name, {})
+  tuple. (#280)
+
+### Other
+
+* Require `conda-package-streaming >=0.12.0` (#260)
+* Many type hints added, updated. (#262)
+* `BaseCondaIndexCache`'s list of valid package extensions can be overridden.
+  (#262)
+* Separate sharded, monolithic queries for PostgreSQL (#277)
+* Remove redundant extension check when fetching shards (#281)
+
+### Contributors
+
+* @danyeaw
+* @dholth
+* @ryanskeith
+
+
+
 ## 0.10.0 (2026-02-05)
 
 ### Enhancements
