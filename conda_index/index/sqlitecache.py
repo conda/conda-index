@@ -412,15 +412,12 @@ class CondaIndexCache(BaseCondaIndexCache):
             )
             for row in rows:
                 _, path, index_json, run_exports = row
-                if not path.endswith(self.package_extensions):
-                    log.warning("%s doesn't look like a conda package", path)
+                key = self.package_section_for_path(path)
+                if key is None:
+                    log.warning("%s has unsupported extension", path)
                     continue
                 record = json.loads(index_json)
                 record["run_exports"] = json.loads(run_exports or "{}")
-                key = self.package_section_for_path(path)
-                if key is None:
-                    log.warning("%s has unsupported package extension", path)
-                    continue
                 shard_dict[key][path] = pack_record(record)
 
             if not desired or name in desired:
