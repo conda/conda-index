@@ -25,7 +25,7 @@ from .cache import (
 )
 from .cache import clear_newline_chars as _clear_newline_chars
 from .fs import MinimalFS
-from ..utils import LOCAL_FILE_UPSTREAM_STAGE
+from ..utils import UpstreamStages
 
 if TYPE_CHECKING:
     from .cache import ChangedPackage, HasChecksumsAndSize
@@ -81,7 +81,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
-        upstream_stage: str = LOCAL_FILE_UPSTREAM_STAGE,
+        upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
         **kwargs,
     ):
         """
@@ -187,7 +187,6 @@ class CondaIndexCache(BaseCondaIndexCache):
         """
         database_path = self.database_path(fn)
         with self.db:
-            # import pdb; pdb.set_trace()
             for have_path in members:
                 table = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":

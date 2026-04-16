@@ -31,8 +31,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    LOCAL_FILE_UPSTREAM_STAGE,
-    METADATA_UPSTREAM_STAGE
+    UpstreamStages,
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
@@ -423,7 +422,6 @@ class ChannelIndex:
         save_fs_state=True,
         write_current_repodata=True,
         upstream_stage: str = "fs",
-        upstream_stages: Iterable[str] = [LOCAL_FILE_UPSTREAM_STAGE],
         cache_kwargs=None,
         update_only=False,
         repodata_v3=False,
@@ -459,7 +457,6 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
-        self.upstream_stages = upstream_stages
         self.update_only = update_only
         self.repodata_v3 = repodata_v3
 
@@ -520,6 +517,9 @@ class ChannelIndex:
             def extract_wrapper(args: tuple):
                 # runs in thread
                 subdir, verbose, progress, subdir_path = args
+                # Don't need to loop through all the upstream stages here.
+                # Just the "fs" stage has metadata that needs to be unpacked
+                # by reading local files.
                 cache = self.cache_for_subdir(subdir)
                 # exactly these packages (unless they are un-indexable) will
                 # be in the output repodata
@@ -785,8 +785,8 @@ class ChannelIndex:
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
         indexed_packages = IndexedPackages(packages={}, packages_conda={}, packages_whl={})
-        for stage in self.upstream_stages:
-            cache = self.cache_for_subdir(subdir, stage=stage)
+        for stage in UpstreamStages:
+            cache = self.cache_for_subdir(subdir, stage=stage.value)
             indexed_packages = indexed_packages.merge(cache.indexed_packages())
 
         new_repodata = {
