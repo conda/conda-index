@@ -1,3 +1,4 @@
+from enum import Enum
 import filecmp
 import hashlib
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -42,8 +43,13 @@ CONDA_PACKAGE_EXTENSION_V1 = ".tar.bz2"
 CONDA_PACKAGE_EXTENSIONS = (CONDA_PACKAGE_EXTENSION_V2, CONDA_PACKAGE_EXTENSION_V1)
 
 
-METADATA_UPSTREAM_STAGE = "md"
-LOCAL_FILE_UPSTREAM_STAGE = "fs"
+class UpstreamStages(Enum):
+    # Metadata only stage - does not have local files associated with it
+    METADATA_UPSTREAM_STAGE = "md"
+
+    # The artifact is now available in the set of packages (assumed by default to be the local filesystem).
+    LOCAL_FILE_UPSTREAM_STAGE = "fs"
+
 
 # multithreaded checksums
 

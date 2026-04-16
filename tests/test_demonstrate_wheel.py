@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from conda_index.index import ChannelIndex
-from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, METADATA_UPSTREAM_STAGE, LOCAL_FILE_UPSTREAM_STAGE
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, UpstreamStages
 
 HERE = Path(__file__).parent
 
@@ -21,11 +21,10 @@ def test_demonstrate_wheel(tmp_path: Path):
         repodata_v3=True,
         # update_only=True,
         # save_fs_state=False,
-        upstream_stages=[METADATA_UPSTREAM_STAGE, LOCAL_FILE_UPSTREAM_STAGE],
         write_current_repodata=False,
         cache_kwargs={"package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",)},
     )
-    cache = channel_index.cache_for_subdir("noarch", stage=METADATA_UPSTREAM_STAGE)
+    cache = channel_index.cache_for_subdir("noarch", stage=UpstreamStages.METADATA_UPSTREAM_STAGE.value)
 
     input = json.loads((HERE / "demonstrate_wheel.json").read_text())
     wheels = {
@@ -43,7 +42,7 @@ def test_demonstrate_wheel(tmp_path: Path):
         for path, repodata in wheels.items():
             yield {
                 "path": cache.database_path(path),
-                "stage": METADATA_UPSTREAM_STAGE,
+                "stage": UpstreamStages.METADATA_UPSTREAM_STAGE.value,
                 "size": repodata["size"],
                 "mtime": repodata.get(
                     "timestamp", 1

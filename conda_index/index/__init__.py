@@ -31,8 +31,7 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    LOCAL_FILE_UPSTREAM_STAGE,
-    METADATA_UPSTREAM_STAGE
+    UpstreamStages,
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
@@ -423,7 +422,6 @@ class ChannelIndex:
         save_fs_state=True,
         write_current_repodata=True,
         upstream_stage: str = "fs",
-        upstream_stages: Iterable[str] = [LOCAL_FILE_UPSTREAM_STAGE],
         cache_kwargs=None,
         update_only=False,
         repodata_v3=False,
@@ -459,7 +457,6 @@ class ChannelIndex:
         self.save_fs_state = save_fs_state
         self.write_current_repodata = write_current_repodata
         self.upstream_stage = upstream_stage
-        self.upstream_stages = upstream_stages
         self.update_only = update_only
         self.repodata_v3 = repodata_v3
 
