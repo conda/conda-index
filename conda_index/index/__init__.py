@@ -850,7 +850,7 @@ class ChannelIndex:
                 else:
                     key = self._v3_key_for_path(filename)
                     if key is None:
-                        log.warning("%s has unsupported package extension", filename)
+                        log.warning("%s has unsupported extension", filename)
                         continue
 
                 v3[section][key] = record
