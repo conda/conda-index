@@ -368,7 +368,7 @@ class CondaIndexCache(BaseCondaIndexCache):
 
             section = self.package_section_for_path(path)
             if section is None:
-                log.warning("%s has unsupported package extension", path)
+                log.warning("%s has unsupported extension", path)
                 continue
             new_packages[section][path] = index_json
 

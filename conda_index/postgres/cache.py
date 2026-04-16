@@ -315,7 +315,7 @@ class PsqlCache(BaseCondaIndexCache):
 
                     key = self.package_section_for_path(path)
                     if key is None:
-                        log.warning("%s has unsupported package extension", path)
+                        log.warning("%s has unsupported extension", path)
                         continue
                     # This will be passed to the patch function, which we hope
                     # does not look for hex hash values.
@@ -374,7 +374,7 @@ class PsqlCache(BaseCondaIndexCache):
                 path = self.plain_path(path)
                 key = self.package_section_for_path(path)
                 if key is None:
-                    log.warning("%s has unsupported package extension", path)
+                    log.warning("%s has unsupported extension", path)
                     continue
                 shard_dict[key][path] = index_json
 
