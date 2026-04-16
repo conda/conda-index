@@ -298,12 +298,20 @@ class CondaIndexCache(BaseCondaIndexCache):
         return data
 
     def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
+        # Add default stage to records that don't have it
+        records_with_stage = (
+            {**record, "stage": record.get("stage", self.upstream_stage)}
+            for record in listdir_stat
+        )
+
+        # Inject the upstream stage into the stat records if not already present.
         with self.db:
             if not self.update_only:
                 self.db.execute(
                     "DELETE FROM stat WHERE stage=:upstream_stage AND path like :path_like",
                     {"path_like": self.database_path_like, "upstream_stage": self.upstream_stage},
                 )
+
             self.db.executemany(
                 """
             INSERT INTO STAT (stage, path, mtime, size)
@@ -311,7 +319,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             ON CONFLICT (stage, path) DO UPDATE SET
             mtime=excluded.mtime, size=excluded.size
             """,
-                listdir_stat,
+                records_with_stage,
             )
 
     def changed_packages(self) -> list[ChangedPackage]:
