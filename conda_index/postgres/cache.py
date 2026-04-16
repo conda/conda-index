@@ -279,7 +279,7 @@ class PsqlCache(BaseCondaIndexCache):
                 for row in connection.execute(query)
             ]  # type: ignore
 
-    def indexed_shards_2(
+    def indexed_shards(
         self, desired: set[str] | None = None, *, pack_record=pack_record
     ) -> Iterator[IndexedShard]:
         """

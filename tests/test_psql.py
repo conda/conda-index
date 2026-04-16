@@ -318,12 +318,11 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     ]
     shards = list(cache.indexed_shards())
     assert len(shards) == 1
-    shards0 = shards[0]
-    name, data = shards0
-    assert name == "package"
-    assert len(data["packages"]) == 1
-    assert len(data["packages.conda"]) == 1
-    assert data["packages.conda"]["package-1.0.conda"]["run_exports"] == {
+    shard = shards[0]
+    assert shard.name == "package"
+    assert len(shard.packages) == 1
+    assert len(shard.packages_conda) == 1
+    assert shard.packages_conda["package-1.0.conda"]["run_exports"] == {
         "weak": ["zlib"]
     }
 
@@ -354,7 +353,7 @@ def test_psql_include_wheel_extension(tmp_path: Path):
         DummyResult("package", "package.whl", {}, {}),
         DummyResult("package", "package.conda", {}, {}),
     ]
-    shards = list(cache.indexed_shards_2())
+    shards = list(cache.indexed_shards())
     assert len(shards) == 1
     assert len(shards[0].packages_whl) == 1
     assert len(shards[0].packages_conda) == 1
@@ -363,7 +362,7 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     assert indexed_packages.packages == {}
     assert len(indexed_packages.packages_conda) == 1
 
-    shards_2 = list(cache.indexed_shards_2())
+    shards_2 = list(cache.indexed_shards())
     assert len(shards_2) == 1
     assert len(shards_2[0].packages_whl) == 1
     assert len(shards_2[0].packages_conda) == 1

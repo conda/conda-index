@@ -95,7 +95,7 @@ def test_indexed_packages_excludes_run_exports(tmp_path):
         },
     )
 
-    shards = list(cache.indexed_shards_2())
+    shards = list(cache.indexed_shards())
     assert len(shards) == 1
     assert shards[0].packages_conda["pkg-1.0-0.conda"]["run_exports"] == {
         "weak": ["zlib"]

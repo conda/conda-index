@@ -378,7 +378,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             packages_whl=new_packages["packages.whl"],
         )
 
-    def indexed_shards_2(
+    def indexed_shards(
         self, desired: set[str] | None = None, *, pack_record=pack_record
     ) -> Iterator[IndexedShard]:
         """

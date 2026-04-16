@@ -750,7 +750,7 @@ class ChannelIndex:
             "whl": {},
         }
 
-        for shard in cache.indexed_shards_2():
+        for shard in cache.indexed_shards():
             repodata_shard = self._indexed_shard_to_repodata(shard)
             shard_bytes = compressor.compress(sqlitecache.packb_typed(repodata_shard))
             shard_hash = hashlib.sha256(shard_bytes).digest()

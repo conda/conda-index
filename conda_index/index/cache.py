@@ -444,27 +444,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         Return all data for "monolithic repodata.json" query.
         """
 
-    def indexed_shards(
-        self,
-        desired: set[str] | None = None,
-        *,
-        pack_record=pack_record,
-    ) -> Iterator[tuple[str, ShardDict]]:
-        """
-        Yield (package name, all packages with that name as dict) from database
-        ordered by name, path i.o.w. filename.
-
-        :desired: If not None, set of desired package names.
-        """
-        for shard in self.indexed_shards_2(desired, pack_record=pack_record):
-            shard_data: ShardDict = {
-                "packages": shard.packages,
-                "packages.conda": shard.packages_conda,
-            }
-            yield (shard.name, shard_data)
-
     @abc.abstractmethod
-    def indexed_shards_2(
+    def indexed_shards(
         self,
         desired: set[str] | None = None,
         *,
