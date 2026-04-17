@@ -24,7 +24,7 @@ def test_demonstrate_wheel(tmp_path: Path):
         write_current_repodata=False,
         cache_kwargs={"package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",)},
     )
-    cache = channel_index.cache_for_subdir("noarch", stage=UpstreamStages.METADATA_UPSTREAM_STAGE.value)
+    cache = channel_index.cache_for_subdir("noarch")
 
     input = json.loads((HERE / "demonstrate_wheel.json").read_text())
     wheels = {
@@ -42,14 +42,13 @@ def test_demonstrate_wheel(tmp_path: Path):
         for path, repodata in wheels.items():
             yield {
                 "path": cache.database_path(path),
-                "stage": UpstreamStages.METADATA_UPSTREAM_STAGE.value,
                 "size": repodata["size"],
                 "mtime": repodata.get(
                     "timestamp", 1
                 ),  # timestamp missing from generate.py wheel repodata
             }
 
-    cache.store_fs_state(listdir_like())
+    cache.store_fs_state(listdir_like(), UpstreamStages.METADATA_UPSTREAM_STAGE.value)
 
     # Has to be in stat JOIN index_json to appear in repodat
     for path, repodata in wheels.items():
