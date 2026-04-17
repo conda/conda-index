@@ -466,14 +466,13 @@ class ChannelIndex:
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def cache_for_subdir(self, subdir, stage: str | None = None):
-        stage = stage or self.upstream_stage
+    def cache_for_subdir(self, subdir):
         cache = self.cache_class(
             channel_root=self.channel_root,
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
-            upstream_stage=stage,
+            upstream_stage=self.upstream_stage,
             update_only=self.update_only,
             **self.cache_kwargs or {},
         )  # type: ignore
