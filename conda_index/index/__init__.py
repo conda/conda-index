@@ -466,14 +466,13 @@ class ChannelIndex:
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def cache_for_subdir(self, subdir, stage: str | None = None):
-        stage = stage or self.upstream_stage
+    def cache_for_subdir(self, subdir):
         cache = self.cache_class(
             channel_root=self.channel_root,
             subdir=subdir,
             fs=self.fs,
             channel_url=self.channel_url,
-            upstream_stage=stage,
+            upstream_stage=self.upstream_stage,
             update_only=self.update_only,
             **self.cache_kwargs or {},
         )  # type: ignore
@@ -517,9 +516,6 @@ class ChannelIndex:
             def extract_wrapper(args: tuple):
                 # runs in thread
                 subdir, verbose, progress, subdir_path = args
-                # Don't need to loop through all the upstream stages here.
-                # Just the "fs" stage has metadata that needs to be unpacked
-                # by reading local files.
                 cache = self.cache_for_subdir(subdir)
                 # exactly these packages (unless they are un-indexable) will
                 # be in the output repodata
@@ -784,10 +780,8 @@ class ChannelIndex:
         """
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        indexed_packages = IndexedPackages(packages={}, packages_conda={}, packages_whl={})
-        for stage in UpstreamStages:
-            cache = self.cache_for_subdir(subdir, stage=stage.value)
-            indexed_packages = indexed_packages.merge(cache.indexed_packages())
+        cache = self.cache_for_subdir(subdir)
+        indexed_packages = cache.indexed_packages()
 
         new_repodata = {
             "packages": indexed_packages.packages,
