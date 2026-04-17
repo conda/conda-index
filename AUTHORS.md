@@ -4,6 +4,7 @@ Authors are sorted alphabetically.
 * Andrew Vallette
 * Carl Anderson
 * Conda Bot
+* Dan Yeaw
 * Daniel Holth
 * Jannis Leidel
 * Jay Roebuck
