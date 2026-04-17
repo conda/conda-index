@@ -18,7 +18,7 @@ from zipfile import BadZipFile
 from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
+from ..utils import CONDA_PACKAGE_EXTENSIONS, UpstreamStages, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
@@ -136,7 +136,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
-        upstream_stage: str = "fs",
+        upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
+        available_upstream_stages: list[str] =  [stg.value for stg in UpstreamStages],
         package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
@@ -145,7 +146,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         subdir: platform subdir, e.g. 'linux-64'
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
-        upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
+        upstream_stage: default stage from 'stat' table used to track available packages. Default is 'fs'.
+        available_upstream_stages: list of stages to track
         update_only: skip "delete from stat where stage='fs'" operation.
         """
 
@@ -154,6 +156,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.available_upstream_stages = available_upstream_stages
         self.package_extensions = package_extensions
         self.update_only = update_only
 
