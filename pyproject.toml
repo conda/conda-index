@@ -19,7 +19,6 @@ dependencies = [
     # Disabled due to conda not being available on PyPI
     # "conda",
     "conda-package-streaming >=0.12.0",
-    "filelock",
     "jinja2",
     "msgpack",
     "ruamel.yaml",
