@@ -10,7 +10,7 @@ from sqlalchemy import TEXT, Column, Computed, Integer, LargeBinary, Table, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
-from ..utils import INDEXED_STAGE
+from .cache import INDEXED_STAGE
 
 TABLE_NAMES = {
     "about",

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from ..index.cache import HasChecksumsAndSize
 
 from . import model
-from ..utils import INDEXED_STAGE
+from .cache import INDEXED_STAGE
 
 log = logging.getLogger(__name__)
 
@@ -263,7 +263,9 @@ class PsqlCache(BaseCondaIndexCache):
                     isouter=True,
                 )
             )
-            .where(stat_upstream.c.path.startswith(self.database_prefix, autoescape=True))
+            .where(
+                stat_upstream.c.path.startswith(self.database_prefix, autoescape=True)
+            )
             .where(
                 or_(
                     stat_upstream.c.mtime != stat_indexed.c.mtime,

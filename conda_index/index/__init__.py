@@ -31,7 +31,6 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
     CONDA_PACKAGE_EXTENSION_V2,
     CONDA_PACKAGE_EXTENSIONS,
-    UpstreamStages,
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS

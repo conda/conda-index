@@ -22,7 +22,8 @@ from conda_index.index.convert_cache import (
     migrate,
 )
 from conda_index.index.sqlitecache import CondaIndexCache, _clear_newline_chars
-from conda_index.utils import DEFAULT_SUBDIRS, INDEXED_STAGE
+from conda_index.utils import DEFAULT_SUBDIRS
+from conda_index.index.cache import INDEXED_STAGE
 
 
 def test_cache_extract_without_stat_result(index_data):

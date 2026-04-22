@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
@@ -18,13 +19,11 @@ from zipfile import BadZipFile
 from conda_package_streaming import package_streaming
 
 from .. import yaml
-from ..utils import CONDA_PACKAGE_EXTENSIONS, UpstreamStages, _checksum
+from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
     from typing import IO, Any, Iterator
-
-    from conda_index.index import ShardDict
 
     from .fs import FileInfo
 
@@ -69,6 +68,17 @@ TABLE_NO_CACHE = {
 
 # saved to cache, not found in package
 COMPUTED = {"info/post_install.json"}
+
+
+class UpstreamStages(Enum):
+    # Metadata only stage - does not have local files associated with it
+    METADATA_UPSTREAM_STAGE = "md"
+
+    # The artifact is now available in the set of packages (assumed by default to be the local filesystem).
+    LOCAL_FILE_UPSTREAM_STAGE = "fs"
+
+
+INDEXED_STAGE = "indexed"
 
 
 # lock-free replacement for @cached_property
@@ -137,7 +147,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
-        available_upstream_stages: list[str] =  [stg.value for stg in UpstreamStages],
+        available_upstream_stages: list[str] = [stg.value for stg in UpstreamStages],
         package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):

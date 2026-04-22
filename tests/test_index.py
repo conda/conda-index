@@ -20,7 +20,7 @@ from conda.base.context import context
 import conda_index.api
 import conda_index.index
 from conda_index.utils_build import copy_into_nolock as copy_into
-from conda_index.utils import INDEXED_STAGE
+from conda_index.index.cache import INDEXED_STAGE
 
 from .utils import archive_dir
 

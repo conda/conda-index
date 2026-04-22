@@ -16,7 +16,7 @@ import sqlite3
 from itertools import chain, islice
 
 from . import common
-from ..utils import INDEXED_STAGE
+from .cache import INDEXED_STAGE
 
 log = logging.getLogger(__name__)
 
