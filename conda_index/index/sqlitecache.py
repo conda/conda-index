@@ -24,8 +24,8 @@ from .cache import (
     pack_record,
 )
 from .cache import clear_newline_chars as _clear_newline_chars
+from .cache import UpstreamStages, INDEXED_STAGE
 from .fs import MinimalFS
-from ..utils import UpstreamStages, INDEXED_STAGE
 
 if TYPE_CHECKING:
     from .cache import ChangedPackage, HasChecksumsAndSize
@@ -82,7 +82,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
-        available_upstream_stages: list[str] =  [stg.value for stg in UpstreamStages],
+        available_upstream_stages: list[str] = [stg.value for stg in UpstreamStages],
         **kwargs,
     ):
         """
@@ -234,7 +234,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         try:
             # recent stat information must exist here...
             mtime = self.db.execute(
-                 "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
+                "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
                 {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
             ).fetchone()[0]
         except TypeError:  # .fetchone() was None
@@ -300,7 +300,9 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return data
 
-    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]], upstream_stage: str | None = None):
+    def store_fs_state(
+        self, listdir_stat: Iterable[dict[str, Any]], upstream_stage: str | None = None
+    ):
         upstream_stage = upstream_stage or self.upstream_stage
         # Add default stage to records that don't have it
         records_with_stage = (
@@ -313,7 +315,10 @@ class CondaIndexCache(BaseCondaIndexCache):
             if not self.update_only:
                 self.db.execute(
                     "DELETE FROM stat WHERE stage=:upstream_stage AND path like :path_like",
-                    {"path_like": self.database_path_like, "upstream_stage": self.upstream_stage},
+                    {
+                        "path_like": self.database_path_like,
+                        "upstream_stage": self.upstream_stage,
+                    },
                 )
 
             self.db.executemany(
@@ -326,14 +331,16 @@ class CondaIndexCache(BaseCondaIndexCache):
                 records_with_stage,
             )
 
-    def changed_packages(self, upstream_stages: list[str] | None = None) -> list[ChangedPackage]:
+    def changed_packages(
+        self, upstream_stages: list[str] | None = None
+    ) -> list[ChangedPackage]:
         """
         Compare upstream to 'indexed' state.
 
         Return packages in upstream that are changed or missing compared to 'indexed'.
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
-        stages_placeholders = ','.join(['?' for _ in upstream_stages])
+        stages_placeholders = ",".join(["?" for _ in upstream_stages])
         query = self.db.execute(
             f"""
             WITH
@@ -355,14 +362,16 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return query
 
-    def indexed_packages(self, upstream_stages: list[str] | None = None) -> IndexedPackages:
+    def indexed_packages(
+        self, upstream_stages: list[str] | None = None
+    ) -> IndexedPackages:
         """
         Return package sections from the cache.
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
         upstream_stages.append(self.upstream_stage)
-        stages_placeholders = ','.join(['?' for _ in upstream_stages])
-        
+        stages_placeholders = ",".join(["?" for _ in upstream_stages])
+
         new_packages = {
             "packages": {},
             "packages.conda": {},
@@ -394,7 +403,11 @@ class CondaIndexCache(BaseCondaIndexCache):
         )
 
     def indexed_shards(
-        self, desired: set[str] | None = None, *, pack_record=pack_record, upstream_stages: list[str] | None = None
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
+        upstream_stages: list[str] | None = None,
     ) -> Iterator[IndexedShard]:
         """
         Yield package shards as IndexedShard records.
@@ -403,8 +416,8 @@ class CondaIndexCache(BaseCondaIndexCache):
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
         upstream_stages.append(self.upstream_stage)
-        stages_placeholders = ','.join(['?' for _ in upstream_stages])
-        
+        stages_placeholders = ",".join(["?" for _ in upstream_stages])
+
         for name, rows in itertools.groupby(
             self.db.execute(
                 f"""SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
@@ -450,14 +463,16 @@ class CondaIndexCache(BaseCondaIndexCache):
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 
-    def run_exports(self, upstream_stages: list[str] | None = None) -> Iterator[tuple[str, dict]]:
+    def run_exports(
+        self, upstream_stages: list[str] | None = None
+    ) -> Iterator[tuple[str, dict]]:
         """
         Query returning run_exports data, to be formatted by
         ChannelIndex.build_run_exports_data()
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
         upstream_stages.append(self.upstream_stage)
-        stages_placeholders = ','.join(['?' for _ in upstream_stages])
+        stages_placeholders = ",".join(["?" for _ in upstream_stages])
         for path, run_exports in self.db.execute(
             f"""
             SELECT path, run_exports FROM stat
