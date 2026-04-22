@@ -20,6 +20,7 @@ from conda.base.context import context
 import conda_index.api
 import conda_index.index
 from conda_index.utils_build import copy_into_nolock as copy_into
+from conda_index.utils import INDEXED_STAGE
 
 from .utils import archive_dir
 
@@ -1251,7 +1252,7 @@ def test_track_features(index_data):
             f"""INSERT INTO index_json VALUES('{features_pkg}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{features_pkg_name}","noarch":"generic","subdir":"noarch","timestamp":1561127261940,"version":"1.0","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683,"track_features":["jim"],"features":["jim"]}}');"""
         )
         conn.execute(
-            f"""INSERT INTO stat VALUES('indexed','{features_pkg}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+            f"""INSERT INTO stat VALUES('{INDEXED_STAGE}','{features_pkg}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
         )
         conn.execute(
             f"""INSERT INTO stat VALUES('fs','{features_pkg}',1652905054,2683,NULL,NULL,NULL,NULL);"""
@@ -1261,7 +1262,7 @@ def test_track_features(index_data):
             f"""INSERT INTO index_json VALUES('{features_pkg_2}','{{"build":"h39de5ba_0","build_number":0,"depends":[],"name":"{features_pkg_name}","noarch":"generic","subdir":"noarch","timestamp":1561127261940,"version":"0.9","md5":"ba68433ef44982170d4e2f2f9bf89338","sha256":"33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76","size":2683}}');"""
         )
         conn.execute(
-            f"""INSERT INTO stat VALUES('indexed','{features_pkg_2}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
+            f"""INSERT INTO stat VALUES('{INDEXED_STAGE}','{features_pkg_2}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
         )
         conn.execute(
             f"""INSERT INTO stat VALUES('fs','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""

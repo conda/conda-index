@@ -50,6 +50,7 @@ class UpstreamStages(Enum):
     # The artifact is now available in the set of packages (assumed by default to be the local filesystem).
     LOCAL_FILE_UPSTREAM_STAGE = "fs"
 
+INDEXED_STAGE = "indexed"
 
 # multithreaded checksums
 
