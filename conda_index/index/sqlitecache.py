@@ -228,14 +228,14 @@ class CondaIndexCache(BaseCondaIndexCache):
             )  # we don't need this return value; it will be queried back out to generate repodata
 
     def load_all_from_cache(self, fn):
+        """Load all items for the chosen stage."""
         subdir_path = self.subdir_path
 
         try:
             # recent stat information must exist here...
-            stages_placeholders = ','.join(['?' for _ in self.available_upstream_stages])
             mtime = self.db.execute(
-                f"SELECT mtime FROM stat WHERE stage IN ({stages_placeholders}) AND path=?",
-                [*self.available_upstream_stages, self.database_path(fn)],
+                 "SELECT mtime FROM stat WHERE stage=:upstream_stage AND path=:path",
+                {"upstream_stage": self.upstream_stage, "path": self.database_path(fn)},
             ).fetchone()[0]
         except TypeError:  # .fetchone() was None
             log.warning("%s mtime not found in cache", fn)
@@ -360,6 +360,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         Return package sections from the cache.
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
+        upstream_stages.append(self.upstream_stage)
         stages_placeholders = ','.join(['?' for _ in upstream_stages])
         
         new_packages = {
@@ -401,7 +402,9 @@ class CondaIndexCache(BaseCondaIndexCache):
         :desired: If not None, set of desired package names.
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
+        upstream_stages.append(self.upstream_stage)
         stages_placeholders = ','.join(['?' for _ in upstream_stages])
+        
         for name, rows in itertools.groupby(
             self.db.execute(
                 f"""SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
@@ -453,6 +456,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         ChannelIndex.build_run_exports_data()
         """
         upstream_stages = upstream_stages or self.available_upstream_stages
+        upstream_stages.append(self.upstream_stage)
         stages_placeholders = ','.join(['?' for _ in upstream_stages])
         for path, run_exports in self.db.execute(
             f"""
