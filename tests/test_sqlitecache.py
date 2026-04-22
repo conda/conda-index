@@ -23,6 +23,7 @@ from conda_index.index.convert_cache import (
 )
 from conda_index.index.sqlitecache import CondaIndexCache, _clear_newline_chars
 from conda_index.utils import DEFAULT_SUBDIRS
+from conda_index.index.cache import INDEXED_STAGE
 
 
 def test_cache_extract_without_stat_result(index_data):
@@ -83,7 +84,7 @@ def test_store_tolerates_null_md5(tmp_path):
     )
 
     row = cache.db.execute(
-        "SELECT path, sha256, md5 FROM stat WHERE stage='indexed'"
+        f"SELECT path, sha256, md5 FROM stat WHERE stage='{INDEXED_STAGE}'"
     ).fetchone()
     assert row["path"] == "pkg-1.0-py3_none.whl"
     assert row["sha256"] == "a" * 64
@@ -115,7 +116,7 @@ def test_store_warns_when_member_data_missing(tmp_path, caplog):
 
 def test_indexed_packages_excludes_run_exports(tmp_path):
     (tmp_path / "noarch").mkdir()
-    cache = CondaIndexCache(tmp_path, "noarch", upstream_stage="indexed")
+    cache = CondaIndexCache(tmp_path, "noarch", upstream_stage=INDEXED_STAGE)
 
     cache.store(
         "pkg-1.0-0.conda",
@@ -156,12 +157,12 @@ def test_indexed_shards_warns_on_unsupported_extension(tmp_path, caplog):
     cache = CondaIndexCache(
         tmp_path,
         "noarch",
-        upstream_stage="indexed",
+        upstream_stage=INDEXED_STAGE,
     )
 
     with cache.db:
         cache.db.execute(
-            "INSERT INTO stat (stage, path, mtime, size) VALUES ('indexed', ?, ?, ?)",
+            f"INSERT INTO stat (stage, path, mtime, size) VALUES ('{INDEXED_STAGE}', ?, ?, ?)",
             ("pkg-1.0-0.unsupported", 1000, 1234),
         )
         cache.db.execute(

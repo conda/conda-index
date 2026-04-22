@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from ..index.cache import HasChecksumsAndSize
 
 from . import model
+from .cache import INDEXED_STAGE
 
 log = logging.getLogger(__name__)
 
@@ -131,12 +132,12 @@ class PsqlCache(BaseCondaIndexCache):
             if not self.update_only:
                 connection.execute(
                     stat.delete().where(
-                        stat.c.stage == "fs",
+                        stat.c.stage == self.upstream_stage,
                         stat.c.path.startswith(self.database_prefix, autoescape=True),
                     )
                 )
 
-            items = [{**item, "stage": "fs"} for item in listdir_stat]
+            items = [{**item, "stage": self.upstream_stage} for item in listdir_stat]
             if items:
                 insert_statement = insert(stat)
                 connection.execute(
@@ -215,7 +216,7 @@ class PsqlCache(BaseCondaIndexCache):
             stat_table = model.Base.metadata.tables["stat"]
             values = {
                 "path": database_path,
-                "stage": "indexed",
+                "stage": INDEXED_STAGE,
                 "mtime": mtime,
                 "size": size,
                 "sha256": index_json["sha256"],
@@ -243,30 +244,32 @@ class PsqlCache(BaseCondaIndexCache):
         """
 
         stat_table = model.Stat.__table__
-        stat_fs = cte(
+        stat_upstream = cte(
             select(stat_table).where(stat_table.c.stage == self.upstream_stage),
-            "stat_fs",
+            "stat_upstream",
         )
         stat_indexed = cte(
-            select(stat_table).where(stat_table.c.stage == "indexed"),
+            select(stat_table).where(stat_table.c.stage == INDEXED_STAGE),
             "stat_indexed",
         )
 
         query = (
-            select(stat_fs)
+            select(stat_upstream)
             .select_from(
                 join(
-                    stat_fs,
+                    stat_upstream,
                     stat_indexed,
-                    stat_fs.c.path == stat_indexed.c.path,
+                    stat_upstream.c.path == stat_indexed.c.path,
                     isouter=True,
                 )
             )
-            .where(stat_fs.c.path.startswith(self.database_prefix, autoescape=True))
+            .where(
+                stat_upstream.c.path.startswith(self.database_prefix, autoescape=True)
+            )
             .where(
                 or_(
-                    stat_fs.c.mtime != stat_indexed.c.mtime,
-                    stat_fs.c.size != stat_indexed.c.size,
+                    stat_upstream.c.mtime != stat_indexed.c.mtime,
+                    stat_upstream.c.size != stat_indexed.c.size,
                     stat_indexed.c.path == None,  # noqa: E711
                 )
             )

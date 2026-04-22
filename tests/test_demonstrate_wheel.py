@@ -7,6 +7,7 @@ from pathlib import Path
 
 from conda_index.index import ChannelIndex
 from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
+from conda_index.index.cache import UpstreamStages
 
 HERE = Path(__file__).parent
 
@@ -19,8 +20,8 @@ def test_demonstrate_wheel(tmp_path: Path):
         tmp_path,
         "haswheels",  # channel name if different than last segment of tmp_path
         repodata_v3=True,
-        update_only=True,
-        save_fs_state=False,
+        # update_only=True,
+        # save_fs_state=False,
         write_current_repodata=False,
         cache_kwargs={"package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",)},
     )
@@ -48,7 +49,7 @@ def test_demonstrate_wheel(tmp_path: Path):
                 ),  # timestamp missing from generate.py wheel repodata
             }
 
-    cache.store_fs_state(listdir_like())
+    cache.store_fs_state(listdir_like(), UpstreamStages.METADATA_UPSTREAM_STAGE.value)
 
     # Has to be in stat JOIN index_json to appear in repodat
     for path, repodata in wheels.items():
@@ -67,7 +68,6 @@ def test_demonstrate_wheel(tmp_path: Path):
 
     # packages from database
     packages = cache.indexed_packages()
-
     assert len(packages.packages_whl) == len(wheels)
 
     # repodata.json without repodata patches applied. Saved to

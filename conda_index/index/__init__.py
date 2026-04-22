@@ -34,6 +34,7 @@ from ..utils import (
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
+from .cache import IndexedPackages
 
 if TYPE_CHECKING:
     from typing import Any, NotRequired, TypedDict
@@ -776,11 +777,9 @@ class ChannelIndex:
 
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
-
-        cache = self.cache_for_subdir(subdir)
-
         log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
+        cache = self.cache_for_subdir(subdir)
         indexed_packages = cache.indexed_packages()
 
         new_repodata = {
