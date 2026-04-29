@@ -23,7 +23,6 @@ requirements:
     - hatch-vcs >=0.2.0
   run:
     - python >=3.10
-    - click >=8
     - conda >=25
     - conda-package-streaming
     - filelock

@@ -1,0 +1,19 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* Drop `click` dependency, use argparse. (#288)
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
