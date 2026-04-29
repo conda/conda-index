@@ -32,13 +32,11 @@ def _create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         help="Output repodata to given directory.",
-        default=None,
     )
 
     parser.add_argument(
         "--subdir",
         action="append",
-        default=None,
         help="Subdir to index. Accepts multiple.",
     )
 
@@ -46,7 +44,6 @@ def _create_parser() -> argparse.ArgumentParser:
         "-n",
         "--channel-name",
         help="Customize the channel name listed in each channel's index.html.",
-        default=None,
     )
 
     # Patch generator
@@ -55,7 +52,6 @@ def _create_parser() -> argparse.ArgumentParser:
         help="Path to Python file that outputs metadata patch instructions from its "
         "_patch_repodata function or a .tar.bz2/.conda file which contains a "
         "patch_instructions.json file for each subdir",
-        default=None,
     )
 
     # Boolean flags for channeldata and RSS
@@ -111,7 +107,6 @@ def _create_parser() -> argparse.ArgumentParser:
         "The current_index.json will contain the newest from this series of versions. "
         "For example: python: [3.8, 3.9] will keep python 3.8.X and 3.9.Y in the "
         "current_index.json, instead of only the very latest python version.",
-        default=None,
     )
 
     # Base URL
@@ -120,7 +115,6 @@ def _create_parser() -> argparse.ArgumentParser:
         help="If packages should be served separately from repodata.json, URL of the "
         "directory tree holding packages. Generates repodata.json with "
         "repodata_version=2 which is supported in conda 24.5.0 or later.",
-        default=None,
     )
 
     # Update cache and update only
