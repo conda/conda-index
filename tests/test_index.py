@@ -1505,3 +1505,59 @@ def test_index_format(tmp_path):
         "repodata_version": 1,
         "removed": [],
     }
+
+
+def test_update_index_closes_sqlite_connections(testing_workdir):
+    """
+    Regression test for https://github.com/conda/conda-index/issues/236.
+
+    ``update_index`` must explicitly close every sqlite3 connection it opens
+    via ``CondaIndexCache``. Previously the ``cache_for_subdir`` call sites in
+    ``ChannelIndex`` relied on Python's GC to finalize the connections, which
+    emits ``ResourceWarning: unclosed database`` on Python 3.13+ and can hold
+    on to file handles longer than expected.
+    """
+    from conda_index.index import sqlitecache
+
+    test_package_path = join(
+        testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    )
+    test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    download(test_package_url, test_package_path)
+
+    import sqlite3
+
+    class _TrackingConnection(sqlite3.Connection):
+        """Tracks whether ``close()`` was explicitly called."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.closed_explicitly = False
+
+        def close(self):
+            self.closed_explicitly = True
+            super().close()
+
+    opened: list[_TrackingConnection] = []
+    real_connect = sqlitecache.common.connect
+
+    def tracking_connect(dburi="cache.db"):
+        conn = sqlite3.connect(dburi, uri=True, factory=_TrackingConnection)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        opened.append(conn)
+        return conn
+
+    sqlitecache.common.connect = tracking_connect
+    try:
+        conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+    finally:
+        sqlitecache.common.connect = real_connect
+
+    assert opened, "update_index did not open any sqlite connections"
+
+    leaked = [c for c in opened if not c.closed_explicitly]
+    assert not leaked, (
+        f"update_index left {len(leaked)} of {len(opened)} sqlite connection(s) "
+        "without an explicit close() call"
+    )
