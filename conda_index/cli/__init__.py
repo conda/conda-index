@@ -61,78 +61,46 @@ def _create_parser() -> argparse.ArgumentParser:
     # Boolean flags for channeldata and RSS
     parser.add_argument(
         "--channeldata",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
     )
 
     parser.add_argument(
-        "--no-channeldata",
-        action="store_false",
-        dest="channeldata",
-    )
-
-    parser.add_argument(
         "--rss",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Write rss.xml (Only if --channeldata is enabled).",
-    )
-
-    parser.add_argument(
-        "--no-rss",
-        action="store_false",
-        dest="rss",
     )
 
     # Compression options
     parser.add_argument(
         "--bz2",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Write repodata.json.bz2.",
     )
 
     parser.add_argument(
-        "--no-bz2",
-        action="store_false",
-        dest="bz2",
-    )
-
-    parser.add_argument(
         "--zst",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Write repodata.json.zst.",
-    )
-
-    parser.add_argument(
-        "--no-zst",
-        action="store_false",
-        dest="zst",
     )
 
     # Run exports and compact
     parser.add_argument(
         "--run-exports",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Write run_exports.json. Conflicts with --no-write-monolithic.",
     )
 
     parser.add_argument(
-        "--no-run-exports",
-        action="store_false",
-        dest="run_exports",
-    )
-
-    parser.add_argument(
         "--compact",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Output JSON as one line, or pretty-printed.",
-    )
-
-    parser.add_argument(
-        "--no-compact",
-        action="store_false",
-        dest="compact",
     )
 
     # Current index versions file
@@ -158,7 +126,7 @@ def _create_parser() -> argparse.ArgumentParser:
     # Update cache and update only
     parser.add_argument(
         "--update-cache",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Control whether listdir() is called to refresh the set of available "
         "packages. Used to generate complete repodata.json from cache only when "
@@ -166,23 +134,12 @@ def _create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--no-update-cache",
-        action="store_false",
-        dest="update_cache",
-    )
-
-    parser.add_argument(
         "--update-only",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Control whether missing files are deleted from repodata.json. Used to "
         "add local files to repodata.json without having the complete set of "
         "packages on disk. (Experimental)",
-    )
-
-    parser.add_argument(
-        "--no-update-only",
-        action="store_false",
-        dest="update_only",
     )
 
     # Upstream stage
@@ -196,17 +153,11 @@ def _create_parser() -> argparse.ArgumentParser:
     # Current repodata
     parser.add_argument(
         "--current-repodata",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=False,
         help="Skip generating current_repodata.json, a file containing only the newest "
         "versions of all packages and their dependencies, only used by the "
         "classic solver. Conflicts with --no-write-monolithic.",
-    )
-
-    parser.add_argument(
-        "--no-current-repodata",
-        action="store_false",
-        dest="current_repodata",
     )
 
     # Threads and verbose
@@ -226,28 +177,17 @@ def _create_parser() -> argparse.ArgumentParser:
     # Write monolithic and write shards
     parser.add_argument(
         "--write-monolithic",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Write repodata.json with all package metadata in a single file.",
     )
 
     parser.add_argument(
-        "--no-write-monolithic",
-        action="store_false",
-        dest="write_monolithic",
-    )
-
-    parser.add_argument(
         "--write-shards",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Write a repodata.msgpack.zst index and many smaller files per CEP-16. "
         "(Experimental)",
-    )
-
-    parser.add_argument(
-        "--no-write-shards",
-        action="store_false",
-        dest="write_shards",
     )
 
     # Database options
@@ -268,29 +208,19 @@ def _create_parser() -> argparse.ArgumentParser:
     # HTML dependencies and repodata-next
     parser.add_argument(
         "--html-dependencies",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Include dependency popups in generated HTML index files. "
         "May significantly increase file size for large repositories like "
         "main or conda-forge.",
     )
 
     parser.add_argument(
-        "--no-html-dependencies",
-        action="store_false",
-        dest="html_dependencies",
-    )
-
-    parser.add_argument(
         "--repodata-next",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package "
         "records under a top-level v3 key.",
-    )
-
-    parser.add_argument(
-        "--no-repodata-next",
-        action="store_false",
-        dest="repodata_next",
     )
 
     return parser
