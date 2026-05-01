@@ -149,7 +149,6 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
-        available_upstream_stages: list[str] = [stg.value for stg in UpstreamStages],
         package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
@@ -159,7 +158,6 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
         upstream_stage: default stage from 'stat' table used to track available packages. Default is 'fs'.
-        available_upstream_stages: list of stages to track
         update_only: skip "delete from stat where stage='fs'" operation.
         """
 
@@ -168,7 +166,6 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
-        self.available_upstream_stages = available_upstream_stages
         self.package_extensions = package_extensions
         self.update_only = update_only
 
@@ -455,6 +452,13 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
     def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """
         Save set of packages to be indexed.
+        """
+
+    @abc.abstractmethod
+    def store_md_state(self, listdir_stat: Iterator[dict[str, Any]]):
+        """
+        Save package metadata to cache. Useful for metadata only packages, including non
+        local packages.
         """
 
     @abc.abstractmethod
