@@ -24,7 +24,7 @@ from .cache import (
     pack_record,
 )
 from .cache import clear_newline_chars as _clear_newline_chars
-from .cache import UpstreamStages, INDEXED_STAGE
+from .cache import UpstreamStages, IndexedStages
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
@@ -347,7 +347,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             fs AS
                 ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage IN ({stages_placeholders}) ),
             cached AS
-                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = '{INDEXED_STAGE}' )
+                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = '{IndexedStages.INDEXED_STAGE.value}' )
 
             SELECT fs.path, fs.mtime, fs.size, fs.sha256, fs.md5,
                 cached.mtime as cached_mtime, cached.size as cached_size, cached.sha256 as cached_sha256, cached.md5 as cached_md5
@@ -459,7 +459,7 @@ class CondaIndexCache(BaseCondaIndexCache):
     ):
         self.db.execute(
             f"""INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
-                VALUES ('{INDEXED_STAGE}', ?, ?, ?, ?, ?)""",
+                VALUES ('{IndexedStages.INDEXED_STAGE.value}', ?, ?, ?, ?, ?)""",
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 

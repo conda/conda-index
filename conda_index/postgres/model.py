@@ -10,7 +10,7 @@ from sqlalchemy import TEXT, Column, Computed, Integer, LargeBinary, Table, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
-from .cache import INDEXED_STAGE
+from .cache import IndexedStages
 
 TABLE_NAMES = {
     "about",
@@ -56,7 +56,7 @@ class Stat(Base):
     __table__: Table
     __tablename__ = "stat"
 
-    stage = mapped_column(TEXT, default=INDEXED_STAGE, nullable=False, primary_key=True)
+    stage = mapped_column(TEXT, default=IndexedStages.INDEXED_STAGE.value, nullable=False, primary_key=True)
     path = mapped_column(TEXT, nullable=False, primary_key=True)
     mtime = mapped_column(Integer)
     size = mapped_column(Integer)

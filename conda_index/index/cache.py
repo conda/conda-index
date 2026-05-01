@@ -71,14 +71,16 @@ COMPUTED = {"info/post_install.json"}
 
 
 class UpstreamStages(Enum):
-    # Metadata only stage - does not have local files associated with it
-    METADATA_UPSTREAM_STAGE = "md"
-
     # The artifact is now available in the set of packages (assumed by default to be the local filesystem).
     LOCAL_FILE_UPSTREAM_STAGE = "fs"
 
 
-INDEXED_STAGE = "indexed"
+class IndexedStages(Enum):
+    # The artifact has been indexed and is available in the "indexed" state.
+    INDEXED_STAGE = "indexed"
+
+    # Metadata only stage - does not have local files associated with it
+    METADATA_INDEXED_STAGE = "md"
 
 
 # lock-free replacement for @cached_property

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from ..index.cache import ChangedPackage, HasChecksumsAndSize
 
 from . import model
-from .cache import INDEXED_STAGE
+from .cache import IndexedStages
 
 log = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ class PsqlCache(BaseCondaIndexCache):
             stat_table = model.Base.metadata.tables["stat"]
             values = {
                 "path": database_path,
-                "stage": INDEXED_STAGE,
+                "stage": IndexedStages.INDEXED_STAGE.value,
                 "mtime": mtime,
                 "size": size,
                 "sha256": index_json["sha256"],
@@ -248,7 +248,7 @@ class PsqlCache(BaseCondaIndexCache):
             "stat_upstream",
         )
         stat_indexed = cte(
-            select(stat_table).where(stat_table.c.stage == INDEXED_STAGE),
+            select(stat_table).where(stat_table.c.stage == IndexedStages.INDEXED_STAGE.value),
             "stat_indexed",
         )
 

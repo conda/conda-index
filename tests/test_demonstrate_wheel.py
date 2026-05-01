@@ -7,7 +7,7 @@ from pathlib import Path
 
 from conda_index.index import ChannelIndex
 from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
-from conda_index.index.cache import UpstreamStages
+from conda_index.index.cache import IndexedStages
 
 HERE = Path(__file__).parent
 
@@ -49,7 +49,7 @@ def test_demonstrate_wheel(tmp_path: Path):
                 ),  # timestamp missing from generate.py wheel repodata
             }
 
-    cache.store_fs_state(listdir_like(), UpstreamStages.METADATA_UPSTREAM_STAGE.value)
+    cache.store_fs_state(listdir_like(), IndexedStages.METADATA_INDEXED_STAGE.value)
 
     # Has to be in stat JOIN index_json to appear in repodat
     for path, repodata in wheels.items():
