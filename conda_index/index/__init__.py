@@ -34,7 +34,6 @@ from ..utils import (
 )
 from . import rss, sqlitecache
 from .fs import FileInfo, MinimalFS
-from .cache import IndexedPackages
 
 if TYPE_CHECKING:
     from typing import Any, NotRequired, TypedDict

@@ -20,7 +20,7 @@ from conda.base.context import context
 import conda_index.api
 import conda_index.index
 from conda_index.utils_build import copy_into_nolock as copy_into
-from conda_index.index.cache import IndexedStages
+from conda_index.index.cache import IndexedStages, UpstreamStages
 
 from .utils import archive_dir, fake_download
 
@@ -1245,7 +1245,7 @@ def test_track_features(index_data):
             f"""INSERT INTO stat VALUES('{IndexedStages.INDEXED_STAGE.value}','{features_pkg}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
         )
         conn.execute(
-            f"""INSERT INTO stat VALUES('{IndexedStages.FS_STAGE.value}','{features_pkg}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+            f"""INSERT INTO stat VALUES('{UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value}','{features_pkg}',1652905054,2683,NULL,NULL,NULL,NULL);"""
         )
 
         conn.execute(
@@ -1255,7 +1255,7 @@ def test_track_features(index_data):
             f"""INSERT INTO stat VALUES('{IndexedStages.INDEXED_STAGE.value}','{features_pkg_2}',1652905054,2683,'33877cbe447e8c7a026fbcb7e299b37208ad4bc70cf8328fb4cf552af01ada76','ba68433ef44982170d4e2f2f9bf89338',NULL,NULL);"""
         )
         conn.execute(
-            f"""INSERT INTO stat VALUES('{IndexedStages.FS_STAGE.value}','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
+            f"""INSERT INTO stat VALUES('{UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value}','{features_pkg_2}',1652905054,2683,NULL,NULL,NULL,NULL);"""
         )
 
         # cover "run exports on .conda package" branch

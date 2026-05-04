@@ -446,7 +446,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             SELECT path, run_exports FROM stat
             LEFT JOIN run_exports USING (path)
             WHERE stat.stage = ?
-            ORDER BY pat
+            ORDER BY path
             """,
             (self.upstream_stage,),
         ):
