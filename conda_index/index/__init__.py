@@ -11,7 +11,6 @@ import multiprocessing
 import os
 import sys
 import time
-from contextlib import closing
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
@@ -515,7 +514,7 @@ class ChannelIndex:
             def extract_wrapper(args: tuple):
                 # runs in thread
                 subdir, verbose, progress, subdir_path = args
-                with closing(self.cache_for_subdir(subdir)) as cache:
+                with self.cache_for_subdir(subdir) as cache:
                     # exactly these packages (unless they are un-indexable) will
                     # be in the output repodata
                     if self.save_fs_state:
@@ -716,7 +715,7 @@ class ChannelIndex:
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
 
-        with closing(self.cache_for_subdir(subdir)) as cache:  # type: ignore
+        with self.cache_for_subdir(subdir) as cache:  # type: ignore
             log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
             shards = {}
@@ -783,7 +782,7 @@ class ChannelIndex:
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
 
-        with closing(self.cache_for_subdir(subdir)) as cache:
+        with self.cache_for_subdir(subdir) as cache:
             log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
             indexed_packages = cache.indexed_packages()
@@ -1172,12 +1171,10 @@ class ChannelIndex:
         if groups:
             fns, fn_dicts = zip(*groups)
 
-        with closing(self.cache_for_subdir(subdir)) as cache:
+        with self.cache_for_subdir(subdir) as cache:
             load_func = cache.load_all_from_cache
             with self.thread_executor_factory() as thread_executor:
-                for fn_dict, data in zip(
-                    fn_dicts, thread_executor.map(load_func, fns)
-                ):
+                for fn_dict, data in zip(fn_dicts, thread_executor.map(load_func, fns)):
                     # not reached when older channeldata.json matches
                     if data:
                         data.update(fn_dict)
@@ -1187,9 +1184,7 @@ class ChannelIndex:
                         data_v = data.get("version", "0")
                         erec_v = existing_record.get("version", "0")
                         # are timestamps already normalized to seconds?
-                        data_newer = VersionOrder(data_v) > VersionOrder(
-                            erec_v
-                        ) or (
+                        data_newer = VersionOrder(data_v) > VersionOrder(erec_v) or (
                             data_v == erec_v
                             and _make_seconds(data.get("timestamp", 0))
                             > _make_seconds(existing_record.get("timestamp", 0))
@@ -1295,7 +1290,7 @@ class ChannelIndex:
         run_exports_packages = {}
         run_exports_conda_packages = {}
 
-        with closing(self.cache_for_subdir(subdir)) as cache:
+        with self.cache_for_subdir(subdir) as cache:
             for row in cache.run_exports():
                 path, run_exports_data = row
                 run_exports_data = {"run_exports": run_exports_data or {}}
