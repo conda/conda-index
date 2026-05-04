@@ -20,11 +20,11 @@ def test_demonstrate_wheel(tmp_path: Path):
         tmp_path,
         "haswheels",  # channel name if different than last segment of tmp_path
         repodata_v3=True,
-        # update_only=True,
-        # save_fs_state=False,
-        upstream_stage="md",
         write_current_repodata=False,
-        cache_kwargs={"package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",)},
+        cache_kwargs={
+            "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
+            "include_stages": ["md"],
+        },
     )
     cache = channel_index.cache_for_subdir("noarch")
 
