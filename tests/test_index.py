@@ -1507,7 +1507,7 @@ def test_index_format(tmp_path):
     }
 
 
-def test_update_index_closes_sqlite_connections(testing_workdir):
+def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
     """
     Regression test for https://github.com/conda/conda-index/issues/236.
 
@@ -1539,7 +1539,6 @@ def test_update_index_closes_sqlite_connections(testing_workdir):
             super().close()
 
     opened: list[_TrackingConnection] = []
-    real_connect = sqlitecache.common.connect
 
     def tracking_connect(dburi="cache.db"):
         conn = sqlite3.connect(dburi, uri=True, factory=_TrackingConnection)
@@ -1548,11 +1547,8 @@ def test_update_index_closes_sqlite_connections(testing_workdir):
         opened.append(conn)
         return conn
 
-    sqlitecache.common.connect = tracking_connect
-    try:
-        conda_index.index.update_index(testing_workdir, channel_name="test-channel")
-    finally:
-        sqlitecache.common.connect = real_connect
+    monkeypatch.setattr(sqlitecache.common, "connect", tracking_connect)
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     assert opened, "update_index did not open any sqlite connections"
 
