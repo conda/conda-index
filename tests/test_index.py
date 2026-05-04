@@ -33,7 +33,7 @@ here = os.path.dirname(__file__)
 TEST_SUBDIR = "osx-64"
 
 
-def download(url, local_path):
+def fake_download(url, local_path):
     # NOTE: The tests in this module used to download packages from the
     # conda-test channel. These packages are small and are now included.
     if not isdir(dirname(local_path)):
@@ -50,7 +50,7 @@ def test_index_on_single_subdir_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", write_bz2=True, write_zst=True
@@ -177,7 +177,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -224,13 +224,13 @@ def test_file_index_on_single_subdir_1(testing_workdir):
     test_package_url = (
         "https://conda.anaconda.org/conda-test/osx-64/fly-2.5.2-0.tar.bz2"
     )
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     test_package_path = join(testing_workdir, "osx-64", "nano-2.4.1-0-tar.bz2")
     test_package_url = (
         "https://conda.anaconda.org/conda-test/osx-64/nano-2.4.1-0.tar.bz2"
     )
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     updated_packages = expected_repodata_json.get("packages")
 
@@ -304,13 +304,13 @@ def test_index_noarch_osx64_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     test_package_path = join(
         testing_workdir, "noarch", "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -819,7 +819,9 @@ def test_patch_instructions_with_missing_subdir(testing_workdir):
     url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
         pkg
     )
-    patch_instructions = download(url, os.path.join(os.getcwd(), "patches.tar.bz2"))
+    patch_instructions = fake_download(
+        url, os.path.join(os.getcwd(), "patches.tar.bz2")
+    )
     conda_index.api.update_index(".", patch_generator=patch_instructions)
 
 
@@ -828,7 +830,7 @@ def test_stat_cache_used(testing_workdir, mocker):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     cph_extract = mocker.spy(conda_package_handling.api, "extract")
@@ -1098,7 +1100,7 @@ def test_index_clears_changed_packages(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -1111,7 +1113,7 @@ def test_index_clears_changed_packages(testing_workdir):
     import time
 
     time.sleep(1)  # ensure mtime is at least 1 second greater
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     with index_cache.db:  # force transaction
         # this function should also commit a transaction, even without `with
@@ -1523,7 +1525,7 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     import sqlite3
 
