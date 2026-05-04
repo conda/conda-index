@@ -317,22 +317,6 @@ class CondaIndexCache(BaseCondaIndexCache):
                 listdir_stat,
             )
 
-    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
-        self.store_stat_state(UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value, listdir_stat)
-
-    def store_md_state(self, listdir_stat: Iterable[dict[str, Any]]):
-        # update stat table and add data to index_json table
-        stats = [stat for stat in listdir_stat]
-        self.store_stat_state(IndexedStages.METADATA_INDEXED_STAGE.value, stats)
-        for stat in stats:
-            self.store(
-                stat["path"],
-                stat["size"],
-                stat["mtime"],
-                {},
-                stat["repodata"],
-            )
-
     def changed_packages(self) -> list[ChangedPackage]:
         """
         Compare upstream to 'indexed' state.

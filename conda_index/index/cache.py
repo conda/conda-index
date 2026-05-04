@@ -449,17 +449,33 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.store_fs_state(listdir_stat())
 
     @abc.abstractmethod
+    def store_stat_state(self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]):
+        """
+        Save set of packages to a particular stage.
+        """
+
     def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """
         Save set of packages to be indexed.
         """
+        self.store_stat_state(UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value, listdir_stat)
 
-    @abc.abstractmethod
+
     def store_md_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """
-        Save package metadata to cache. Useful for metadata only packages, including non
-        local packages.
+        Save package metadata to cache and add write the package's index data to the
+        database. Useful for metadata only packages, including non-local packages.
         """
+        stats = [stat for stat in listdir_stat]
+        self.store_stat_state(IndexedStages.METADATA_INDEXED_STAGE.value, stats)
+        for stat in stats:
+            self.store(
+                stat["path"],
+                stat["size"],
+                stat["mtime"],
+                {},
+                stat["repodata"],
+            )
 
     @abc.abstractmethod
     def changed_packages(self) -> list[ChangedPackage]:

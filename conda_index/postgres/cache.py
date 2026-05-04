@@ -119,10 +119,11 @@ class PsqlCache(BaseCondaIndexCache):
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
-    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
+    def store_stat_state(self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]):
         """
         Write {path, mtime, size} into database.
         """
+        stage = stage or self.upstream_stage
         connection: Connection
         with self.engine.begin() as connection:
             stat = model.Stat.__table__
@@ -130,12 +131,12 @@ class PsqlCache(BaseCondaIndexCache):
             if not self.update_only:
                 connection.execute(
                     stat.delete().where(
-                        stat.c.stage == "fs",
+                        stat.c.stage == stage,
                         stat.c.path.startswith(self.database_prefix, autoescape=True),
                     )
                 )
 
-            items = [{**item, "stage": "fs"} for item in listdir_stat]
+            items = [{**item, "stage": stage} for item in listdir_stat]
             if items:
                 insert_statement = insert(stat)
                 connection.execute(
