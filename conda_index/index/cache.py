@@ -24,8 +24,6 @@ from .fs import MinimalFS
 if TYPE_CHECKING:
     from typing import IO, Any, Iterator
 
-    from conda_index.index import ShardDict
-
     from .fs import FileInfo
 
 log = logging.getLogger(__name__)
@@ -176,6 +174,18 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         Remove and close any database connections.
         """
+
+    def __enter__(self) -> BaseCondaIndexCache:
+        """
+        Return self.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Call self.close()
+        """
+        self.close()
 
     @property
     def database_prefix(self) -> str:

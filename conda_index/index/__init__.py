@@ -514,14 +514,14 @@ class ChannelIndex:
             def extract_wrapper(args: tuple):
                 # runs in thread
                 subdir, verbose, progress, subdir_path = args
-                cache = self.cache_for_subdir(subdir)
-                # exactly these packages (unless they are un-indexable) will
-                # be in the output repodata
-                if self.save_fs_state:
-                    cache.save_fs_state(subdir_path)
-                return self.extract_subdir_to_cache(
-                    subdir, verbose, progress, subdir_path, cache
-                )
+                with self.cache_for_subdir(subdir) as cache:
+                    # exactly these packages (unless they are un-indexable) will
+                    # be in the output repodata
+                    if self.save_fs_state:
+                        cache.save_fs_state(subdir_path)
+                    return self.extract_subdir_to_cache(
+                        subdir, verbose, progress, subdir_path, cache
+                    )
 
             # map() gives results in order passed, not in order of
             # completion. If using multiple threads, switch to
@@ -715,60 +715,65 @@ class ChannelIndex:
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
 
-        cache = self.cache_for_subdir(subdir)  # type: ignore
+        with self.cache_for_subdir(subdir) as cache:  # type: ignore
+            log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
+            shards = {}
 
-        shards = {}
+            created_at = self.created_at
 
-        created_at = self.created_at
+            shards_index = {
+                "version": REPODATA_SHARDS_VERSION,
+                "info": {
+                    "base_url": "",  # pixi requires this key
+                    "shards_base_url": "",  # and this one
+                    "created_at": created_at,
+                    "subdir": subdir,
+                },
+                "shards": shards,
+            }
 
-        shards_index = {
-            "version": REPODATA_SHARDS_VERSION,
-            "info": {
-                "base_url": "",  # pixi requires this key
-                "shards_base_url": "",  # and this one
-                "created_at": created_at,
-                "subdir": subdir,
-            },
-            "shards": shards,
-        }
+            if self.base_url:
+                # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
+                shards_index["info"]["base_url"] = (
+                    f"{self.base_url.rstrip('/')}/{subdir}/"
+                )
 
-        if self.base_url:
-            # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
-            shards_index["info"]["base_url"] = f"{self.base_url.rstrip('/')}/{subdir}/"
+            # Higher compression levels are a waste of time for tiny gains on this
+            # collection of small objects.
+            compressor = zstandard.ZstdCompressor()
 
-        # Higher compression levels are a waste of time for tiny gains on this
-        # collection of small objects.
-        compressor = zstandard.ZstdCompressor()
+            (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-        (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
+            v3_data = {
+                "tar.bz2": {},
+                "conda": {},
+                "whl": {},
+            }
 
-        v3_data = {
-            "tar.bz2": {},
-            "conda": {},
-            "whl": {},
-        }
+            for shard in cache.indexed_shards():
+                repodata_shard = self._indexed_shard_to_repodata(shard)
+                shard_bytes = compressor.compress(
+                    sqlitecache.packb_typed(repodata_shard)
+                )
+                shard_hash = hashlib.sha256(shard_bytes).digest()
+                output_path = (
+                    self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
+                )
+                if not output_path.exists():
+                    output_path.write_bytes(shard_bytes)
+                shards[shard.name] = shard_hash
 
-        for shard in cache.indexed_shards():
-            repodata_shard = self._indexed_shard_to_repodata(shard)
-            shard_bytes = compressor.compress(sqlitecache.packb_typed(repodata_shard))
-            shard_hash = hashlib.sha256(shard_bytes).digest()
-            output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
-            if not output_path.exists():
-                output_path.write_bytes(shard_bytes)
-            shards[shard.name] = shard_hash
+                if self.repodata_v3:
+                    for section, records in repodata_shard["v3"].items():
+                        v3_data[section].update(records)
 
             if self.repodata_v3:
-                for section, records in repodata_shard["v3"].items():
-                    v3_data[section].update(records)
+                shards_index["info"]["repodata_revisions"] = [
+                    self._make_repodata_revision_data(v3_data)
+                ]
 
-        if self.repodata_v3:
-            shards_index["info"]["repodata_revisions"] = [
-                self._make_repodata_revision_data(v3_data)
-            ]
-
-        return shards_index
+            return shards_index
 
     def index_subdir(self, subdir, verbose=False, progress=False):
         """
@@ -777,11 +782,10 @@ class ChannelIndex:
         Must call `extract_subdir_to_cache()` first or will be outdated.
         """
 
-        cache = self.cache_for_subdir(subdir)
+        with self.cache_for_subdir(subdir) as cache:
+            log.debug("Building repodata for %s/%s", self.channel_name, subdir)
 
-        log.debug("Building repodata for %s/%s", self.channel_name, subdir)
-
-        indexed_packages = cache.indexed_packages()
+            indexed_packages = cache.indexed_packages()
 
         new_repodata = {
             "packages": indexed_packages.packages,
@@ -1119,8 +1123,6 @@ class ChannelIndex:
         self._maybe_write(index_path, rendered_html)
 
     def _update_channeldata(self, channel_data, repodata, subdir):
-        cache = self.cache_for_subdir(subdir)
-
         legacy_packages = repodata["packages"]
         conda_packages = repodata["packages.conda"]
 
@@ -1169,77 +1171,82 @@ class ChannelIndex:
         if groups:
             fns, fn_dicts = zip(*groups)
 
-        load_func = cache.load_all_from_cache
-        with self.thread_executor_factory() as thread_executor:
-            for fn_dict, data in zip(fn_dicts, thread_executor.map(load_func, fns)):
-                # not reached when older channeldata.json matches
-                if data:
-                    data.update(fn_dict)
-                    name = data["name"]
-                    # existing record
-                    existing_record = package_data.get(name, {})
-                    data_v = data.get("version", "0")
-                    erec_v = existing_record.get("version", "0")
-                    # are timestamps already normalized to seconds?
-                    data_newer = VersionOrder(data_v) > VersionOrder(erec_v) or (
-                        data_v == erec_v
-                        and _make_seconds(data.get("timestamp", 0))
-                        > _make_seconds(existing_record.get("timestamp", 0))
-                    )
-
-                    package_data[name] = package_data.get(name, {})
-                    # keep newer value for these
-                    for k in (
-                        "description",
-                        "dev_url",
-                        "doc_url",
-                        "doc_source_url",
-                        "home",
-                        "license",
-                        "source_url",
-                        "source_git_url",
-                        "summary",
-                        "icon_url",
-                        "icon_hash",
-                        "tags",
-                        "identifiers",
-                        "keywords",
-                        "recipe_origin",
-                        "version",
-                    ):
-                        _replace_if_newer_and_present(
-                            package_data[name], data, existing_record, data_newer, k
+        with self.cache_for_subdir(subdir) as cache:
+            load_func = cache.load_all_from_cache
+            with self.thread_executor_factory() as thread_executor:
+                for fn_dict, data in zip(fn_dicts, thread_executor.map(load_func, fns)):
+                    # not reached when older channeldata.json matches
+                    if data:
+                        data.update(fn_dict)
+                        name = data["name"]
+                        # existing record
+                        existing_record = package_data.get(name, {})
+                        data_v = data.get("version", "0")
+                        erec_v = existing_record.get("version", "0")
+                        # are timestamps already normalized to seconds?
+                        data_newer = VersionOrder(data_v) > VersionOrder(erec_v) or (
+                            data_v == erec_v
+                            and _make_seconds(data.get("timestamp", 0))
+                            > _make_seconds(existing_record.get("timestamp", 0))
                         )
 
-                    # keep any true value for these, since we don't distinguish subdirs
-                    for k in (
-                        "binary_prefix",
-                        "text_prefix",
-                        "activate.d",
-                        "deactivate.d",
-                        "pre_link",
-                        "post_link",
-                        "pre_unlink",
-                    ):
-                        package_data[name][k] = any(
-                            (data.get(k), existing_record.get(k))
-                        )
+                        package_data[name] = package_data.get(name, {})
+                        # keep newer value for these
+                        for k in (
+                            "description",
+                            "dev_url",
+                            "doc_url",
+                            "doc_source_url",
+                            "home",
+                            "license",
+                            "source_url",
+                            "source_git_url",
+                            "summary",
+                            "icon_url",
+                            "icon_hash",
+                            "tags",
+                            "identifiers",
+                            "keywords",
+                            "recipe_origin",
+                            "version",
+                        ):
+                            _replace_if_newer_and_present(
+                                package_data[name],
+                                data,
+                                existing_record,
+                                data_newer,
+                                k,
+                            )
 
-                    package_data[name]["subdirs"] = sorted(
-                        list(set(existing_record.get("subdirs", []) + [subdir]))
-                    )
-                    # keep one run_exports entry per version of the package, since these vary by version
-                    run_exports = existing_record.get("run_exports", {})
-                    exports_from_this_version = data.get("run_exports")
-                    if exports_from_this_version:
-                        run_exports[data_v] = data.get("run_exports")
-                    package_data[name]["run_exports"] = run_exports
-                    package_data[name]["timestamp"] = _make_seconds(
-                        max(
-                            data.get("timestamp", 0),
-                            channel_data.get(name, {}).get("timestamp", 0),
+                        # keep any true value for these, since we don't distinguish subdirs
+                        for k in (
+                            "binary_prefix",
+                            "text_prefix",
+                            "activate.d",
+                            "deactivate.d",
+                            "pre_link",
+                            "post_link",
+                            "pre_unlink",
+                        ):
+                            package_data[name][k] = any(
+                                (data.get(k), existing_record.get(k))
+                            )
+
+                        package_data[name]["subdirs"] = sorted(
+                            list(set(existing_record.get("subdirs", []) + [subdir]))
                         )
-                    )
+                        # keep one run_exports entry per version of the package, since these vary by version
+                        run_exports = existing_record.get("run_exports", {})
+                        exports_from_this_version = data.get("run_exports")
+                        if exports_from_this_version:
+                            run_exports[data_v] = data.get("run_exports")
+                        package_data[name]["run_exports"] = run_exports
+                        package_data[name]["timestamp"] = _make_seconds(
+                            max(
+                                data.get("timestamp", 0),
+                                channel_data.get(name, {}).get("timestamp", 0),
+                            )
+                        )
 
         channel_data.update(
             {
@@ -1278,23 +1285,21 @@ class ChannelIndex:
         """
         subdir_path = join(self.channel_root, subdir)
 
-        cache = self.cache_for_subdir(subdir)
-
         log.debug("Building run_exports for %s", subdir_path)
 
         run_exports_packages = {}
         run_exports_conda_packages = {}
 
-        # load cached packages
-        for row in cache.run_exports():
-            path, run_exports_data = row
-            run_exports_data = {"run_exports": run_exports_data or {}}
-            if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
-                run_exports_packages[path] = run_exports_data
-            elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
-                run_exports_conda_packages[path] = run_exports_data
-            else:
-                log.warning("%s doesn't look like a conda package", path)
+        with self.cache_for_subdir(subdir) as cache:
+            for row in cache.run_exports():
+                path, run_exports_data = row
+                run_exports_data = {"run_exports": run_exports_data or {}}
+                if path.endswith(CONDA_PACKAGE_EXTENSION_V1):
+                    run_exports_packages[path] = run_exports_data
+                elif path.endswith(CONDA_PACKAGE_EXTENSION_V2):
+                    run_exports_conda_packages[path] = run_exports_data
+                else:
+                    log.warning("%s doesn't look like a conda package", path)
 
         new_run_exports_data = {
             "packages": run_exports_packages,

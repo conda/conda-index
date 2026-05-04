@@ -33,7 +33,7 @@ here = os.path.dirname(__file__)
 TEST_SUBDIR = "osx-64"
 
 
-def download(url, local_path):
+def fake_download(url, local_path):
     # NOTE: The tests in this module used to download packages from the
     # conda-test channel. These packages are small and are now included.
     if not isdir(dirname(local_path)):
@@ -50,7 +50,7 @@ def test_index_on_single_subdir_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(
         testing_workdir, channel_name="test-channel", write_bz2=True, write_zst=True
@@ -177,7 +177,7 @@ def test_file_index_on_single_subdir_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -224,13 +224,13 @@ def test_file_index_on_single_subdir_1(testing_workdir):
     test_package_url = (
         "https://conda.anaconda.org/conda-test/osx-64/fly-2.5.2-0.tar.bz2"
     )
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     test_package_path = join(testing_workdir, "osx-64", "nano-2.4.1-0-tar.bz2")
     test_package_url = (
         "https://conda.anaconda.org/conda-test/osx-64/nano-2.4.1-0.tar.bz2"
     )
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     updated_packages = expected_repodata_json.get("packages")
 
@@ -304,13 +304,13 @@ def test_index_noarch_osx64_1(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     test_package_path = join(
         testing_workdir, "noarch", "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -819,7 +819,9 @@ def test_patch_instructions_with_missing_subdir(testing_workdir):
     url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
         pkg
     )
-    patch_instructions = download(url, os.path.join(os.getcwd(), "patches.tar.bz2"))
+    patch_instructions = fake_download(
+        url, os.path.join(os.getcwd(), "patches.tar.bz2")
+    )
     conda_index.api.update_index(".", patch_generator=patch_instructions)
 
 
@@ -828,7 +830,7 @@ def test_stat_cache_used(testing_workdir, mocker):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
     cph_extract = mocker.spy(conda_package_handling.api, "extract")
@@ -1098,7 +1100,7 @@ def test_index_clears_changed_packages(testing_workdir):
         testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     conda_index.index.update_index(testing_workdir, channel_name="test-channel")
 
@@ -1111,7 +1113,7 @@ def test_index_clears_changed_packages(testing_workdir):
     import time
 
     time.sleep(1)  # ensure mtime is at least 1 second greater
-    download(test_package_url, test_package_path)
+    fake_download(test_package_url, test_package_path)
 
     with index_cache.db:  # force transaction
         # this function should also commit a transaction, even without `with
@@ -1505,3 +1507,55 @@ def test_index_format(tmp_path):
         "repodata_version": 1,
         "removed": [],
     }
+
+
+def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
+    """
+    Regression test for https://github.com/conda/conda-index/issues/236.
+
+    ``update_index`` must explicitly close every sqlite3 connection it opens
+    via ``CondaIndexCache``. Previously the ``cache_for_subdir`` call sites in
+    ``ChannelIndex`` relied on Python's GC to finalize the connections, which
+    emits ``ResourceWarning: unclosed database`` on Python 3.13+ and can hold
+    on to file handles longer than expected.
+    """
+    from conda_index.index import sqlitecache
+
+    test_package_path = join(
+        testing_workdir, "osx-64", "conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    )
+    test_package_url = "https://conda.anaconda.org/conda-test/osx-64/conda-index-pkg-a-1.0-py27h5e241af_0.tar.bz2"
+    fake_download(test_package_url, test_package_path)
+
+    import sqlite3
+
+    class _TrackingConnection(sqlite3.Connection):
+        """Tracks whether ``close()`` was explicitly called."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.closed_explicitly = False
+
+        def close(self):
+            self.closed_explicitly = True
+            super().close()
+
+    opened: list[_TrackingConnection] = []
+
+    def tracking_connect(dburi="cache.db"):
+        conn = sqlite3.connect(dburi, uri=True, factory=_TrackingConnection)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlitecache.common, "connect", tracking_connect)
+    conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+
+    assert opened, "update_index did not open any sqlite connections"
+
+    leaked = [c for c in opened if not c.closed_explicitly]
+    assert not leaked, (
+        f"update_index left {len(leaked)} of {len(opened)} sqlite connection(s) "
+        "without an explicit close() call"
+    )

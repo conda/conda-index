@@ -1,0 +1,23 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* Explicitly close `sqlite3.Connection` objects opened by `CondaIndexCache`
+  inside `ChannelIndex` instead of relying on the garbage collector. This
+  avoids `ResourceWarning: unclosed database` on Python 3.13+ and releases
+  cache database files promptly so API consumers (e.g. `conda-build`) can
+  open them immediately after `update_index()` returns. (#236)
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
