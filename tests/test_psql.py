@@ -72,7 +72,7 @@ def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
     assert "AND stat.path" in query
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
+@pytest.mark.needs_postgresql
 def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.
@@ -501,6 +501,7 @@ INVALID_PACKAGES_IN_SUITE = {
 }
 
 
+@pytest.mark.needs_postgresql
 def test_psql_channel_separation(
     tmp_path: Path, index_data: Path, archives_data: Path, postgresql_database
 ):

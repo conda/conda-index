@@ -1553,6 +1553,7 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
     )
 
 
+@pytest.mark.needs_postgresql
 @pytest.mark.parametrize(
         "cache_class",
         [
