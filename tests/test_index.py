@@ -20,6 +20,8 @@ from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
+from conda_index.index.sqlitecache import CondaIndexCache
+from conda_index.postgres.cache import PsqlCache
 from conda_index.utils_build import copy_into_nolock as copy_into
 from conda_index.index.cache import IndexedStages, UpstreamStages
 
@@ -1551,12 +1553,31 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
     )
 
 
-def test_index_noarch_with_wheels(testing_workdir):
+@pytest.mark.parametrize(
+        "cache_class",
+        [
+            pytest.param(CondaIndexCache, id="CondaIndexCache"),
+            pytest.param(PsqlCache, id="PsqlCache"),
+        ]
+    )
+def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
+    """
+    Test that repodata with wheels can be indexed using different cache implementations.
+    """
     test_package_path = join(
         testing_workdir, "noarch", "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     )
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     fake_download(test_package_url, test_package_path)
+
+    cache_kwargs = {
+        "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
+        "include_stages": ["md"],
+    }
+    if cache_class is PsqlCache:
+        # Get the postgresql_database fixture from the request if available
+        postgresql_database = request.getfixturevalue("postgresql_database")
+        cache_kwargs["db_url"] = postgresql_database.url
 
     # conda_index.index.update_index(testing_workdir, channel_name="test-channel")
     channel_index = conda_index.index.ChannelIndex(
@@ -1565,10 +1586,8 @@ def test_index_noarch_with_wheels(testing_workdir):
         subdirs=["noarch"],
         repodata_v3=True,
         write_current_repodata=False,
-        cache_kwargs={
-            "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
-            "include_stages": ["md"],
-        },
+        cache_class=cache_class,
+        cache_kwargs=cache_kwargs,
     )
     cache = channel_index.cache_for_subdir("noarch")
 
