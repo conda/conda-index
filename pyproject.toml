@@ -15,7 +15,6 @@ readme = "README.md"
 dynamic = ["version", "description"]
 requires-python = ">=3.10"
 dependencies = [
-    "click >=8",
     # Disabled due to conda not being available on PyPI
     # "conda",
     "conda-package-streaming >=0.12.0",
@@ -40,7 +39,7 @@ test = [
 docs = [
     "furo",
     "sphinx",
-    "sphinx-click",
+    "sphinx-argparse",
     "myst-parser",
     "mdit-py-plugins>=0.3.0",
 ]

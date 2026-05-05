@@ -105,8 +105,11 @@ def test_main():
     """
     Run module for coverage.
     """
+    # Test that CLI raises SystemExit when no arguments provided
+    from conda_index.cli import cli
+
     with pytest.raises(SystemExit):
-        import conda_index.__main__  # noqa: F401
+        cli([])
 
 
 def test_patch_instructions_coverage(tmp_path):

@@ -2,225 +2,286 @@
 Updated command line interface for conda-index.
 """
 
+from __future__ import annotations
+
+import argparse
 import logging
 import os.path
+import sys
 from pathlib import Path
-
-import click
 
 from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 from .. import yaml
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("dir")
-@click.option("--output", help="Output repodata to given directory.")
-@click.option(
-    "--subdir",
-    multiple=True,
-    default=None,
-    help="Subdir to index. Accepts multiple.",
-)
-@click.option(
-    "-n",
-    "--channel-name",
-    help="Customize the channel name listed in each channel's index.html.",
-)
-@click.option(
-    "--patch-generator",
-    required=False,
-    help="Path to Python file that outputs metadata patch instructions from its "
-    "_patch_repodata function or a .tar.bz2/.conda file which contains a "
-    "patch_instructions.json file for each subdir",
-)
-@click.option(
-    "--channeldata/--no-channeldata",
-    help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--rss/--no-rss",
-    help="Write rss.xml (Only if --channeldata is enabled).",
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--bz2/--no-bz2",
-    help="Write repodata.json.bz2.",
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--zst/--no-zst",
-    help="Write repodata.json.zst.",
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--run-exports/--no-run-exports",
-    help="Write run_exports.json. Conflicts with --no-write-monolithic.",
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--compact/--no-compact",
-    help="Output JSON as one line, or pretty-printed.",
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--current-index-versions-file",
-    "-m",
-    help="""
-        YAML file containing name of package as key, and list of versions as values.  The current_index.json
-        will contain the newest from this series of versions.  For example:
+def _create_parser() -> argparse.ArgumentParser:
+    """Create and configure the argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Generate conda repository metadata (repodata.json) from a directory tree.",
+        add_help=True,
+    )
 
-        python:
-          - 3.8
-          - 3.9
+    # Positional argument
+    parser.add_argument(
+        "dir",
+        help="Directory to index",
+    )
 
-        will keep python 3.8.X and 3.9.Y in the current_index.json, instead of only the very latest python version.
-        """,
-)
-@click.option(
-    "--base-url",
-    help="""
-        If packages should be served separately from repodata.json, URL of the
-        directory tree holding packages. Generates repodata.json with
-        repodata_version=2 which is supported in conda 24.5.0 or later.
-        """,
-)
-@click.option(
-    "--update-cache/--no-update-cache",
-    help="""
-        Control whether listdir() is called to refresh the set of available
-        packages. Used to generate complete repodata.json from cache only when
-        packages are not on disk. (Experimental)
-        """,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--update-only/--no-update-only",
-    help="""
-        Control whether missing files are deleted from repodata.json. Used to
-        add local files to repodata.json without having the complete set of
-        packages on disk. (Experimental)
-        """,
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--upstream-stage",
-    help="""
-    Set to 'clone' to generate example repodata from conda-forge test database.
-    (Experimental)
-    """,
-    default="fs",
-)
-@click.option(
-    "--current-repodata/--no-current-repodata",
-    help="""
-        Skip generating current_repodata.json, a file containing only the newest
-        versions of all packages and their dependencies, only used by the
-        classic solver. Conflicts with --no-write-monolithic.
-        """,
-    default=False,
-    show_default=True,
-)
-@click.option("--threads", default=MAX_THREADS_DEFAULT, show_default=True)
-@click.option(
-    "--verbose",
-    help="""
-        Enable debug logging.
-        """,
-    default=False,
-    is_flag=True,
-)
-@click.option(
-    "--write-monolithic/--no-write-monolithic",
-    help="""
-    Write repodata.json with all package metadata in a single file.
-    """,
-    default=True,
-    is_flag=True,
-)
-@click.option(
-    "--write-shards/--no-write-shards",
-    help="""
-        Write a repodata.msgpack.zst index and many smaller files per CEP-16.
-        (Experimental)
-        """,
-    default=False,
-    is_flag=True,
-)
-@click.option(
-    "--db",
-    help="""
-        Choose database backend. "sqlite3" (default) or "postgresql"
-        (Experimental)
-        """,
-    default="sqlite3",
-    type=click.Choice(["sqlite3", "postgresql"]),
-)
-@click.option(
-    "--db-url",
-    help="""
-        SQLAlchemy database URL when using --db=postgresql. Alternatively, use
-        the CONDA_INDEX_DBURL environment variable. (Experimental)
-        """,
-    default="postgresql:///conda_index",
-    show_default=True,
-    envvar="CONDA_INDEX_DBURL",
-)
-@click.option(
-    "--html-dependencies/--no-html-dependencies",
-    help="""
-        Include dependency popups in generated HTML index files.
-        May significantly increase file size for large repositories like
-        main or conda-forge.
-        """,
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--repodata-next/--no-repodata-next",
-    help="""
-        EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package
-        records under a top-level v3 key.
-        """,
-    default=False,
-    show_default=True,
-)
-def cli(
-    dir,
-    patch_generator=None,
-    subdir=None,
-    output=None,
-    channeldata=False,
-    verbose=False,
-    threads=None,
-    current_index_versions_file=None,
-    channel_name=None,
-    bz2=False,
-    zst=False,
-    rss=False,
-    run_exports=False,
-    compact=True,
-    base_url=None,
-    update_cache=False,
-    upstream_stage="fs",
-    current_repodata=True,
-    write_monolithic=True,
-    write_shards=False,
-    db="sqlite3",
-    db_url="",
-    html_dependencies=False,
-    update_only=False,
-    repodata_next=False,
-):
+    # Output options
+    parser.add_argument(
+        "--output",
+        help="Output repodata to given directory.",
+    )
+
+    parser.add_argument(
+        "--subdir",
+        action="append",
+        help="Subdir to index. Accepts multiple.",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--channel-name",
+        help="Customize the channel name listed in each channel's index.html.",
+    )
+
+    # Patch generator
+    parser.add_argument(
+        "--patch-generator",
+        help="Path to Python file that outputs metadata patch instructions from its "
+        "_patch_repodata function or a .tar.bz2/.conda file which contains a "
+        "patch_instructions.json file for each subdir",
+    )
+
+    # Boolean flags for channeldata and RSS
+    parser.add_argument(
+        "--channeldata",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Generate channeldata.json. Conflicts with --no-write-monolithic.",
+    )
+
+    parser.add_argument(
+        "--rss",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write rss.xml (Only if --channeldata is enabled).",
+    )
+
+    # Compression options
+    parser.add_argument(
+        "--bz2",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Write repodata.json.bz2.",
+    )
+
+    parser.add_argument(
+        "--zst",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Write repodata.json.zst.",
+    )
+
+    # Run exports and compact
+    parser.add_argument(
+        "--run-exports",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Write run_exports.json. Conflicts with --no-write-monolithic.",
+    )
+
+    parser.add_argument(
+        "--compact",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Output JSON as one line, or pretty-printed.",
+    )
+
+    # Current index versions file
+    parser.add_argument(
+        "--current-index-versions-file",
+        "-m",
+        help="YAML file containing name of package as key, and list of versions as values. "
+        "The current_index.json will contain the newest from this series of versions. "
+        "For example: python: [3.8, 3.9] will keep python 3.8.X and 3.9.Y in the "
+        "current_index.json, instead of only the very latest python version.",
+    )
+
+    # Base URL
+    parser.add_argument(
+        "--base-url",
+        help="If packages should be served separately from repodata.json, URL of the "
+        "directory tree holding packages. Generates repodata.json with "
+        "repodata_version=2 which is supported in conda 24.5.0 or later.",
+    )
+
+    # Update cache and update only
+    parser.add_argument(
+        "--update-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Control whether listdir() is called to refresh the set of available "
+        "packages. Used to generate complete repodata.json from cache only when "
+        "packages are not on disk. (Experimental)",
+    )
+
+    parser.add_argument(
+        "--update-only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Control whether missing files are deleted from repodata.json. Used to "
+        "add local files to repodata.json without having the complete set of "
+        "packages on disk. (Experimental)",
+    )
+
+    # Upstream stage
+    parser.add_argument(
+        "--upstream-stage",
+        help="Set to 'clone' to generate example repodata from conda-forge test database. "
+        "(Experimental)",
+        default="fs",
+    )
+
+    # Current repodata
+    parser.add_argument(
+        "--current-repodata",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Skip generating current_repodata.json, a file containing only the newest "
+        "versions of all packages and their dependencies, only used by the "
+        "classic solver. Conflicts with --no-write-monolithic.",
+    )
+
+    # Threads and verbose
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=MAX_THREADS_DEFAULT,
+        help="Number of threads to use",
+    )
+
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable debug logging.",
+    )
+
+    # Write monolithic and write shards
+    parser.add_argument(
+        "--write-monolithic",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write repodata.json with all package metadata in a single file.",
+    )
+
+    parser.add_argument(
+        "--write-shards",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Write a repodata.msgpack.zst index and many smaller files per CEP-16. "
+        "(Experimental)",
+    )
+
+    # Database options
+    parser.add_argument(
+        "--db",
+        choices=["sqlite3", "postgresql"],
+        default="sqlite3",
+        help='Choose database backend. "sqlite3" (default) or "postgresql" (Experimental)',
+    )
+
+    parser.add_argument(
+        "--db-url",
+        default=os.environ.get("CONDA_INDEX_DBURL", "postgresql:///conda_index"),
+        help="SQLAlchemy database URL when using --db=postgresql. Alternatively, use "
+        "the CONDA_INDEX_DBURL environment variable. (Experimental)",
+    )
+
+    # HTML dependencies and repodata-next
+    parser.add_argument(
+        "--html-dependencies",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Include dependency popups in generated HTML index files. "
+        "May significantly increase file size for large repositories like "
+        "main or conda-forge.",
+    )
+
+    parser.add_argument(
+        "--repodata-next",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="EXPERIMENTAL. Write CEP-XXXX v3 repodata layout with all package "
+        "records under a top-level v3 key.",
+    )
+
+    return parser
+
+
+def cli(args: list[str] | None = None) -> None:
+    """Main CLI entry point."""
+    parser = _create_parser()
+    parsed_args = parser.parse_args(args)
+
+    _main_impl(
+        dir=parsed_args.dir,
+        patch_generator=parsed_args.patch_generator,
+        subdir=parsed_args.subdir,
+        output=parsed_args.output,
+        channeldata=parsed_args.channeldata,
+        verbose=parsed_args.verbose,
+        threads=parsed_args.threads,
+        current_index_versions_file=parsed_args.current_index_versions_file,
+        channel_name=parsed_args.channel_name,
+        bz2=parsed_args.bz2,
+        zst=parsed_args.zst,
+        rss=parsed_args.rss,
+        run_exports=parsed_args.run_exports,
+        compact=parsed_args.compact,
+        base_url=parsed_args.base_url,
+        update_cache=parsed_args.update_cache,
+        upstream_stage=parsed_args.upstream_stage,
+        current_repodata=parsed_args.current_repodata,
+        write_monolithic=parsed_args.write_monolithic,
+        write_shards=parsed_args.write_shards,
+        db=parsed_args.db,
+        db_url=parsed_args.db_url,
+        html_dependencies=parsed_args.html_dependencies,
+        update_only=parsed_args.update_only,
+        repodata_next=parsed_args.repodata_next,
+    )
+
+
+def _main_impl(
+    dir: str,
+    patch_generator: str | None = None,
+    subdir: list[str] | None = None,
+    output: str | None = None,
+    channeldata: bool = False,
+    verbose: bool = False,
+    threads: int | None = None,
+    current_index_versions_file: str | None = None,
+    channel_name: str | None = None,
+    bz2: bool = False,
+    zst: bool = False,
+    rss: bool = False,
+    run_exports: bool = False,
+    compact: bool = True,
+    base_url: str | None = None,
+    update_cache: bool = False,
+    upstream_stage: str = "fs",
+    current_repodata: bool = True,
+    write_monolithic: bool = True,
+    write_shards: bool = False,
+    db: str = "sqlite3",
+    db_url: str = "",
+    html_dependencies: bool = False,
+    update_only: bool = False,
+    repodata_next: bool = False,
+) -> None:
+    """Implementation of the main CLI logic."""
     logutil.configure()
     if verbose:
         logging.getLogger("conda_index.index").setLevel(logging.DEBUG)
@@ -240,9 +301,9 @@ def cli(
 
         if incompatible_args:
             args_str = ", ".join(incompatible_args)
-            raise click.ClickException(
-                f"Conflicting arguments: {args_str} require(s) --write-monolithic (the default setting)."
-            )
+            error_msg = f"Conflicting arguments: {args_str} require(s) --write-monolithic (the default setting)."
+            print(f"Error: {error_msg}", file=sys.stderr)
+            sys.exit(1)
 
     cache_kwargs = {}
 
@@ -253,7 +314,9 @@ def cli(
             cache_class = conda_index.postgres.cache.PsqlCache
             cache_kwargs["db_url"] = db_url
         except ImportError as e:
-            raise click.ClickException(f"Missing dependencies for postgresql: {e}")
+            error_msg = f"Missing dependencies for postgresql: {e}"
+            print(f"Error: {error_msg}", file=sys.stderr)
+            sys.exit(1)
     else:
         from conda_index.index.sqlitecache import CondaIndexCache
 
