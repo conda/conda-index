@@ -325,25 +325,26 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         Return packages in upstream that are changed or missing compared to 'indexed'.
         """
-        indexed_stages = [stg.value for stg in IndexedStages]
-        stages_placeholders = ",".join(("?",) * len(indexed_stages))
         query = self.db.execute(
-            f"""
+            """
             WITH
             fs AS
-                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = ? ),
+                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = :upstream_stage ),
             cached AS
-                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage IN  ({stages_placeholders}))
+                ( SELECT path, mtime, size, sha256, md5 FROM stat WHERE stage = 'indexed' )
 
             SELECT fs.path, fs.mtime, fs.size, fs.sha256, fs.md5,
                 cached.mtime as cached_mtime, cached.size as cached_size, cached.sha256 as cached_sha256, cached.md5 as cached_md5
 
             FROM fs LEFT JOIN cached USING (path)
 
-            WHERE fs.path LIKE ? AND
+            WHERE fs.path LIKE :path_like AND
                 (fs.mtime != cached.mtime OR fs.size != cached.size OR cached.path IS NULL)
             """,
-            [self.upstream_stage, *indexed_stages, self.database_path_like],
+            {
+                "path_like": self.database_path_like,
+                "upstream_stage": self.upstream_stage,
+            },
         )
 
         return query
