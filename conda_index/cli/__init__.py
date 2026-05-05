@@ -225,60 +225,32 @@ def cli(args: list[str] | None = None) -> None:
     parser = _create_parser()
     parsed_args = parser.parse_args(args)
 
-    # Convert parsed arguments to the format expected by the rest of the code
-    dir_path = parsed_args.dir
-    patch_generator = parsed_args.patch_generator
-    subdir = parsed_args.subdir
-    output = parsed_args.output
-    channeldata = parsed_args.channeldata
-    verbose = parsed_args.verbose
-    threads = parsed_args.threads
-    current_index_versions_file = parsed_args.current_index_versions_file
-    channel_name = parsed_args.channel_name
-    bz2 = parsed_args.bz2
-    zst = parsed_args.zst
-    rss = parsed_args.rss
-    run_exports = parsed_args.run_exports
-    compact = parsed_args.compact
-    base_url = parsed_args.base_url
-    update_cache = parsed_args.update_cache
-    upstream_stage = parsed_args.upstream_stage
-    current_repodata = parsed_args.current_repodata
-    write_monolithic = parsed_args.write_monolithic
-    write_shards = parsed_args.write_shards
-    db = parsed_args.db
-    db_url = parsed_args.db_url
-    html_dependencies = parsed_args.html_dependencies
-    update_only = parsed_args.update_only
-    repodata_next = parsed_args.repodata_next
-
-    # Call the implementation function
     _main_impl(
-        dir=dir_path,
-        patch_generator=patch_generator,
-        subdir=subdir,
-        output=output,
-        channeldata=channeldata,
-        verbose=verbose,
-        threads=threads,
-        current_index_versions_file=current_index_versions_file,
-        channel_name=channel_name,
-        bz2=bz2,
-        zst=zst,
-        rss=rss,
-        run_exports=run_exports,
-        compact=compact,
-        base_url=base_url,
-        update_cache=update_cache,
-        upstream_stage=upstream_stage,
-        current_repodata=current_repodata,
-        write_monolithic=write_monolithic,
-        write_shards=write_shards,
-        db=db,
-        db_url=db_url,
-        html_dependencies=html_dependencies,
-        update_only=update_only,
-        repodata_next=repodata_next,
+        dir=parsed_args.dir,
+        patch_generator=parsed_args.patch_generator,
+        subdir=parsed_args.subdir,
+        output=parsed_args.output,
+        channeldata=parsed_args.channeldata,
+        verbose=parsed_args.verbose,
+        threads=parsed_args.threads,
+        current_index_versions_file=parsed_args.current_index_versions_file,
+        channel_name=parsed_args.channel_name,
+        bz2=parsed_args.bz2,
+        zst=parsed_args.zst,
+        rss=parsed_args.rss,
+        run_exports=parsed_args.run_exports,
+        compact=parsed_args.compact,
+        base_url=parsed_args.base_url,
+        update_cache=parsed_args.update_cache,
+        upstream_stage=parsed_args.upstream_stage,
+        current_repodata=parsed_args.current_repodata,
+        write_monolithic=parsed_args.write_monolithic,
+        write_shards=parsed_args.write_shards,
+        db=parsed_args.db,
+        db_url=parsed_args.db_url,
+        html_dependencies=parsed_args.html_dependencies,
+        update_only=parsed_args.update_only,
+        repodata_next=parsed_args.repodata_next,
     )
 
 
