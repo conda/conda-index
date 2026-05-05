@@ -306,7 +306,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):
@@ -367,7 +367,7 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):

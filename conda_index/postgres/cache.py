@@ -373,13 +373,13 @@ class PsqlCache(BaseCondaIndexCache):
 
         connection: Connection
         with self.engine.begin() as connection:
-            for _, path, index_json in connection.execute(query):
-                path = self.plain_path(path)
+            for row in connection.execute(query):
+                path = self.plain_path(row.path)
                 key = self.package_section_for_path(path)
                 if key is None:
                     log.warning("%s has unsupported extension", path)
                     continue
-                shard_dict[key][path] = index_json
+                shard_dict[key][path] = row.index_json
 
         return IndexedPackages(
             packages=shard_dict["packages"],
