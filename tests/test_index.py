@@ -1622,11 +1622,24 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
                 "repodata": repodata,
             }
 
+    # Add wheel metadata
     cache.store_md_state(listdir_like())
+
+    # Run the index
+    channel_index.index(None)
+
+    # Check indexed_packages has the expected number of packages
+    # for both wheels and conda packages.
     packages = cache.indexed_packages()
     assert len(packages.packages_whl) == len(wheels)
+    assert len(packages.packages) == 1
 
-    channel_index.index(None)
+    # Check that indexed_shards are also updated with the expected number
+    # of packages.
+    shards = list(cache.indexed_shards())
+    assert len(shards) >= 1
+    assert sum([len(shard.packages) for shard in shards]) == 1
+    assert sum([len(shard.packages_whl) for shard in shards])== len(wheels)
 
     # #######################################
     # tests for noarch subdir

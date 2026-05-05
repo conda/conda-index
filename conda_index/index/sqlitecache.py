@@ -397,15 +397,18 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         :desired: If not None, set of desired package names.
         """
+        check_stages = [self.upstream_stage] + self.include_stages
+        stages_placeholders = ",".join(("?",) * len(check_stages))
+
         for name, rows in itertools.groupby(
             self.db.execute(
-                """SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
+                f"""SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
                 FROM stat
                 JOIN index_json USING (path)
                 LEFT JOIN run_exports USING (path)
-                WHERE stat.stage = ?
+                WHERE stat.stage IN ({stages_placeholders})
                 ORDER BY index_json.name, index_json.path""",
-                (self.upstream_stage,),
+                check_stages,
             ),
             lambda k: k[0],
         ):
