@@ -214,6 +214,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         Return filename with database prefix added.
         """
+        if fn.startswith(self.database_prefix):
+            return fn
         return f"{self.database_prefix}{fn}"
 
     def plain_path(self, path: str) -> str:

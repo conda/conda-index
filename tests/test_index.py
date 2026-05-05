@@ -1562,7 +1562,7 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
     )
 def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
     """
-    Test that repodata with wheels can be indexed using different cache implementations.
+    Test that repodata with wheels and conda packages can be indexed using different cache implementations.
     """
     test_package_path = join(
         testing_workdir, "noarch", "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"

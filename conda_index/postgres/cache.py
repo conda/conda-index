@@ -56,6 +56,7 @@ class PsqlCache(BaseCondaIndexCache):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = "fs",
+        include_stages: list[str] = [],
         db_url="postgresql://conda_index_test@localhost/conda_index_test",
         **kwargs,
     ):
@@ -65,6 +66,7 @@ class PsqlCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            include_stages=include_stages,
             **kwargs,
         )
         self.db_filename = self.channel_root / ".cache" / "cache.json"
@@ -352,10 +354,11 @@ class PsqlCache(BaseCondaIndexCache):
                 isouter=True,
             )
 
+        check_stages = [self.upstream_stage] + self.include_stages
         return (
             select(*columns)
             .select_from(from_clause)
-            .where(stat_table.c.stage == self.upstream_stage)
+            .where(stat_table.c.stage.in_(check_stages))
             .where(stat_table.c.path.startswith(self.database_prefix, autoescape=True))
             .order_by(index_json_table.c.name, index_json_table.c.path)
         )
