@@ -82,6 +82,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
         upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
+        include_stages: list[str] = [],
         **kwargs,
     ):
         """
@@ -98,6 +99,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            include_stages=include_stages,
             **kwargs,
         )
 
@@ -324,7 +326,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         Return packages in upstream that are changed or missing compared to 'indexed'.
         """
         indexed_stages = [stg.value for stg in IndexedStages]
-        stages_placeholders = ",".join(["?" for _ in indexed_stages])
+        stages_placeholders = ",".join(("?",) * len(indexed_stages))
         query = self.db.execute(
             f"""
             WITH
@@ -356,14 +358,17 @@ class CondaIndexCache(BaseCondaIndexCache):
             "packages.whl": {},
         }
 
+        check_stages = [self.upstream_stage] + self.include_stages
+        stages_placeholders = ",".join(("?",) * len(check_stages))
+
         # load cached packages
         for row in self.db.execute(
-            """
+            f"""
             SELECT path, index_json FROM stat JOIN index_json USING (path)
-            WHERE stat.stage = ?
+            WHERE stat.stage IN ({stages_placeholders})
             ORDER BY path
             """,
-            (self.upstream_stage,),
+            check_stages,
         ):
             path, index_json = row
             index_json = json.loads(index_json)
