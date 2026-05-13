@@ -318,7 +318,7 @@ pre {
         choose a subdir, search packages, inspect versions, and drill down into CEP-0034 key fields.
       </p>
       <form id="channel-form" class="controls">
-        <input id="channel-url" type="text" placeholder="Channel URL (for example: https://prefix.dev/conda-forge/linux-64/)" value="./">
+        <input id="channel-url" type="text" placeholder="Channel URL (for example: https://prefix.dev/conda-forge/linux-64/)" value="http://localhost:8000/noarch/">
         <select id="subdir-select" aria-label="Subdir">
           <option>linux-64</option>
           <option>noarch</option>
@@ -349,6 +349,7 @@ pre {
         </div>
         <div class="panel-body">
           <input id="search" type="search" placeholder="Search package names...">
+          <div class="list-meta" style="font-size: 12px; color: #8a9abe; margin-bottom: 8px;">Supports regular expressions.</div>
           <div class="list-meta" id="package-meta">Load a channel to view package names.</div>
           <div class="virtual-list" id="package-list">
             <div class="virtual-inner" id="package-list-inner"></div>
@@ -538,14 +539,20 @@ async function loadCodecs() {
 }
 
 async function fetchMsgpackZst(url, codecs) {
+  console.log(`[DEBUG] Fetching: ${url}`);
   const response = await fetch(url, { mode: "cors" });
   if (!response.ok) {
+    console.error(`[ERROR] HTTP ${response.status} for ${url}`);
     throw new Error(`Failed to fetch ${url}: ${response.status}`);
   }
+  console.log(`[DEBUG] Decompressing...`);
   const compressed = new Uint8Array(await response.arrayBuffer());
   const decompressed = codecs.decompress(compressed);
   const bytes = decompressed instanceof Uint8Array ? decompressed : new Uint8Array(decompressed);
-  return codecs.decode(bytes);
+  console.log(`[DEBUG] Decoding msgpack...`);
+  const decoded = codecs.decode(bytes);
+  console.log(`[DEBUG] Decoded successfully`);
+  return decoded;
 }
 
 function clearResults() {
@@ -564,10 +571,19 @@ function clearResults() {
 }
 
 function updateFilteredPackages(query) {
-  const q = query.trim().toLowerCase();
-  state.filteredNames = q
-    ? state.packageNames.filter((name) => name.toLowerCase().includes(q))
-    : state.packageNames.slice();
+  const q = query.trim();
+  if (!q) {
+    state.filteredNames = state.packageNames.slice();
+  } else {
+    try {
+      const regex = new RegExp(q);
+      state.filteredNames = state.packageNames.filter((name) => regex.test(name));
+    } catch (e) {
+      // Fall back to substring matching on invalid regex
+      const lowerQ = q.toLowerCase();
+      state.filteredNames = state.packageNames.filter((name) => name.toLowerCase().includes(lowerQ));
+    }
+  }
   dom.packageMeta.textContent = `${state.filteredNames.length.toLocaleString()} packages visible`;
   renderVirtualList();
 }
@@ -601,29 +617,66 @@ function renderVirtualList() {
 
 async function getShardForPackage(packageName, codecs) {
   if (state.shardCache.has(packageName)) {
+    console.log(`[DEBUG] Package '${packageName}' already in cache`);
     return state.shardCache.get(packageName);
   }
   const hashBytes = state.shardIndex.shards[packageName];
+  if (!hashBytes) {
+    console.error(`[ERROR] No hash found for package: ${packageName}`);
+    throw new Error(`Package '${packageName}' not in shards index`);
+  }
   const hashHex = bytesToHex(hashBytes);
   const shardUrl = resolveShardUrl(hashHex);
-  const shard = await fetchMsgpackZst(shardUrl, codecs);
-  state.shardCache.set(packageName, shard);
-  return shard;
+  console.log(`[DEBUG] Loading shard for '${packageName}': ${shardUrl}`);
+  try {
+    const shard = await fetchMsgpackZst(shardUrl, codecs);
+    console.log(`[DEBUG] Loaded shard for '${packageName}':`, shard);
+    state.shardCache.set(packageName, shard);
+    return shard;
+  } catch (e) {
+    console.error(`[ERROR] Failed to load shard for '${packageName}':`, e);
+    throw e;
+  }
 }
 
 function normalizeVersions(shard) {
   const records = [];
-  for (const [filename, record] of Object.entries(shard.packages || {})) {
-    records.push({ filename, record });
+  
+  // Support both v3 and legacy formats
+  if (shard.v3) {
+    console.log(`[DEBUG] Using v3 format`);
+    
+    // Handle any extension type in v3 (tar.bz2, conda, whl, etc.)
+    for (const [extension, packages] of Object.entries(shard.v3)) {
+      const extCount = Object.keys(packages).length;
+      console.log(`[DEBUG] Processing v3.${extension}: ${extCount} packages`);
+      
+      for (const [key, record] of Object.entries(packages)) {
+        // Reconstruct full filename with extension
+        const filename = `${key}.${extension}`;
+        records.push({ filename, record });
+      }
+    }
+  } else {
+    // Fall back to legacy format
+    console.log(`[DEBUG] Using legacy format (packages/packages.conda)`);
+    for (const [filename, record] of Object.entries(shard.packages || {})) {
+      records.push({ filename, record });
+    }
+    for (const [filename, record] of Object.entries(shard["packages.conda"] || {})) {
+      records.push({ filename, record });
+    }
   }
-  for (const [filename, record] of Object.entries(shard["packages.conda"] || {})) {
-    records.push({ filename, record });
-  }
+  
+  const totalCount = records.length;
+  console.log(`[DEBUG] Shard contains ${totalCount} total files`);
+  
   records.sort((a, b) => {
-    const at = a.record.timestamp || 0;
-    const bt = b.record.timestamp || 0;
+    const at = a.record.timestamp || a.record.indexed_at || 0;
+    const bt = b.record.timestamp || b.record.indexed_at || 0;
     return bt - at;
   });
+  console.log(`[DEBUG] Normalized to ${records.length} total versions`);
   return records;
 }
 
@@ -733,8 +786,10 @@ function renderRecord(record, filename) {
 
 async function selectPackage(name) {
   if (!name || !state.shardIndex) {
+    console.warn(`[WARN] selectPackage called with invalid args: name=${name}, hasIndex=${!!state.shardIndex}`);
     return;
   }
+  console.log(`[DEBUG] Selecting package: ${name}`);
   state.selectedPackage = name;
   state.selectedFilename = null;
   dom.selectedPackage.textContent = name;
@@ -744,9 +799,16 @@ async function selectPackage(name) {
 
   if (!state.versionsByPackage.has(name)) {
     setStatus(`Loading shard for ${name}...`);
-    const shard = await getShardForPackage(name, window.__codecs);
-    state.versionsByPackage.set(name, normalizeVersions(shard));
-    setStatus(`Loaded ${name}`);
+    try {
+      const shard = await getShardForPackage(name, window.__codecs);
+      const versions = normalizeVersions(shard);
+      state.versionsByPackage.set(name, versions);
+      console.log(`[DEBUG] Cached ${versions.length} versions for ${name}`);
+      setStatus(`Loaded ${name}`);
+    } catch (e) {
+      console.error(`[ERROR] Failed to load shard for ${name}:`, e);
+      setStatus(`Error loading shard for ${name}: ${e.message}`, true);
+    }
   }
   renderVersions(name);
 }
@@ -781,6 +843,7 @@ function setSubdirOption(subdir) {
 }
 
 async function loadChannel(rawUrl, selectedSubdir) {
+  console.log(`[DEBUG] Loading channel: ${rawUrl}, subdir: ${selectedSubdir}`);
   clearResults();
 
   const normalized = normalizeBaseUrl(rawUrl);
@@ -793,12 +856,25 @@ async function loadChannel(rawUrl, selectedSubdir) {
   state.activeSubdirUrl = subdirUrl;
   state.shardIndexUrl = indexUrl;
 
+  console.log(`[DEBUG] Channel base: ${normalized.channelBaseUrl}`);
+  console.log(`[DEBUG] Subdir URL: ${subdirUrl}`);
+  console.log(`[DEBUG] Index URL: ${indexUrl}`);
+  
   setStatus(`Loading ${indexUrl} ...`);
   const index = await fetchMsgpackZst(indexUrl, window.__codecs);
 
   state.shardIndex = index;
   state.packageNames = Object.keys(index.shards || {}).sort((a, b) => a.localeCompare(b));
   state.filteredNames = state.packageNames.slice();
+  
+  console.log(`[DEBUG] Loaded ${state.packageNames.length} packages`);
+  console.log(`[DEBUG] First 5 packages:`, state.packageNames.slice(0, 5));
+  
+  // Check for repodata format version
+  const hasV3 = index.v3 !== undefined;
+  const repoVersion = index.info?.repodata_version || "unknown";
+  const revisions = index.info?.repodata_revisions || {};
+  console.log(`[DEBUG] Repodata version: ${repoVersion}, has v3: ${hasV3}, revisions: ${JSON.stringify(revisions)}`);
 
   const infoSubdir = index.info?.subdir || subdir;
   setSubdirOption(infoSubdir);
@@ -815,12 +891,15 @@ async function loadChannel(rawUrl, selectedSubdir) {
 
 async function init() {
   try {
+    console.log(`[DEBUG] Initializing shard explorer...`);
     setStatus("Loading codecs...");
     window.__codecs = await loadCodecs();
+    console.log(`[DEBUG] Codecs loaded successfully`);
     setStatus("Codecs ready.");
+    console.log(`[DEBUG] Loading initial channel: ${dom.channelUrl.value}`);
     await loadChannel(dom.channelUrl.value, dom.subdirSelect.value);
   } catch (error) {
-    console.error(error);
+    console.error("[ERROR] Initialization failed:", error);
     setStatus(
       "Failed to load channel. Ensure CORS is enabled for the URL and repodata_shards.msgpack.zst exists.",
       true
