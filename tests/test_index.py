@@ -26,7 +26,7 @@ try:
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
     PsqlCache = None
-from conda_index.index.cache import IndexedStages, UpstreamStages
+from conda_index.index.cache import IndexedStages, UpstreamStages, IndexedPackages
 from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .utils import archive_dir, fake_download
@@ -1505,6 +1505,64 @@ def test_index_format(tmp_path):
     }
 
 
+def test_index_v3_format(tmp_path):
+    """
+    Test that empty shards, monolithic indexes have expected
+    "repodata_revisions", "repodata_version" and "v3" keys and structure.
+    """
+    (tmp_path / "noarch").mkdir()
+
+    CREATED_AT = "2022-01-01T00:00:00Z"
+
+    index = conda_index.index.ChannelIndex(tmp_path, "noarch", repodata_v3=True)
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", index.created_at)
+    index.created_at = CREATED_AT
+    shards_index = index.index_subdir_shards("noarch")
+
+    assert shards_index == {
+        "version": 1,
+        "info": {
+            "base_url": "",
+            "shards_base_url": "",
+            "subdir": "noarch",
+            "created_at": CREATED_AT,
+            "repodata_revisions": [
+                {
+                    "revision": 3,
+                    "n_packages": 0,
+                    "oldest": None,
+                    "newest": None,
+                }
+            ],
+        },
+        "shards": {},
+    }
+
+    monolithic_index = index = index.index_subdir("noarch")
+    assert monolithic_index == {
+        "packages": {},
+        "packages.conda": {},
+        "info": {
+            "subdir": "noarch",
+            "repodata_revisions": [
+                {
+                    "revision": 3,
+                    "n_packages": 0,
+                    "oldest": None,
+                    "newest": None,
+                }
+            ],
+        },
+        "repodata_version": 1,
+        "removed": [],
+        "v3": {
+            "whl": {},
+            "conda": {},
+            "tar.bz2": {},
+        },
+    }
+
+
 def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
     """
     Regression test for https://github.com/conda/conda-index/issues/236.
@@ -1559,15 +1617,23 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
 
 @pytest.mark.needs_postgresql
 @pytest.mark.parametrize(
-    "cache_class",
+    "cache_class,v3_repodata",
     (
         [
-            pytest.param(CondaIndexCache, id="CondaIndexCache"),
+            pytest.param(CondaIndexCache, True, id="CondaIndexCache with v3 repodata"),
+            pytest.param(CondaIndexCache, False, id="CondaIndexCache with v1 repodata"),
         ]
-        + ([pytest.param(PsqlCache, id="PsqlCache")] if PsqlCache is not None else [])
+        + (
+            [
+                pytest.param(PsqlCache, True, id="PsqlCache with v3 repodata"),
+                pytest.param(PsqlCache, False, id="PsqlCache with v1 repodata"),
+            ]
+            if PsqlCache is not None
+            else []
+        )
     ),
 )
-def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
+def test_index_noarch_with_wheels(testing_workdir, cache_class, v3_repodata, request):
     """
     Test that repodata with wheels and conda packages can be indexed using different cache implementations.
     """
@@ -1591,7 +1657,7 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
         testing_workdir,
         channel_name="test-channel",
         subdirs=["noarch"],
-        repodata_v3=True,
+        repodata_v3=v3_repodata,
         write_current_repodata=False,
         cache_class=cache_class,
         cache_kwargs=cache_kwargs,
@@ -1655,33 +1721,183 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
 
     with open(join(testing_workdir, "noarch", "repodata.json")) as fh:
         actual_repodata_json = json.loads(fh.read())
-    expected_repodata_json_v3 = {
-        "conda": {},
-        "tar.bz2": {
-            "conda-index-pkg-a-1.0-pyhed9eced_1": {
-                "build": "pyhed9eced_1",
-                "build_number": 1,
-                "depends": ["python"],
-                "license": "BSD",
-                "md5": "56b5f6b7fb5583bccfc4489e7c657484",
-                "name": "conda-index-pkg-a",
-                "noarch": "python",
-                "sha256": "7430743bffd4ac63aa063ae8518e668eac269c783374b589d8078bee5ed4cbc6",
-                "size": 7882,
-                "subdir": "noarch",
-                "timestamp": 1508520204768,
-                "version": "1.0",
-            }
+
+    if v3_repodata:
+        expected_repodata_json_v3 = {
+            "conda": {},
+            "tar.bz2": {
+                "conda-index-pkg-a-1.0-pyhed9eced_1": {
+                    "build": "pyhed9eced_1",
+                    "build_number": 1,
+                    "depends": ["python"],
+                    "license": "BSD",
+                    "md5": "56b5f6b7fb5583bccfc4489e7c657484",
+                    "name": "conda-index-pkg-a",
+                    "noarch": "python",
+                    "sha256": "7430743bffd4ac63aa063ae8518e668eac269c783374b589d8078bee5ed4cbc6",
+                    "size": 7882,
+                    "subdir": "noarch",
+                    "timestamp": 1508520204768,
+                    "version": "1.0",
+                }
+            },
+            "whl": {
+                "mypkg-0.115.6-py3_none_any_0": {
+                    "url": "not-a-real-url",
+                    "name": "mypkg",
+                    "version": "0.115.6",
+                    "build": "py3_none_any_0",
+                    "build_number": 0,
+                    "depends": ["python >=3.8"],
+                    "fn": "mypkg-0.115.6-py3-none-any.whl",
+                    "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
+                    "size": 94843,
+                    "subdir": "noarch",
+                    "noarch": "python",
+                    "md5": None,
+                }
+            },
+        }
+        assert len(actual_repodata_json["v3"]["tar.bz2"]) == 1
+        assert len(actual_repodata_json["v3"]["conda"]) == 0
+        assert len(actual_repodata_json["v3"]["whl"]) == 1
+        assert actual_repodata_json["v3"] == expected_repodata_json_v3
+    else:
+        expected_repodata_json_v1 = {
+            "info": {"subdir": "noarch"},
+            "packages": {
+                "conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2": {
+                    "build": "pyhed9eced_1",
+                    "build_number": 1,
+                    "depends": ["python"],
+                    "license": "BSD",
+                    "md5": "56b5f6b7fb5583bccfc4489e7c657484",
+                    "name": "conda-index-pkg-a",
+                    "noarch": "python",
+                    "sha256": "7430743bffd4ac63aa063ae8518e668eac269c783374b589d8078bee5ed4cbc6",
+                    "size": 7882,
+                    "subdir": "noarch",
+                    "timestamp": 1508520204768,
+                    "version": "1.0",
+                }
+            },
+            "packages.conda": {},
+            "removed": [],
+            "repodata_version": 1,
+        }
+        assert "v3" not in actual_repodata_json
+        assert actual_repodata_json == expected_repodata_json_v1
+
+
+@pytest.mark.parametrize(
+    "bad_packages",
+    [
+        pytest.param(
+            {
+                "mypkg-0.115.6-py3_none_any_0.unrecognized": {
+                    "url": "not-a-real-url",
+                    "name": "mypkg",
+                    "version": "0.115.6",
+                    "build": "py3_none_any_0",
+                    "build_number": 0,
+                    "depends": ["python >=3.8"],
+                    "fn": "mypkg-0.115.6-py3-none-any.unrecognized",
+                    "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
+                    "size": 94843,
+                    "subdir": "noarch",
+                    "noarch": "python",
+                    "md5": None,
+                }
+            },
+            id="invalid-extension",
+        ),
+        pytest.param(
+            {
+                "mypkg-0.115.6-py3_none_any_0.whl": {
+                    "url": "not-a-real-url",
+                    "version": "0.115.6",
+                    "build": "py3_none_any_0",
+                    "build_number": 0,
+                    "depends": ["python >=3.8"],
+                    "fn": "mypkg-0.115.6-py3-none-any.unrecognized",
+                    "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
+                    "size": 94843,
+                    "subdir": "noarch",
+                    "noarch": "python",
+                    "md5": None,
+                }
+            },
+            id="missing name",
+        ),
+        pytest.param(
+            {
+                "mypkg-0.115.6-py3_none_any_0.whl": {
+                    "url": "not-a-real-url",
+                    "name": "mypkg",
+                    "build": "py3_none_any_0",
+                    "build_number": 0,
+                    "depends": ["python >=3.8"],
+                    "fn": "mypkg-0.115.6-py3-none-any.unrecognized",
+                    "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
+                    "size": 94843,
+                    "subdir": "noarch",
+                    "noarch": "python",
+                    "md5": None,
+                }
+            },
+            id="missing version",
+        ),
+        pytest.param(
+            {
+                "mypkg-0.115.6-py3_none_any_0.whl": {
+                    "url": "not-a-real-url",
+                    "name": "mypkg",
+                    "version": "0.115.6",
+                    "build_number": 0,
+                    "depends": ["python >=3.8"],
+                    "fn": "mypkg-0.115.6-py3-none-any.unrecognized",
+                    "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
+                    "size": 94843,
+                    "subdir": "noarch",
+                    "noarch": "python",
+                    "md5": None,
+                }
+            },
+            id="missing build",
+        ),
+    ],
+)
+def test_index_with_invalid_indexed_packages(
+    bad_packages: dict[str, dict], testing_workdir
+):
+    """
+    Test that packages with invalid extensions or with missing required fields
+    are not included in the v3 section of the repodata, and that they do not
+    cause errors during indexing.
+    """
+    # conda_index.index.update_index(testing_workdir, channel_name="test-channel")
+    channel_index = conda_index.index.ChannelIndex(
+        testing_workdir,
+        channel_name="test-channel",
+        subdirs=["noarch"],
+        repodata_v3=True,
+        write_current_repodata=False,
+        cache_kwargs={
+            "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
+            "include_stages": ["md"],
         },
-        "whl": {
-            "mypkg-0.115.6-py3_none_any_0": {
+    )
+
+    test_indexed_packages = IndexedPackages(
+        packages={
+            "mypkg1-0.115.6-py3_none_any_0.tar.bz2": {
                 "url": "not-a-real-url",
-                "name": "mypkg",
+                "name": "mypkg1",
                 "version": "0.115.6",
                 "build": "py3_none_any_0",
                 "build_number": 0,
                 "depends": ["python >=3.8"],
-                "fn": "mypkg-0.115.6-py3-none-any.whl",
+                "fn": "mypkg1-0.115.6-py3-none-any.tar.bz2",
                 "sha256": "e9240b29e36fa8f4bb7290316988e90c381e5092e0cbe84e7818cc3713bcf305",
                 "size": 94843,
                 "subdir": "noarch",
@@ -1689,8 +1905,14 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
                 "md5": None,
             }
         },
-    }
-    assert len(actual_repodata_json["v3"]["tar.bz2"]) == 1
-    assert len(actual_repodata_json["v3"]["conda"]) == 0
-    assert len(actual_repodata_json["v3"]["whl"]) == 1
-    assert actual_repodata_json["v3"] == expected_repodata_json_v3
+        packages_whl=bad_packages,
+        packages_conda={},
+    )
+
+    v3_section = channel_index._extract_indexed_packages_v3(test_indexed_packages)
+    assert (
+        v3_section["tar.bz2"]["mypkg1-0.115.6-py3_none_any_0"]
+        == test_indexed_packages.packages["mypkg1-0.115.6-py3_none_any_0.tar.bz2"]
+    )
+    assert v3_section["conda"] == {}
+    assert v3_section["whl"] == {}

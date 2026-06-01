@@ -73,7 +73,8 @@ def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
 
 
 @pytest.mark.needs_postgresql
-def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
+@pytest.mark.parametrize("v3_repodata", (True, False))
+def test_psql(v3_repodata: bool, tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.
     """
@@ -99,6 +100,7 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
         cache_kwargs={"db_url": postgresql_database.url},
         write_shards=True,
         write_monolithic=True,
+        repodata_v3=v3_repodata,
     )
 
     channel_index.index(
