@@ -453,7 +453,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.store_fs_state(listdir_stat())
 
     @abc.abstractmethod
-    def store_stat_state(self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]):
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]
+    ):
         """
         Save set of packages to a particular stage.
         """
@@ -462,8 +464,9 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         Save set of packages to be indexed.
         """
-        self.store_stat_state(UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value, listdir_stat)
-
+        self.store_stat_state(
+            UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value, listdir_stat
+        )
 
     def store_md_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """

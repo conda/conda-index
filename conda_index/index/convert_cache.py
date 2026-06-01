@@ -247,7 +247,9 @@ def convert_cache(conn, cache_generator):
                 if match["path"] == "stat.json":
                     # stat.json is one file with information on all the
                     # packages, so we delete from stat.
-                    conn.execute(f"DELETE FROM stat WHERE stage='{IndexedStages.INDEXED_STAGE.value}'")
+                    conn.execute(
+                        f"DELETE FROM stat WHERE stage='{IndexedStages.INDEXED_STAGE.value}'"
+                    )
                     for key, value in json.load(member).items():
                         value["path"] = key
                         conn.execute(

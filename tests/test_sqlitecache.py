@@ -11,7 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from conda_index.index.cache import _cache_post_install_details, _cache_recipe
+from conda_index.index.cache import (
+    IndexedStages,
+    _cache_post_install_details,
+    _cache_recipe,
+)
 from conda_index.index.common import connect
 from conda_index.index.convert_cache import (
     add_computed_name,
@@ -23,7 +27,6 @@ from conda_index.index.convert_cache import (
 )
 from conda_index.index.sqlitecache import CondaIndexCache, _clear_newline_chars
 from conda_index.utils import DEFAULT_SUBDIRS
-from conda_index.index.cache import IndexedStages
 
 
 def test_cache_extract_without_stat_result(index_data):
@@ -116,7 +119,9 @@ def test_store_warns_when_member_data_missing(tmp_path, caplog):
 
 def test_indexed_packages_excludes_run_exports(tmp_path):
     (tmp_path / "noarch").mkdir()
-    cache = CondaIndexCache(tmp_path, "noarch", upstream_stage=IndexedStages.INDEXED_STAGE.value)
+    cache = CondaIndexCache(
+        tmp_path, "noarch", upstream_stage=IndexedStages.INDEXED_STAGE.value
+    )
 
     cache.store(
         "pkg-1.0-0.conda",

@@ -56,7 +56,12 @@ class Stat(Base):
     __table__: Table
     __tablename__ = "stat"
 
-    stage = mapped_column(TEXT, default=IndexedStages.INDEXED_STAGE.value, nullable=False, primary_key=True)
+    stage = mapped_column(
+        TEXT,
+        default=IndexedStages.INDEXED_STAGE.value,
+        nullable=False,
+        primary_key=True,
+    )
     path = mapped_column(TEXT, nullable=False, primary_key=True)
     mtime = mapped_column(Integer)
     size = mapped_column(Integer)

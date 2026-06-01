@@ -12,7 +12,6 @@ from os.path import isfile, join
 from pathlib import Path
 from shutil import rmtree
 
-from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, DEFAULT_SUBDIRS
 import conda_package_handling.api
 import pytest
 import zstandard
@@ -21,9 +20,14 @@ from conda.base.context import context
 import conda_index.api
 import conda_index.index
 from conda_index.index.sqlitecache import CondaIndexCache
-from conda_index.postgres.cache import PsqlCache
-from conda_index.utils_build import copy_into_nolock as copy_into
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, DEFAULT_SUBDIRS
+
+try:
+    from conda_index.postgres.cache import PsqlCache
+except ImportError:
+    PsqlCache = None
 from conda_index.index.cache import IndexedStages, UpstreamStages
+from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .utils import archive_dir, fake_download
 
@@ -1555,12 +1559,14 @@ def test_update_index_closes_sqlite_connections(testing_workdir, monkeypatch):
 
 @pytest.mark.needs_postgresql
 @pytest.mark.parametrize(
-        "cache_class",
+    "cache_class",
+    (
         [
             pytest.param(CondaIndexCache, id="CondaIndexCache"),
-            pytest.param(PsqlCache, id="PsqlCache"),
         ]
-    )
+        + ([pytest.param(PsqlCache, id="PsqlCache")] if PsqlCache is not None else [])
+    ),
+)
 def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
     """
     Test that repodata with wheels and conda packages can be indexed using different cache implementations.
@@ -1575,7 +1581,7 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
         "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
         "include_stages": ["md"],
     }
-    if cache_class is PsqlCache:
+    if PsqlCache is not None and cache_class is PsqlCache:
         # Get the postgresql_database fixture from the request if available
         postgresql_database = request.getfixturevalue("postgresql_database")
         cache_kwargs["db_url"] = postgresql_database.url
@@ -1640,7 +1646,7 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, request):
     shards = list(cache.indexed_shards())
     assert len(shards) >= 1
     assert sum([len(shard.packages) for shard in shards]) == 1
-    assert sum([len(shard.packages_whl) for shard in shards])== len(wheels)
+    assert sum([len(shard.packages_whl) for shard in shards]) == len(wheels)
 
     # #######################################
     # tests for noarch subdir

@@ -121,7 +121,9 @@ class PsqlCache(BaseCondaIndexCache):
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
-    def store_stat_state(self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]):
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
+    ):
         """
         Write {path, mtime, size} into database.
         """

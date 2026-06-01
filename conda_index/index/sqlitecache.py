@@ -20,11 +20,12 @@ from .cache import (
     BaseCondaIndexCache,
     IndexedPackages,
     IndexedShard,
+    IndexedStages,
+    UpstreamStages,
     cacher,
     pack_record,
 )
 from .cache import clear_newline_chars as _clear_newline_chars
-from .cache import UpstreamStages, IndexedStages
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
@@ -299,7 +300,9 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return data
 
-    def store_stat_state(self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]):
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
+    ):
         stage = stage or self.upstream_stage
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
