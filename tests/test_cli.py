@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from os.path import join
 import json
 import sys
@@ -10,6 +9,8 @@ from unittest.mock import patch
 
 import pytest
 
+import conda_index.cli
+import conda_index.index.logutil
 from conda_index.cli import cli
 
 try:
@@ -20,7 +21,8 @@ except ImportError:
 from .utils import fake_download
 
 
-here = Path(__file__).parent
+HERE = Path(__file__).parent
+ARBITRARY_YML = HERE / "environment.yml"
 
 
 def test_cli(tmp_path):
@@ -202,7 +204,7 @@ def test_patch_generator(tmp_path):
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     fake_download(test_package_url, test_package_path)
 
-    patch_file = here / "archives" / "conda-index-pkg-a-patch.py"
+    patch_file = HERE / "archives" / "conda-index-pkg-a-patch.py"
 
     try:
         cli(
@@ -245,3 +247,69 @@ def test_postgresql_missing_dependencies():
 
     assert exc_info.value.code == 1
     assert "Missing dependencies for postgresql" in mock_stderr.getvalue()
+
+
+def test_cli_impl(monkeypatch):
+    """Execute code in cli _main_impl function."""
+    # don't allow it to mess up logging
+    monkeypatch.setattr(conda_index.index.logutil, "configure", lambda: None)
+
+    # Save the original changed_packages method to restore it after the test.
+    # _main_impl modifies this class attribute when update_cache=False,
+    # which would otherwise persist and break subsequent tests.
+    from conda_index.index.sqlitecache import CondaIndexCache
+
+    original_changed_packages = CondaIndexCache.changed_packages
+    monkeypatch.setattr(
+        CondaIndexCache,
+        "changed_packages",
+        original_changed_packages,
+    )
+
+    container = {"mock_index": None}
+    called = {}
+
+    class DoNothingChannelIndex(conda_index.index.ChannelIndex):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            container["mock_index"] = self
+
+        def index(self, *args, **kwargs):
+            called["index"] = True
+
+        def update_channeldata(self, rss=False):
+            called["update_channeldata"] = True
+
+    monkeypatch.setattr(conda_index.cli, "ChannelIndex", DoNothingChannelIndex)
+
+    conda_index.cli._main_impl(
+        dir="/tmp/fake",
+        patch_generator="/tmp/fake2",
+        subdir=(),
+        output="/tmp/fake-output",
+        channeldata=True,
+        verbose=True,
+        threads=1,
+        current_index_versions_file=ARBITRARY_YML,
+        channel_name="test-channel",
+        bz2=False,
+        zst=True,
+        rss=True,
+        run_exports=True,
+        compact=True,
+        base_url=None,
+        update_cache=False,
+        upstream_stage="fs",
+        current_repodata=True,
+        write_monolithic=True,
+        write_shards=True,
+        db="sqlite3",
+        db_url="",
+        html_dependencies=True,
+        update_only=False,
+        repodata_next=True,
+    )
+
+    assert container["mock_index"]
+    assert called["index"]
+    assert called["update_channeldata"]
