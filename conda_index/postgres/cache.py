@@ -19,7 +19,6 @@ from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index.cache import (
     BaseCondaIndexCache,
-    ChangedPackage,
     IndexedPackages,
     IndexedShard,
     clear_newline_chars,
@@ -34,7 +33,7 @@ from conda_index.index.sqlitecache import (
 )
 
 if TYPE_CHECKING:
-    from ..index.cache import HasChecksumsAndSize
+    from ..index.cache import ChangedPackage, HasChecksumsAndSize
 
 from . import model
 

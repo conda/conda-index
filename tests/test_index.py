@@ -8,7 +8,7 @@ import shutil
 import tarfile
 import urllib.parse
 from logging import getLogger
-from os.path import dirname, isdir, isfile, join
+from os.path import isfile, join
 from pathlib import Path
 from shutil import rmtree
 
@@ -21,7 +21,7 @@ import conda_index.api
 import conda_index.index
 from conda_index.utils_build import copy_into_nolock as copy_into
 
-from .utils import archive_dir
+from .utils import archive_dir, fake_download
 
 log = getLogger(__name__)
 
@@ -31,18 +31,6 @@ here = os.path.dirname(__file__)
 
 # match ./index_hotfix_pkgs/<subdir>
 TEST_SUBDIR = "osx-64"
-
-
-def fake_download(url, local_path):
-    # NOTE: The tests in this module used to download packages from the
-    # conda-test channel. These packages are small and are now included.
-    if not isdir(dirname(local_path)):
-        os.makedirs(dirname(local_path))
-
-    archive_path = join(here, "archives", url.rsplit("/", 1)[-1])
-
-    shutil.copy(archive_path, local_path)
-    return local_path
 
 
 def test_index_on_single_subdir_1(testing_workdir):
