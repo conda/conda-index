@@ -20,7 +20,7 @@ except ImportError:
 from .utils import fake_download
 
 
-here = os.path.dirname(__file__)
+here = Path(__file__).parent
 
 
 def test_cli(tmp_path):
@@ -202,7 +202,7 @@ def test_patch_generator(tmp_path):
     test_package_url = "https://conda.anaconda.org/conda-test/noarch/conda-index-pkg-a-1.0-pyhed9eced_1.tar.bz2"
     fake_download(test_package_url, test_package_path)
 
-    patch_file = Path(here) / "archives" / "conda-index-pkg-a-patch.py"
+    patch_file = here / "archives" / "conda-index-pkg-a-patch.py"
 
     try:
         cli(
