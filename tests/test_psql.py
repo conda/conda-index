@@ -314,7 +314,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return
@@ -375,7 +375,7 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return

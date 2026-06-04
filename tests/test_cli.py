@@ -89,6 +89,7 @@ def test_mutual_exclusion_mononlithic_repodata(cli_option: str, tmp_path):
         assert cli_option in error_output
 
 
+@pytest.mark.needs_postgresql
 @pytest.mark.xfail(
     PsqlCache is None,
     reason="Should fail with an import error if postgres dependencies are not installed",
