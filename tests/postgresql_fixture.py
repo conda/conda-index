@@ -36,7 +36,7 @@ def postgresql_fixture(BASE: Path):
         yield engine
 
     finally:
-        run(["pg_ctl", "-D", DBDIR, "stop"], cwd=BASE, check=True)
+        run(["pg_ctl", "-D", DBDIR, "stop"], cwd=BASE, check=False)
 
     shutil.rmtree(BASE / DBDIR)
 

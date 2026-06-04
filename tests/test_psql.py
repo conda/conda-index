@@ -303,19 +303,40 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     connection = MockConnection()
     cache.engine = MockEngine(connection)  # type: ignore
 
-    class DummyResult(NamedTuple):
+    class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
         record: object
         run_exports: object
 
+    class DummyResultWithoutRunExports(NamedTuple):
+        name: str
+        path: str
+        record: object
+
+    def results_factory():
+        # Get the last call to determine which query is being executed, and return
+        # the correct number of columns.
+        last_call = connection.calls[-1]
+        if len(last_call[0].columns) == 4:
+            return [
+                DummyResultWithRunExports("package", "package.notconda", {}, {}),
+                DummyResultWithRunExports("package", "package-1.0.notconda", {}, {}),
+                DummyResultWithRunExports(
+                    "package", "package-1.0.conda", {}, {"weak": ["zlib"]}
+                ),
+                DummyResultWithRunExports("package", "package-1.0.tar.bz2", {}, {}),
+            ]
+        elif len(last_call[0].columns) == 3:
+            return [
+                DummyResultWithoutRunExports("package", "package.notconda", {}),
+                DummyResultWithoutRunExports("package", "package-1.0.notconda", {}),
+                DummyResultWithoutRunExports("package", "package-1.0.conda", {}),
+                DummyResultWithoutRunExports("package", "package-1.0.tar.bz2", {}),
+            ]
+
     # no index.json validation at this step, empty {} as record is passed on.
-    connection.results_factory = lambda: [
-        DummyResult("package", "package.notconda", {}, {}),
-        DummyResult("package", "package-1.0.notconda", {}, {}),
-        DummyResult("package", "package-1.0.conda", {}, {"weak": ["zlib"]}),
-        DummyResult("package", "package-1.0.tar.bz2", {}, {}),
-    ]
+    connection.results_factory = results_factory
     shards = list(cache.indexed_shards())
     assert len(shards) == 1
     shard = shards[0]
@@ -343,16 +364,33 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     connection = MockConnection()
     cache.engine = MockEngine(connection)  # type: ignore
 
-    class DummyResult(NamedTuple):
+    class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
         record: object
         run_exports: object
 
-    connection.results_factory = lambda: [
-        DummyResult("package", "package.whl", {}, {}),
-        DummyResult("package", "package.conda", {}, {}),
-    ]
+    class DummyResultWithoutRunExports(NamedTuple):
+        name: str
+        path: str
+        record: object
+
+    def results_factory():
+        # Get the last call to determine which query is being executed, and return
+        # the correct number of columns.
+        last_call = connection.calls[-1]
+        if len(last_call[0].columns) == 4:
+            return [
+                DummyResultWithRunExports("package", "package.whl", {}, {}),
+                DummyResultWithRunExports("package", "package.conda", {}, {}),
+            ]
+        elif len(last_call[0].columns) == 3:
+            return [
+                DummyResultWithoutRunExports("package", "package.whl", {}),
+                DummyResultWithoutRunExports("package", "package.conda", {}),
+            ]
+
+    connection.results_factory = results_factory
     shards = list(cache.indexed_shards())
     assert len(shards) == 1
     assert len(shards[0].packages_whl) == 1

@@ -1,6 +1,7 @@
 import contextlib
 import os
 import shlex
+import shutil
 import sys
 
 import pytest
@@ -14,6 +15,8 @@ def get_root_dir():
     conda_index_dir = os.path.realpath(os.path.dirname(conda_index.__file__))
     return os.path.abspath(os.path.join(conda_index_dir, ".."))
 
+
+here = os.path.dirname(__file__)
 
 thisdir = os.path.join(get_root_dir(), "tests")
 metadata_dir = os.path.join(thisdir, "test-recipes", "metadata")
@@ -139,3 +142,15 @@ def skip_serial(request):
     ):
         # under xdist and serial
         pytest.skip("serial")
+
+
+def fake_download(url, local_path):
+    # NOTE: The tests in this module used to download packages from the
+    # conda-test channel. These packages are small and are now included.
+    if not os.path.isdir(os.path.dirname(local_path)):
+        os.makedirs(os.path.dirname(local_path))
+
+    archive_path = os.path.join(here, "archives", url.rsplit("/", 1)[-1])
+
+    shutil.copy(archive_path, local_path)
+    return local_path

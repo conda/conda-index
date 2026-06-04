@@ -355,21 +355,28 @@ def _main_impl(
         def no_changed_packages(self, *args):
             return []
 
+        # We'll want to restore this method after indexing, so save the original.
+        original_changed_packages = channel_index.cache_class.changed_packages
         channel_index.cache_class.changed_packages = no_changed_packages
 
-    current_index_versions = None
-    if current_index_versions_file:
-        with open(current_index_versions_file) as f:
-            current_index_versions = yaml.safe_load(f)
+    try:
+        current_index_versions = None
+        if current_index_versions_file:
+            with open(current_index_versions_file) as f:
+                current_index_versions = yaml.safe_load(f)
 
-    if patch_generator:
-        patch_generator = str(Path(patch_generator).expanduser())
+        if patch_generator:
+            patch_generator = str(Path(patch_generator).expanduser())
 
-    channel_index.index(
-        patch_generator=patch_generator,  # or will use outdated .py patch functions
-        current_index_versions=current_index_versions,
-        progress=False,  # clone is a batch job
-    )
+        channel_index.index(
+            patch_generator=patch_generator,  # or will use outdated .py patch functions
+            current_index_versions=current_index_versions,
+            progress=False,  # clone is a batch job
+        )
+    finally:
+        if update_cache is False:
+            # Restore the original changed_packages method after indexing.
+            channel_index.cache_class.changed_packages = original_changed_packages
 
     if channeldata:  # about 2 1/2 minutes for conda-forge
         channel_index.update_channeldata(rss=rss)
