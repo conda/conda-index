@@ -1,5 +1,34 @@
 [//]: # (current developments)
 
+## 0.12.0 (2026-06-05)
+
+### Enhancements
+
+* Add a metadata only stage to repodata generation for adding packages to repodata without requiring the package artifacts. (#284)
+
+### Bug fixes
+
+* Explicitly close `sqlite3.Connection` objects opened by `CondaIndexCache`
+  inside `ChannelIndex` instead of relying on the garbage collector. This
+  avoids `ResourceWarning: unclosed database` on Python 3.13+ and releases
+  cache database files promptly so API consumers (e.g. `conda-build`) can
+  open them immediately after `update_index()` returns. (#236)
+* Fix missing f-string prefix in error message. (#291)
+
+### Deprecations
+
+* Drop `click` dependency, use argparse. (#288)
+
+### Contributors
+
+* @dholth
+* @jezdez
+* @soapy1
+* @conda-bot
+* @jaimergp
+
+
+
 ## 0.11.0 (2026-04-16)
 
 ### Enhancements
