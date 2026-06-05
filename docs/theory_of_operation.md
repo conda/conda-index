@@ -5,17 +5,17 @@ table named `stat`, with a compound primary key (`stage`, `path`). Think of
 packages moving from "upstream" to "downstream" by being duplicated in the
 `stat` table for each stage.
 
-The main stages are `'fs'` which is called the `upstream` stage, and
-`'indexed'`. `'fs'` means that the artifact is on the filesystem. `'indexed'`
-means that the entry already exists in the database (same filename, same
-timestamp, same hash), and its package metadata has been extracted to the
-`index_json` etc. tables. Paths in `'fs'` but not in `'indexed'` need to be
-unpacked to have their metadata added to the database. Paths in `'indexed'` but
-not in `'fs'` will be ignored and left out of `repodata.json`.
+The main stages are `'fs'` which is called the upstream stage, and `'indexed'`.
+`'fs'` means that the artifact is on the filesystem. `'indexed'` means that the
+entry already exists in the database (same filename, same timestamp, same hash),
+and its package metadata has been extracted to the `index_json` etc. tables.
+Paths in `'fs'` but not in `'indexed'` need to be unpacked to have their
+metadata added to the database. Paths in `'indexed'` but not in `'fs'` will be
+ignored and left out of `repodata.json`.
 
-First, conda-index adds all files in a subdir to the upstream stage which
-defaults to `fs`, so each package has an entry `('fs', path, mtime, size, ...)`.
-This involves a `listdir()` and `stat()` for each file in the index.
+First, conda-index adds all files in a subdir to the `'fs'` upstream stage. Each
+package has an entry `('fs', path, mtime, size, ...)`. This involves a
+`listdir()` and `stat()` for each file in the index.
 
 Next, conda-index looks for all `changed_packages()`: paths in the `upstream`
 (`fs`) stage that are either missing from or have a different size, mtime than
@@ -37,14 +37,17 @@ WHERE stat.stage = :upstream_stage
 
 The steps to create `repodata.json`, including any repodata patches, and to
 create `current_repodata.json` with only the latest versions of each package,
-are similar to pre-sqlite3 conda-index.
+are similar to pre-sqlite3 conda-index. The raw `repodata_from_packages.json` is
+loaded, each record is sent through a patch function (if provided) than can
+modify or exclude that record, and the result is serialized as `repodata.json`.
 
-The other cached metadata tables are used to create `channeldata.json`.
+The other cached metadata tables are used to create `channeldata.json`, an
+optional file that aggregates packages from every subdir into a channel listing.
 
 # Advanced Techniques
 
-Other techniques are possible, but generally require using the `conda-index` API
-and are not fully available from the command line interface.
+Other techniques are possible but generally require using the `conda-index` API
+and are not available from the command line interface.
 
 ## "Metadata only" stage
 
