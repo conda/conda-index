@@ -42,21 +42,3 @@ stored in the same database. `conda_index` creates a random prefix in
 `[DIR]/.cache/cache.json` to differentiate this channel from any others that may
 be stored in the same PostgreSQL database. Each package name is stored with the
 format `<prefix>/<subdir>/<package>.conda` in a single database.
-
-Advanced users can use the CLI or the API to run `conda_index` on a partial
-local package repository. It is possible to add a few local packages to a much
-larger index instead of keeping every package on the machine running
-`conda-index`.
-
-For example, by running `python -m conda_index --db postgresql --update-only
-[DIR]`, `conda-index` will add or update packages in `[DIR]` to repodata, while
-keeping already-indexed packages in the output `repodata.json`. The output
-repodata can then be copied to a server that has every package.
-
-If `--update-only` is used, the `stat` table must be altered to remove packages
-from `repodata.json`, e.g. `DELETE FROM stat WHERE path =
-'<prefix>/<subdir>/package.conda' AND stage = 'fs'`.
-
-When using this option, care must be taken to never
-run `conda-index` without `--update-only` or all the "missing" packages will be
-dropped from the index.

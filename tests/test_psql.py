@@ -72,8 +72,9 @@ def test_load_all_from_cache_filters_by_stage_and_path(tmp_path: Path):
     assert "AND stat.path" in query
 
 
-@pytest.mark.skipif(PsqlCache is None, reason="Could not import PsqlCache")
-def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
+@pytest.mark.needs_postgresql
+@pytest.mark.parametrize("v3_repodata", (True, False))
+def test_psql(v3_repodata: bool, tmp_path: Path, index_data: Path, postgresql_database):
     """
     Test that conda-index can store its cache in postgresql.
     """
@@ -99,6 +100,7 @@ def test_psql(tmp_path: Path, index_data: Path, postgresql_database):
         cache_kwargs={"db_url": postgresql_database.url},
         write_shards=True,
         write_monolithic=True,
+        repodata_v3=v3_repodata,
     )
 
     channel_index.index(
@@ -306,13 +308,13 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return
@@ -367,13 +369,13 @@ def test_psql_include_wheel_extension(tmp_path: Path):
     class DummyResultWithRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
-        record: object
+        index_json: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return
@@ -501,6 +503,7 @@ INVALID_PACKAGES_IN_SUITE = {
 }
 
 
+@pytest.mark.needs_postgresql
 def test_psql_channel_separation(
     tmp_path: Path, index_data: Path, archives_data: Path, postgresql_database
 ):

@@ -16,6 +16,7 @@ import sqlite3
 from itertools import chain, islice
 
 from . import common
+from .cache import IndexedStages
 
 log = logging.getLogger(__name__)
 
@@ -103,8 +104,8 @@ def create(conn):
     # DATETIME(mtime, 'unixepoch')
     # May or may not need all these columns
     conn.execute(
-        """CREATE TABLE IF NOT EXISTS stat (
-                stage TEXT NOT NULL DEFAULT 'indexed',
+        f"""CREATE TABLE IF NOT EXISTS stat (
+                stage TEXT NOT NULL DEFAULT '{IndexedStages.INDEXED_STAGE.value}',
                 path TEXT NOT NULL,
                 mtime NUMBER,
                 size INTEGER,
@@ -246,11 +247,13 @@ def convert_cache(conn, cache_generator):
                 if match["path"] == "stat.json":
                     # stat.json is one file with information on all the
                     # packages, so we delete from stat.
-                    conn.execute("DELETE FROM stat WHERE stage='indexed'")
+                    conn.execute(
+                        f"DELETE FROM stat WHERE stage='{IndexedStages.INDEXED_STAGE.value}'"
+                    )
                     for key, value in json.load(member).items():
                         value["path"] = key
                         conn.execute(
-                            "INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, 'indexed')",
+                            f"INSERT OR REPLACE INTO stat (path, mtime, size, stage) VALUES (:path, :mtime, :size, '{IndexedStages.INDEXED_STAGE.value}')",
                             value,
                         )
 

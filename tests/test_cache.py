@@ -34,7 +34,9 @@ class DummyCache(cache.BaseCondaIndexCache):
     def load_all_from_cache(self, fn):
         raise NotImplementedError
 
-    def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]
+    ):
         raise NotImplementedError
 
     def changed_packages(self) -> list[cache.ChangedPackage]:

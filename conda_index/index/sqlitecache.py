@@ -20,6 +20,8 @@ from .cache import (
     BaseCondaIndexCache,
     IndexedPackages,
     IndexedShard,
+    IndexedStages,
+    UpstreamStages,
     cacher,
     pack_record,
 )
@@ -80,7 +82,8 @@ class CondaIndexCache(BaseCondaIndexCache):
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
-        upstream_stage: str = "fs",
+        upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
+        include_stages: list[str] = [],
         **kwargs,
     ):
         """
@@ -97,6 +100,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             fs=fs,
             channel_url=channel_url,
             upstream_stage=upstream_stage,
+            include_stages=include_stages,
             **kwargs,
         )
 
@@ -224,6 +228,7 @@ class CondaIndexCache(BaseCondaIndexCache):
             )  # we don't need this return value; it will be queried back out to generate repodata
 
     def load_all_from_cache(self, fn):
+        """Load all items for the chosen stage."""
         subdir_path = self.subdir_path
 
         try:
@@ -295,19 +300,22 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         return data
 
-    def store_fs_state(self, listdir_stat: Iterable[dict[str, Any]]):
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
+    ):
+        stage = stage or self.upstream_stage
         with self.db:
             # always stage='fs', not custom upstream_stage which would be
             # handled in a subclass
             if not self.update_only:
                 self.db.execute(
-                    "DELETE FROM stat WHERE stage='fs' AND path like :path_like",
-                    {"path_like": self.database_path_like},
+                    "DELETE FROM stat WHERE stage=:stage AND path like :path_like",
+                    {"stage": stage, "path_like": self.database_path_like},
                 )
             self.db.executemany(
-                """
+                f"""
             INSERT INTO STAT (stage, path, mtime, size)
-            VALUES ('fs', :path, :mtime, :size)
+            VALUES ('{stage}', :path, :mtime, :size)
             ON CONFLICT (stage, path) DO UPDATE SET
             mtime=excluded.mtime, size=excluded.size
             """,
@@ -354,14 +362,17 @@ class CondaIndexCache(BaseCondaIndexCache):
             "packages.whl": {},
         }
 
+        check_stages = [self.upstream_stage] + self.include_stages
+        stages_placeholders = ",".join(("?",) * len(check_stages))
+
         # load cached packages
         for row in self.db.execute(
-            """
+            f"""
             SELECT path, index_json FROM stat JOIN index_json USING (path)
-            WHERE stat.stage = ?
+            WHERE stat.stage IN ({stages_placeholders})
             ORDER BY path
             """,
-            (self.upstream_stage,),
+            check_stages,
         ):
             path, index_json = row
             index_json = json.loads(index_json)
@@ -379,23 +390,28 @@ class CondaIndexCache(BaseCondaIndexCache):
         )
 
     def indexed_shards(
-        self, desired: set[str] | None = None, *, pack_record=pack_record
+        self,
+        desired: set[str] | None = None,
+        *,
+        pack_record=pack_record,
     ) -> Iterator[IndexedShard]:
         """
         Yield package shards as IndexedShard records.
 
         :desired: If not None, set of desired package names.
         """
+        check_stages = [self.upstream_stage] + self.include_stages
+        stages_placeholders = ",".join(("?",) * len(check_stages))
 
         for name, rows in itertools.groupby(
             self.db.execute(
-                """SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
+                f"""SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
                 FROM stat
                 JOIN index_json USING (path)
                 LEFT JOIN run_exports USING (path)
-                WHERE stat.stage = ?
+                WHERE stat.stage IN ({stages_placeholders})
                 ORDER BY index_json.name, index_json.path""",
-                (self.upstream_stage,),
+                check_stages,
             ),
             lambda k: k[0],
         ):
@@ -427,8 +443,8 @@ class CondaIndexCache(BaseCondaIndexCache):
         self, database_path, mtime, size, index_json: HasChecksumsAndSize
     ):
         self.db.execute(
-            """INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
-                VALUES ('indexed', ?, ?, ?, ?, ?)""",
+            f"""INSERT OR REPLACE INTO stat (stage, path, mtime, size, sha256, md5)
+                VALUES ('{IndexedStages.INDEXED_STAGE.value}', ?, ?, ?, ?, ?)""",
             (database_path, mtime, size, index_json["sha256"], index_json["md5"]),
         )
 

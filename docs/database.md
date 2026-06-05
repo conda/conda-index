@@ -55,44 +55,6 @@ select * from index_json where path = 'libcurl-7.88.1-h9049daf_0.conda';
 '{"build":"h9049daf_0",...,"sha256":"37b8d58c05386ac55d1d8e196c90b92b0a63f3f1fe2fa916bf5ed3e1656d8e14","size":321706}'
 ```
 
-To track whether a package is indexed in the cache or not, conda-index uses a
-table named `stat`. The main point of this table is to assign a stage value to
-each artifact filename; usually `'fs'` which is called the `upstream` stage, and
-`'indexed'`. `'fs'` means that the artifact is now available in the set of
-packages (assumed by default to be the local filesystem). `'indexed'` means that
-the entry already exists in the database (same filename, same timestamp, same
-hash), and its package metadata has been extracted to the `index_json` etc.
-tables. Paths in `'fs'` but not in `'indexed'` need to be unpacked to have their
-metadata added to the database. Paths in `'indexed'` but not in `'fs'` will be
-ignored and left out of `repodata.json`.
-
-First, conda-index adds all files in a subdir to the `upstream` stage. This
-involves a `listdir()` and `stat()` for each file in the index. The default
-`upstream` stage is named `fs`, but this step is designed to be overridden by
-subclassing `CondaIndexCache()` and replacing the `save_fs_state()` and
-`changed_packages()` methods. By overriding `CondexIndexCache()` it is possible
-to index without calling `stat()` on each package, or without even having all
-packages stored on the indexing machine.
-
-Next, conda-index looks for all `changed_packages()`: paths in the `upstream`
-(`fs`) stage that don't exist in or have a different  modification time than
-those in thie `indexed` stage.
-
-Finally, a join between the `upstream` stage, usually `'fs'`, and the
-`index_json` table yields a basic `repodata_from_packages.json` without any
-repodata patches.
-
-```sql
-SELECT path, index_json FROM stat JOIN index_json USING (path) WHERE stat.stage = :upstream_stage
-```
-
-The steps to create `repodata.json`, including any repodata patches, and to
-create `current_repodata.json` with only the latest versions of each package,
-are similar to pre-sqlite3 conda-index.
-
-The other cached metadata tables are used to create `channeldata.json`.
-
-
 ## Sample queries
 
 Megabytes added per day:

@@ -837,13 +837,18 @@ class ChannelIndex:
             ("whl", indexed_packages.packages_whl),
         ):
             for filename, record in records.items():
+                key = self._v3_key_for_path(filename)
+                if key is None:
+                    log.warning("%s has unsupported extension", filename)
+                    continue
+
                 # Per draft wheel-in-conda work, key is conda-like so that some
                 # conda-like parsing can occur on the key only. So we derive the
                 # key here. `record["fn"]` contains the filename or URL.
                 if section == "whl":
-                    name = record.get("name")
-                    version = record.get("version")
-                    build = record.get("build")
+                    name = record.get("name", None)
+                    version = record.get("version", None)
+                    build = record.get("build", None)
                     if name is None or version is None or build is None:
                         log.warning(
                             "%s: v3 whl records require name, version, and build; skipping",
@@ -851,11 +856,6 @@ class ChannelIndex:
                         )
                         continue
                     key = f"{name}-{version}-{build}"
-                else:
-                    key = self._v3_key_for_path(filename)
-                    if key is None:
-                        log.warning("%s has unsupported extension", filename)
-                        continue
 
                 v3[section][key] = record
 

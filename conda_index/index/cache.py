@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from zipfile import BadZipFile
@@ -67,6 +68,19 @@ TABLE_NO_CACHE = {
 
 # saved to cache, not found in package
 COMPUTED = {"info/post_install.json"}
+
+
+class UpstreamStages(Enum):
+    # The artifact is now available in the set of packages (assumed by default to be the local filesystem).
+    LOCAL_FILE_UPSTREAM_STAGE = "fs"
+
+
+class IndexedStages(Enum):
+    # The artifact has been indexed and is available in the "indexed" state.
+    INDEXED_STAGE = "indexed"
+
+    # Metadata only stage - does not have local files associated with it
+    METADATA_INDEXED_STAGE = "md"
 
 
 # lock-free replacement for @cached_property
@@ -134,7 +148,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         *,
         fs: MinimalFS | None = None,
         channel_url: str | None = None,
-        upstream_stage: str = "fs",
+        upstream_stage: str = UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
+        include_stages: list[str] = [],
         package_extensions: tuple[str, ...] = CONDA_PACKAGE_EXTENSIONS,
         update_only: bool = False,
     ):
@@ -143,7 +158,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         subdir: platform subdir, e.g. 'linux-64'
         fs: MinimalFS (designed to wrap fsspec.spec.AbstractFileSystem); optional.
         channel_url: base url if fs is used; optional.
-        upstream_stage: stage from 'stat' table used to track available packages. Default is 'fs'.
+        upstream_stage: default stage from 'stat' table used to track available packages. Default is 'fs'.
         update_only: skip "delete from stat where stage='fs'" operation.
         """
 
@@ -152,6 +167,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.subdir_path = Path(channel_root, subdir)
         self.cache_dir = Path(channel_root, subdir, ".cache")
         self.upstream_stage = upstream_stage
+        self.include_stages = include_stages
         self.package_extensions = package_extensions
         self.update_only = update_only
 
@@ -198,6 +214,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         """
         Return filename with database prefix added.
         """
+        if fn.startswith(self.database_prefix):
+            return fn
         return f"{self.database_prefix}{fn}"
 
     def plain_path(self, path: str) -> str:
@@ -435,10 +453,36 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.store_fs_state(listdir_stat())
 
     @abc.abstractmethod
+    def store_stat_state(
+        self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]
+    ):
+        """
+        Save set of packages to a particular stage.
+        """
+
     def store_fs_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """
         Save set of packages to be indexed.
         """
+        self.store_stat_state(
+            UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value, listdir_stat
+        )
+
+    def store_md_state(self, listdir_stat: Iterator[dict[str, Any]]):
+        """
+        Save package metadata to cache and add write the package's index data to the
+        database. Useful for metadata only packages, including non-local packages.
+        """
+        stats = [stat for stat in listdir_stat]
+        self.store_stat_state(IndexedStages.METADATA_INDEXED_STAGE.value, stats)
+        for stat in stats:
+            self.store(
+                stat["path"],
+                stat["size"],
+                stat["mtime"],
+                {},
+                stat["repodata"],
+            )
 
     @abc.abstractmethod
     def changed_packages(self) -> list[ChangedPackage]:

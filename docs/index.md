@@ -43,9 +43,10 @@
 :caption: 'Contents:'
 :maxdepth: 2
 cli
-modules
+theory_of_operation
 database
 postgresql
+modules
 changelog
 ```
 

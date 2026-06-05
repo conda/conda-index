@@ -19,10 +19,11 @@ def test_demonstrate_wheel(tmp_path: Path):
         tmp_path,
         "haswheels",  # channel name if different than last segment of tmp_path
         repodata_v3=True,
-        update_only=True,
-        save_fs_state=False,
         write_current_repodata=False,
-        cache_kwargs={"package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",)},
+        cache_kwargs={
+            "package_extensions": CONDA_PACKAGE_EXTENSIONS + (".whl",),
+            "include_stages": ["md"],
+        },
     )
     cache = channel_index.cache_for_subdir("noarch")
 
@@ -40,34 +41,22 @@ def test_demonstrate_wheel(tmp_path: Path):
 
     def listdir_like():
         for path, repodata in wheels.items():
+            assert "sha256" in repodata
+            if "md5" not in repodata:
+                repodata["md5"] = None
             yield {
                 "path": cache.database_path(path),
                 "size": repodata["size"],
                 "mtime": repodata.get(
                     "timestamp", 1
                 ),  # timestamp missing from generate.py wheel repodata
+                "repodata": repodata,
             }
 
-    cache.store_fs_state(listdir_like())
-
-    # Has to be in stat JOIN index_json to appear in repodat
-    for path, repodata in wheels.items():
-        # must contain sha256 and md5 keys but values may be None
-        assert "sha256" in repodata
-        if "md5" not in repodata:
-            repodata["md5"] = None
-        # pretend we have a package with index.json but no other info/ files
-        cache.store(
-            cache.database_path(path),
-            repodata["size"],
-            repodata.get("timestamp", 1),
-            {},
-            repodata,
-        )
+    cache.store_md_state(listdir_like())
 
     # packages from database
     packages = cache.indexed_packages()
-
     assert len(packages.packages_whl) == len(wheels)
 
     # repodata.json without repodata patches applied. Saved to

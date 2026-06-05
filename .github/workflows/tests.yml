@@ -60,7 +60,7 @@ jobs:
         run: |
           pip install -e .[test]
           conda info
-          pytest --cov
+          pytest --cov ${{ matrix.postgresql == '' && '-m "not needs_postgresql"' || '' }}
 
       - name: Upload Coverage
         uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5.4.0

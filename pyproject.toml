@@ -26,6 +26,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+psql = [
+    "psycopg2",
+    "sqlalchemy",
+]
 test = [
     # Also not available on PyPI in any current version
     # "conda-build >=3.21.0",
@@ -34,7 +38,10 @@ test = [
     "pytest >=7",
     "pytest-cov",
     "pytest-mock",
-    "fsspec[http]"
+    "fsspec[http]",
+    "psycopg2-binary",
+    "sqlalchemy",
+    "testing.postgresql",
 ]
 docs = [
     "furo",
@@ -68,6 +75,9 @@ filterwarnings = [
   "error::PendingDeprecationWarning:conda_index",
   "error::DeprecationWarning:conda_index",
   "ignore:conda.base.constants.CONDA_PACKAGE_EXTENSIONS:PendingDeprecationWarning",
+]
+markers = [
+    "needs_postgresql",
 ]
 
 [tool.coverage.run]
