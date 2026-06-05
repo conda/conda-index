@@ -26,7 +26,7 @@ try:
     from conda_index.postgres.cache import PsqlCache
 except ImportError:
     PsqlCache = None
-from conda_index.index.cache import IndexedStages, UpstreamStages, IndexedPackages
+from conda_index.index.cache import IndexedPackages, IndexedStages, UpstreamStages
 from conda_index.utils_build import copy_into_nolock as copy_into
 
 from .utils import archive_dir, fake_download
