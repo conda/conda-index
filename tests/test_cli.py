@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from os.path import join
 import json
 import sys
 from io import StringIO
+from os.path import join
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +19,6 @@ except ImportError:
     PsqlCache = None
 
 from .utils import fake_download
-
 
 HERE = Path(__file__).parent
 ARBITRARY_YML = HERE / "environment.yml"
