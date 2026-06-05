@@ -130,7 +130,7 @@ def migrate(conn):
 
     if user_version > USER_VERSION:
         raise ValueError(
-            "conda-index cache is too new: version {user_version} > {USER_VERSION}"
+            f"conda-index cache is too new: version {user_version} > {USER_VERSION}"
         )
 
     if user_version < 1:
