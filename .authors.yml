@@ -10,12 +10,12 @@
   github: AndrewValette
 - name: Daniel Holth
   email: dholth@anaconda.com
-  num_commits: 113
+  num_commits: 117
   first_commit: 2022-05-18 19:49:18
   github: dholth
 - name: jaimergp
   email: jaimergp@users.noreply.github.com
-  num_commits: 2
+  num_commits: 3
   first_commit: 2023-08-29 10:56:37
   github: jaimergp
 - name: Conda Bot
@@ -27,12 +27,12 @@
   - 18747875+conda-bot@users.noreply.github.com
 - name: Jannis Leidel
   email: jannis@leidel.info
-  num_commits: 12
+  num_commits: 13
   first_commit: 2022-05-17 13:35:54
   github: jezdez
 - name: conda-bot
   email: 18747875+conda-bot@users.noreply.github.com
-  num_commits: 33
+  num_commits: 34
   first_commit: 2023-02-23 19:13:51
   github: conda-bot
 - name: Ken Odegard
@@ -66,3 +66,8 @@
   num_commits: 1
   first_commit: 2026-02-18 13:02:00
   github: danyeaw
+- name: Sophia Castellarin
+  email: scastellarin@openteams.com
+  github: soapy1
+  num_commits: 2
+  first_commit: 2026-06-04 11:12:03

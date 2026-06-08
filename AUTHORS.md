@@ -12,5 +12,6 @@ Authors are sorted alphabetically.
 * Klaus Zimmermann
 * Pavel Zwerschke
 * Ryan Keith
+* Sophia Castellarin
 * conda-bot
 * jaimergp
