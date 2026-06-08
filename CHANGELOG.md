@@ -1,6 +1,6 @@
 [//]: # (current developments)
 
-## 0.12.0 (2026-06-05)
+## 0.12.0 (2026-06-08)
 
 ### Enhancements
 
