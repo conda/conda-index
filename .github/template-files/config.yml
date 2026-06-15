@@ -50,7 +50,7 @@ conda/infrastructure:
     with:
       canary_channel: https://anaconda.org/conda-canary
       # SemVer placeholders
-      placeholder: MAJOR.MINOR.MINOR
+      placeholder: MAJOR.MINOR.PATCH
       placeholder_x: MAJOR.MINOR.x
   - src: templates/releases/rever.xsh
     dst: rever.xsh
