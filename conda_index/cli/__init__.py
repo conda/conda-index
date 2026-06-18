@@ -15,11 +15,10 @@ from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 from .. import yaml
 
 
-def _create_parser() -> argparse.ArgumentParser:
-    """Create and configure the argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Generate conda repository metadata (repodata.json) from a directory tree.",
-        add_help=True,
+def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Configure the argument parser."""
+    parser.description = (
+        "Generate conda repository metadata (repodata.json) from a directory tree."
     )
 
     # Positional argument
@@ -220,11 +219,19 @@ def _create_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _create_parser() -> argparse.ArgumentParser:
+    """Create and configure the argument parser."""
+    return configure_parser(argparse.ArgumentParser(add_help=True))
+
+
 def cli(args: list[str] | None = None) -> None:
     """Main CLI entry point."""
     parser = _create_parser()
-    parsed_args = parser.parse_args(args)
+    run(parser.parse_args(args))
 
+
+def run(parsed_args: argparse.Namespace) -> None:
+    """Run the CLI from parsed arguments."""
     _main_impl(
         dir=parsed_args.dir,
         patch_generator=parsed_args.patch_generator,
