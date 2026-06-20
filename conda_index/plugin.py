@@ -9,7 +9,13 @@ import conda.plugins.types
 def command(args):
     import conda_index.cli
 
-    return conda_index.cli.cli(prog_name="conda index", args=args)
+    return conda_index.cli.run(args)
+
+
+def configure_parser(parser):
+    import conda_index.cli
+
+    return conda_index.cli.configure_parser(parser)
 
 
 @conda.plugins.hookimpl
@@ -26,5 +32,8 @@ def conda_subcommands():
         pass
 
     yield conda.plugins.types.CondaSubcommand(
-        name="index", action=command, summary="Update package index metadata files."
+        name="index",
+        action=command,
+        summary="Update package index metadata files.",
+        configure_parser=configure_parser,
     )
