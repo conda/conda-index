@@ -12,7 +12,6 @@ import time
 from os import stat
 from os.path import isdir, isfile, islink
 
-import filelock
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +138,7 @@ def get_lock(folder, timeout=900):
             lock_file = os.path.join(locks_dir, lock_filename)
             with open(lock_file, "w") as f:
                 f.write("")
-            fl = filelock.FileLock(lock_file, timeout)
+            fl = None
             break
         except OSError:
             continue
@@ -225,46 +224,9 @@ def merge_or_update_dict(
 
 
 @contextlib.contextmanager
-def try_acquire_locks(locks: list[filelock.FileLock], timeout):
-    """Try to acquire all locks.
-
-    If any lock can't be immediately acquired, free all locks.
-    If the timeout is reached withou acquiring all locks, free all locks and raise.
-
-    http://stackoverflow.com/questions/9814008/multiple-mutex-locking-strategies-and-why-libraries-dont-use-address-comparison
-    """
-    t = time.time()
-    while time.time() - t < timeout:
-        # Continuously try to acquire all locks.
-        # By passing a short timeout to each individual lock, we give other
-        # processes that might be trying to acquire the same locks (and may
-        # already hold some of them) a chance to the remaining locks - and
-        # hopefully subsequently release them.
-        try:
-            for lock in locks:
-                lock.acquire(timeout=0.1)
-        except filelock.Timeout:
-            # If we failed to acquire a lock, it is important to release all
-            # locks we may have already acquired, to avoid wedging multiple
-            # processes that try to acquire the same set of locks.
-            # That is, we want to avoid a situation where processes 1 and 2 try
-            # to acquire locks A and B, and proc 1 holds lock A while proc 2
-            # holds lock B.
-            for lock in locks:
-                lock.release()
-        else:
-            break
-    else:
-        # If we reach this point, we weren't able to acquire all locks within
-        # the specified timeout. We shouldn't be holding any locks anymore at
-        # this point, so we just raise an exception.
-        raise LockError("Failed to acquire all locks")
-
-    try:
-        yield
-    finally:
-        for lock in locks:
-            lock.release()
+def try_acquire_locks(locks, timeout):
+    """Deprecated: locking is no longer used by conda-index."""
+    yield
 
 
 # with each of these, we are copying less metadata.  This seems to be necessary
