@@ -3,7 +3,7 @@
 ## Overview
 
 [Repodata v3](https://github.com/conda/ceps/pull/146) is a proposal that
-includes a top-level `v3` key and  sub-levels named after package extensions
+includes a top-level `v3` key and sub-levels named after package extensions
 (`.tar.bz2`, `.conda`, `.whl`). `conda-index` can generate `v3` repodata by
 using the `--repodata-next` flag:
 
