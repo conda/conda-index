@@ -1,5 +1,29 @@
 [//]: # (current developments)
 
+## 0.12.1 (2026-06-22)
+
+### Bug fixes
+
+* Fix issue running `conda index` (instead of `python -m conda_index`)
+  introduced by switch from `click` to `argparse` (#306)
+
+### Docs
+
+* Switch to using the new on demand release process. (#302)
+
+### Other
+
+* Enable infrastructure-managed Dependabot configuration via conda/infrastructure templates. (#307)
+
+### Contributors
+
+* @danyeaw
+* @dholth
+* @jezdez
+* @conda-bot
+
+
+
 ## 0.12.0 (2026-06-08)
 
 ### Enhancements
