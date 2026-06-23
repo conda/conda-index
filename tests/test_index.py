@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tarfile
 import urllib.parse
 from logging import getLogger
@@ -14,7 +15,11 @@ from shutil import rmtree
 
 import conda_package_handling.api
 import pytest
-import zstandard
+
+if sys.version_info >= (3, 14):
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 from conda.base.context import context
 
 import conda_index.api
@@ -66,7 +71,7 @@ def test_index_on_single_subdir_1(testing_workdir):
     def compare_zst(filename):
         original_path = Path(testing_workdir, "osx-64", filename)
         compressed_path = Path(testing_workdir, "osx-64", filename + ".zst")
-        assert original_path.read_bytes() == zstandard.decompress(
+        assert original_path.read_bytes() == zstd.decompress(
             compressed_path.read_bytes()
         )
 

@@ -23,11 +23,12 @@ requirements:
     - hatch-vcs >=0.2.0
   run:
     - python >=3.10
+    - backports.zstd >=1.3.0
     - conda >=25
-    - conda-package-streaming
+    - conda-package-streaming >=0.12.0
     - filelock
     - jinja2
-    - msgpack-python >=1.0.2
+    - msgpack-python >=1.1.1
     - ruamel.yaml
 
 test:

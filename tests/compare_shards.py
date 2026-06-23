@@ -5,7 +5,11 @@ from pathlib import Path
 
 import msgpack
 import split_repo
-import zstandard
+
+if sys.version_info >= (3, 14):
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 
 SUBDIRS = "noarch", "linux-64"
 
@@ -31,7 +35,7 @@ class ShardReader(dict):
 
     @classmethod
     def from_path(cls, repodata: Path):
-        shards_index = msgpack.loads(zstandard.decompress(repodata.read_bytes()))
+        shards_index = msgpack.loads(zstd.decompress(repodata.read_bytes()))
         assert isinstance(shards_index, dict)
         shards = cls(shards_index["shards"])
         if "shards_base_url" in shards_index["info"]:
@@ -47,7 +51,7 @@ class ShardReader(dict):
         shard_id = super().__getitem__(key)
         if isinstance(shard_id, bytes):  # not loaded yet
             shard_path = (self.shards_base / shard_id.hex()).with_suffix(".msgpack.zst")
-            item = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+            item = msgpack.loads(zstd.decompress(shard_path.read_bytes()))
             self[key] = item
             return item
         return shard_id

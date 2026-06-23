@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,11 @@ from pathlib import Path
 import boto3
 import msgpack
 import requests
-import zstandard as zstd
+
+if sys.version_info >= (3, 14):
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 from botocore.exceptions import ClientError
 from rich.progress import (
     BarColumn,
@@ -234,8 +239,7 @@ def files_to_upload(outpath, timestamp, subdir, channel_name):
     shard_hashes = set()
     if response.status_code == 200:
         # decode with zstd and msgpack
-        decompressor = zstd.ZstdDecompressor()
-        decompressed = decompressor.decompress(response.content)
+        decompressed = zstd.decompress(response.content)
         index_data = msgpack.loads(decompressed)
         index_file.write_bytes(decompressed)
 
