@@ -25,7 +25,7 @@ channel_index.index(...)
 With v3 repodata enabled, the generated `repodata.json` has the following
 structure:
 
-```json
+```python
 {
   "info": {
     "repodata_revisions": [
