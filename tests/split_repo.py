@@ -133,8 +133,6 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
     shards_index["info"]["base_url"] = f"{repo_url}/{subdir}/"
     shards_index["info"]["shards_base_url"] = "./shards/"
 
-    compressor = zstd.ZstdCompressor(level=COMPRESS_LEVEL)
-
     before = 0
     after_compression = 0
 
@@ -165,9 +163,9 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
                 conda_packages[fn], run_exports_conda_packages.get(fn)
             )
 
-        encoded = msgpack.dumps(d)
+        encoded: bytes = msgpack.dumps(d) # type: ignore[assign]
         # encode with zstd
-        compressed = compressor.compress(encoded)
+        compressed = zstd.compress(encoded, level=COMPRESS_LEVEL)
         # use the sha hash of the compressed data as the filename
         digest, hexdigest = sha256(compressed)
 
@@ -187,7 +185,7 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
 
     # write a repodata_shards.json file that has an index of all the shards
     repodata_shards_file = folder / subdir / "repodata_shards.msgpack.zst"
-    repodata_shards = compressor.compress(msgpack.dumps(shards_index))
+    repodata_shards = zstd.compress(msgpack.dumps(shards_index), level=COMPRESS_LEVEL)  # type: ignore
     repodata_shards_file.write_bytes(repodata_shards)
 
     return package_names
