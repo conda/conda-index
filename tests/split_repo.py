@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,11 @@ from pathlib import Path
 import boto3
 import msgpack
 import requests
-import zstandard as zstd
+
+if sys.version_info >= (3, 14): # pragma: no cover
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 from botocore.exceptions import ClientError
 from rich.progress import (
     BarColumn,
@@ -128,8 +133,6 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
     shards_index["info"]["base_url"] = f"{repo_url}/{subdir}/"
     shards_index["info"]["shards_base_url"] = "./shards/"
 
-    compressor = zstd.ZstdCompressor(level=COMPRESS_LEVEL)
-
     before = 0
     after_compression = 0
 
@@ -160,9 +163,9 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
                 conda_packages[fn], run_exports_conda_packages.get(fn)
             )
 
-        encoded = msgpack.dumps(d)
+        encoded: bytes = msgpack.dumps(d) # type: ignore[assign]
         # encode with zstd
-        compressed = compressor.compress(encoded)
+        compressed = zstd.compress(encoded, level=COMPRESS_LEVEL)
         # use the sha hash of the compressed data as the filename
         digest, hexdigest = sha256(compressed)
 
@@ -182,7 +185,7 @@ def split_repo_file(repo_url, subdir, folder, repodata, run_exports):
 
     # write a repodata_shards.json file that has an index of all the shards
     repodata_shards_file = folder / subdir / "repodata_shards.msgpack.zst"
-    repodata_shards = compressor.compress(msgpack.dumps(shards_index))
+    repodata_shards = zstd.compress(msgpack.dumps(shards_index), level=COMPRESS_LEVEL)  # type: ignore
     repodata_shards_file.write_bytes(repodata_shards)
 
     return package_names
@@ -234,8 +237,7 @@ def files_to_upload(outpath, timestamp, subdir, channel_name):
     shard_hashes = set()
     if response.status_code == 200:
         # decode with zstd and msgpack
-        decompressor = zstd.ZstdDecompressor()
-        decompressed = decompressor.decompress(response.content)
+        decompressed = zstd.decompress(response.content)
         index_data = msgpack.loads(decompressed)
         index_file.write_bytes(decompressed)
 

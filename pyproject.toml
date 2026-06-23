@@ -17,12 +17,12 @@ requires-python = ">=3.10"
 dependencies = [
     # Disabled due to conda not being available on PyPI
     # "conda",
+    "backports.zstd >=1.3.0; python_version < '3.14'",
     "conda-package-streaming >=0.12.0",
     "filelock",
     "jinja2",
-    "msgpack",
+    "msgpack >=1.1.1",
     "ruamel.yaml",
-    "zstandard",
 ]
 
 [project.optional-dependencies]
