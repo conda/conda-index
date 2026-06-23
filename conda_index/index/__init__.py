@@ -15,6 +15,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Iterable
 from uuid import uuid4
 
@@ -1331,6 +1332,13 @@ class ChannelIndex:
         return instructions
 
     def _create_patch_instructions(self, subdir, repodata, patch_generator=None):
+        # If patch_generator is a callable, invoke it directly
+        if callable(patch_generator):
+            instructions = patch_generator(repodata, subdir)
+            if instructions.get("patch_instructions_version", 0) > 1:
+                raise RuntimeError("Incompatible patch instructions version")
+            return instructions
+
         gen_patch_path = patch_generator or join(self.channel_root, "gen_patch.py")
         if isfile(gen_patch_path):
             log.debug(f"using patch generator {gen_patch_path} for {subdir}")
@@ -1389,8 +1397,14 @@ class ChannelIndex:
             raise RuntimeError("Incompatible patch instructions version")
         return instructions
 
-    def _patch_repodata(self, subdir, repodata, patch_generator: str | None = None):
-        if patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
+    def _patch_repodata(
+        self, subdir, repodata, patch_generator: str | Callable | None = None
+    ):
+        if callable(patch_generator):
+            instructions = self._create_patch_instructions(
+                subdir, repodata, patch_generator
+            )
+        elif patch_generator and patch_generator.endswith(CONDA_PACKAGE_EXTENSIONS):
             instructions = self._load_patch_instructions_tarball(
                 subdir, patch_generator
             )
@@ -1402,7 +1416,7 @@ class ChannelIndex:
         return _apply_instructions(subdir, repodata, instructions), instructions
 
     def _patch_repodata_shards(
-        self, subdir, repodata_shards, patch_generator: str | None = None
+        self, subdir, repodata_shards, patch_generator: str | Callable | None = None
     ):
         """
         Apply patches to sharded repodata.
