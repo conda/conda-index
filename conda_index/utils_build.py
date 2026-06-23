@@ -112,43 +112,6 @@ def islist(arg, uniform=False, include_dict=True):
         return False
 
 
-# purpose here is that we want *one* lock per location on disk.  It can be
-# locked or unlocked at any time, but the lock within this process should all be
-# tied to the same tracking mechanism.
-_lock_folders = (os.path.expanduser(os.path.join("~", ".conda_build_locks")),)
-
-
-def get_lock(folder, timeout=900):
-    fl = None
-    try:
-        location = os.path.abspath(os.path.normpath(folder))
-    except OSError:
-        location = folder
-    b_location = location
-    if hasattr(b_location, "encode"):
-        b_location = b_location.encode()
-
-    # Hash the entire filename to avoid collisions.
-    lock_filename = hashlib.sha256(b_location).hexdigest()
-
-    for locks_dir in _lock_folders:
-        try:
-            if not os.path.isdir(locks_dir):
-                os.makedirs(locks_dir)
-            lock_file = os.path.join(locks_dir, lock_filename)
-            with open(lock_file, "w") as f:
-                f.write("")
-            fl = None
-            break
-        except OSError:
-            continue
-    else:
-        raise RuntimeError(
-            "Could not write locks folder to either system location ({})"
-            "or user location ({}).  Aborting.".format(*_lock_folders)
-        )
-    return fl
-
 
 def _equivalent(base_value, value, path):
     equivalent = value == base_value
