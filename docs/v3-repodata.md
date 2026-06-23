@@ -78,6 +78,7 @@ Run-exports is always included in sharded repodata
 Each per-package shard (stored as `<hash>.msgpack.zst`) looks something like this:
 
 ```python
+{
   "packages.conda": {
     "arrow-c-glib-23.0.1-heb0d9f2_0.conda": {
       "name": "arrow-c-glib",
