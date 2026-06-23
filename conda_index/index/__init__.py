@@ -68,7 +68,10 @@ log = logging.getLogger(__name__)
 # 16#repodata.json     : 229527083 ->  24457586 (x9.385),   47.6 MB/s, 3797.3 MB/s
 # 17#repodata.json     : 229527083 ->  23358438 (x9.826),   30.2 MB/s, 3977.2 MB/s
 ZSTD_COMPRESS_LEVEL = 16
-ZSTD_COMPRESS_THREADS = -1  # automatic
+# According to https://easyperf.net/blog/2024/05/10/Thread-Count-Scaling-Part3,
+# 5 threads is the maximum useful number. Use cpu_count() // 2 in case of
+# hyperthreading. A value of 0 disables multithreading
+ZSTD_COMPRESS_THREADS = min((os.cpu_count() or 1) // 2, 5)
 
 
 def logging_config():
