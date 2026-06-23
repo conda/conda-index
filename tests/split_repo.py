@@ -13,7 +13,7 @@ import boto3
 import msgpack
 import requests
 
-if sys.version_info >= (3, 14):
+if sys.version_info >= (3, 14): # pragma: no cover
     import compression.zstd as zstd
 else:
     import backports.zstd as zstd

@@ -16,7 +16,7 @@ from shutil import rmtree
 import conda_package_handling.api
 import pytest
 
-if sys.version_info >= (3, 14):
+if sys.version_info >= (3, 14):  # pragma: no cover
     import compression.zstd as zstd
 else:
     import backports.zstd as zstd
