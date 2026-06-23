@@ -179,8 +179,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--write-shards",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Write a repodata.msgpack.zst index and many smaller files per CEP-16. "
-        "(Experimental)",
+        help="Write a repodata.msgpack.zst index and many smaller files per CEP-16.",
     )
 
     # Database options
@@ -188,14 +187,14 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--db",
         choices=["sqlite3", "postgresql"],
         default="sqlite3",
-        help='Choose database backend. "sqlite3" (default) or "postgresql" (Experimental)',
+        help='Choose database backend. "sqlite3" (default) or "postgresql"',
     )
 
     parser.add_argument(
         "--db-url",
         default=os.environ.get("CONDA_INDEX_DBURL", "postgresql:///conda_index"),
         help="SQLAlchemy database URL when using --db=postgresql. Alternatively, use "
-        "the CONDA_INDEX_DBURL environment variable. (Experimental)",
+        "the CONDA_INDEX_DBURL environment variable.",
     )
 
     # HTML dependencies and repodata-next
