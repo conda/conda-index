@@ -76,9 +76,9 @@ ZSTD_COMPRESS_THREADS = min((os.cpu_count() or 1) // 2, 5)
 
 def logging_config():
     """Called by package extraction subprocesses to re-configure logging."""
-    import conda_index.index.logutil
+    from . import logutil
 
-    conda_index.index.logutil.configure()
+    logutil.configure()
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly

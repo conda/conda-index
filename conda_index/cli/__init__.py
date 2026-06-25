@@ -10,9 +10,8 @@ import os.path
 import sys
 from pathlib import Path
 
-from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
-
 from .. import yaml
+from ..index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -315,16 +314,16 @@ def _main_impl(
 
     if db == "postgresql":
         try:
-            import conda_index.postgres.cache
+            from ..postgres import cache as postgres_cache
 
-            cache_class = conda_index.postgres.cache.PsqlCache
+            cache_class = postgres_cache.PsqlCache
             cache_kwargs["db_url"] = db_url
         except ImportError as e:
             error_msg = f"Missing dependencies for postgresql: {e}"
             print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
     else:
-        from conda_index.index.sqlitecache import CondaIndexCache
+        from ..index.sqlitecache import CondaIndexCache
 
         cache_class = CondaIndexCache
 

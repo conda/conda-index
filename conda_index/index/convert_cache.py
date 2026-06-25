@@ -298,7 +298,7 @@ def merge_index_cache(channel_root, output_db="merged.db"):
     Combine {channel_root}/*/.cache/cache.db databases into a single database.
     Useful for queries. Not used by any part of the indexing process.
     """
-    from conda_index.utils import DEFAULT_SUBDIRS
+    from ..utils import DEFAULT_SUBDIRS
 
     channel_name = os.path.basename(channel_root)
     log.info(f"Merge caches for channel {channel_name}")

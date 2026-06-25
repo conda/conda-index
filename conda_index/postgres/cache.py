@@ -16,14 +16,14 @@ from psycopg2 import OperationalError
 from sqlalchemy import cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
-from conda_index.index.cache import (
+from ..index.cache import (
     BaseCondaIndexCache,
     IndexedPackages,
     IndexedShard,
     clear_newline_chars,
     pack_record,
 )
-from conda_index.index.sqlitecache import (
+from ..index.sqlitecache import (
     ICON_PATH,
     PATH_TO_TABLE,
     TABLE_NO_CACHE,
@@ -37,9 +37,8 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Connection
 
-    from conda_index.index.fs import MinimalFS
-
     from ..index.cache import ChangedPackage, HasChecksumsAndSize
+    from ..index.fs import MinimalFS
 
 from . import model
 
