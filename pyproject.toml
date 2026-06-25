@@ -113,8 +113,10 @@ target-version = "py310"
 flake8-type-checking = {exempt-modules = [], strict = true}
 ignore = [
   "E402",  # module level import not at top of file
+  "E501",  # line too long
   "E722",  # do not use bare 'except'
   "E731",  # do not assign a lambda expression, use a def
+  "UP031",  # do not fix printf-style string formatting
 ]
 pycodestyle = {max-line-length = 120}
 # see https://docs.astral.sh/ruff/rules/

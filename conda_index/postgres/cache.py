@@ -9,12 +9,11 @@ import json
 import logging
 import os
 import re
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Iterator
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import Connection, cte, join, or_, select
+from sqlalchemy import cte, join, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from conda_index.index.cache import (
@@ -24,7 +23,6 @@ from conda_index.index.cache import (
     clear_newline_chars,
     pack_record,
 )
-from conda_index.index.fs import MinimalFS
 from conda_index.index.sqlitecache import (
     ICON_PATH,
     PATH_TO_TABLE,
@@ -33,6 +31,14 @@ from conda_index.index.sqlitecache import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+    from pathlib import Path
+    from typing import Any
+
+    from sqlalchemy import Connection
+
+    from conda_index.index.fs import MinimalFS
+
     from ..index.cache import ChangedPackage, HasChecksumsAndSize
 
 from . import model
@@ -206,14 +212,12 @@ class PsqlCache(BaseCondaIndexCache):
             index_json_table = model.Base.metadata.tables[table]
             insert_obj = insert(index_json_table)
             connection.execute(
-                (
-                    insert(index_json_table)
-                    .values(path=database_path, index_json=index_json)
-                    .on_conflict_do_update(
-                        index_elements=[index_json_table.c.path],
-                        set_={table: insert_obj.excluded.index_json},
-                    )  # it will cast to jsonb automatically
-                )
+                insert(index_json_table)
+                .values(path=database_path, index_json=index_json)
+                .on_conflict_do_update(
+                    index_elements=[index_json_table.c.path],
+                    set_={table: insert_obj.excluded.index_json},
+                )  # it will cast to jsonb automatically
             )
 
             stat_table = model.Base.metadata.tables["stat"]

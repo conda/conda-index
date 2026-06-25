@@ -25,7 +25,7 @@ channel_index.index(...)
 With v3 repodata enabled, the generated `repodata.json` has the following
 structure:
 
-```python
+```json
 {
   "info": {
     "repodata_revisions": [
@@ -61,7 +61,7 @@ structure:
 
 When using sharded repodata (`--write-shards`), each shard includes
 `run_exports` data for its packages. This implements [CEP
-21](https://github.com/conda/ceps/blob/main/cep-0021.md). 
+21](https://github.com/conda/ceps/blob/main/cep-0021.md).
 
 Run-exports describe which dependencies a package imposes on packages that link
 against it. Including this information directly in the repodata shards helps
@@ -69,7 +69,7 @@ build tools to generate correct dependencies for new packages.
 
 In sharded repodata, a `run_exports` field is included inside individual package
 records, instead of collecting all `run_exports` in their own section or in a
-separate file. 
+separate file.
 
 Run-exports is always included in sharded repodata
 
@@ -77,7 +77,7 @@ Run-exports is always included in sharded repodata
 
 Each per-package shard (stored as `<hash>.msgpack.zst`) looks something like this:
 
-```python
+```json
 {
   "packages.conda": {
     "arrow-c-glib-23.0.1-heb0d9f2_0.conda": {

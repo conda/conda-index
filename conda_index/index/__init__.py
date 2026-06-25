@@ -15,7 +15,7 @@ from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime, timezone
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import msgpack
@@ -28,8 +28,6 @@ from conda.models.version import VersionOrder  # sole remaining conda dependency
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
 
-from conda_index.index.cache import BaseCondaIndexCache
-
 from .. import utils
 from ..utils import (
     CONDA_PACKAGE_EXTENSION_V1,
@@ -37,12 +35,14 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .fs import FileInfo, MinimalFS
+from .fs import FileInfo
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from typing import Any, NotRequired, TypedDict
 
-    from .cache import IndexedPackages, IndexedShard
+    from .cache import BaseCondaIndexCache, IndexedPackages, IndexedShard
+    from .fs import MinimalFS
 
     V3Section = TypedDict(
         "V3Section",
