@@ -1,0 +1,74 @@
+# disable autofixing PRs, commenting "pre-commit.ci autofix" on a pull request triggers a autofix
+ci:
+  autofix_prs: false
+# ignore test fixtures and patches since slight reformatting can break them
+exclude: |
+  (?x)^(
+    conda_index/utils_build.py |
+    tests/split_repo.py |
+    tests/index_data/ |
+    tests/index_hotfix_pkgs/ |
+    tests/archives/ |
+    .*\.(patch|diff)
+  )
+repos:
+  # generic verification and formatting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      # standard end of line/end of file cleanup
+      - id: mixed-line-ending
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      # ensure syntaxes are valid
+      - id: check-toml
+      - id: check-yaml
+        exclude: recipe/meta\.yaml
+      # catch git merge/rebase problems
+      - id: check-merge-conflict
+      # sort requirements files
+      - id: file-contents-sorter
+        files: docs/requirements\.txt
+        args: [--unique]
+  # Python verification and formatting
+  - repo: https://github.com/asottile/blacken-docs
+    rev: fda77690955e9b63c6687d8806bafd56a526e45f  # frozen: 1.20.0
+    hooks:
+      # auto format Python codes within docstrings
+      - id: blacken-docs
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 745be0411e3c150e246d527e531e5a221b8c3462  # frozen: v0.15.19
+    hooks:
+      # lint & attempt to correct failures (e.g. pyupgrade)
+      - id: ruff-check
+        args: [--fix]
+      # compatible replacement for black
+      - id: ruff-format
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: 4380fbb73a154b5f5624794c1c78d9719ccc860f  # frozen: v2.16.0
+    hooks:
+      - id: pretty-format-toml
+        args: [--autofix, --trailing-commas]
+  - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
+    rev: 8d1b9cadaf854cb25bb0b0f5870e1cc66a083d6b  # frozen: 0.2.3
+    hooks:
+      - id: yamlfmt
+        # ruamel.yaml doesn't line wrap correctly (?) so set width to 1M to avoid issues
+        args: [--mapping=2, --offset=2, --sequence=4, --width=1000000, --implicit_start]
+        exclude: |
+          (?x)^(
+            \.authors\.yml |
+            recipe/meta\.yaml |
+            tests/
+          )
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 5030dca3047414c338091455ac41803200ec1f0f  # frozen: 0.37.3
+    hooks:
+      # verify github syntaxes
+      - id: check-github-workflows
+      - id: check-dependabot
+  - repo: meta
+    # see https://pre-commit.com/#meta-hooks
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes

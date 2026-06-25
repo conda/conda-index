@@ -6,64 +6,83 @@ requires = [
 ]
 
 [project]
-name = "conda_index"
 authors = [
-    { name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io" },
+  {name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io"},
 ]
-license = { file = "LICENSE" }
-readme = "README.md"
-dynamic = ["version", "description"]
-requires-python = ">=3.10"
 dependencies = [
-    # Disabled due to conda not being available on PyPI
-    # "conda",
-    "backports.zstd >=1.3.0; python_version < '3.14'",
-    "conda-package-streaming >=0.12.0",
-    "filelock",
-    "jinja2",
-    "msgpack >=1.1.1",
-    "ruamel.yaml",
+  # Disabled due to conda not being available on PyPI
+  # "conda",
+  "backports.zstd >=1.3.0; python_version < '3.14'",
+  "conda-package-streaming >=0.12.0",
+  "filelock",
+  "jinja2",
+  "msgpack >=1.1.1",
+  "ruamel.yaml",
 ]
-
-[project.optional-dependencies]
-psql = [
-    "psycopg2",
-    "sqlalchemy",
-]
-test = [
-    # Also not available on PyPI in any current version
-    # "conda-build >=3.21.0",
-    "conda-package-handling >=1.9.0",
-    "coverage[toml]",
-    "pytest >=7",
-    "pytest-cov",
-    "pytest-mock",
-    "fsspec[http]",
-    "psycopg2-binary",
-    "sqlalchemy",
-    "testing.postgresql",
-]
-docs = [
-    "furo",
-    "sphinx",
-    "sphinx-argparse",
-    "myst-parser",
-    "mdit-py-plugins>=0.3.0",
-]
-
-[project.scripts]
-# conda-build also provides conda-index script.
-# require python -m conda_index for the moment to avoid the conflict.
+dynamic = ["version", "description"]
+license = {file = "LICENSE"}
+name = "conda_index"
+readme = "README.md"
+requires-python = ">=3.10"
 
 [project.entry-points.conda]
 index = "conda_index.plugin"
 
+[project.optional-dependencies]
+docs = [
+  "furo",
+  "sphinx",
+  "sphinx-argparse",
+  "myst-parser",
+  "mdit-py-plugins>=0.3.0",
+]
+psql = [
+  "psycopg2",
+  "sqlalchemy",
+]
+test = [
+  # Also not available on PyPI in any current version
+  # "conda-build >=3.21.0",
+  "conda-package-handling >=1.9.0",
+  "coverage[toml]",
+  "pytest >=7",
+  "pytest-cov",
+  "pytest-mock",
+  "fsspec[http]",
+  "psycopg2-binary",
+  "sqlalchemy",
+  "testing.postgresql",
+]
+
+[project.scripts]
+
 [project.urls]
 Home = "https://github.com/conda/conda-index"
 
+[tool.coverage.report]
+exclude_lines = [
+  "# pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if typing.TYPE_CHECKING:",
+]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing", "thread"]
+source = ["conda_index"]
+
+[tool.hatch.build]
+include = ["conda_index"]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "conda_index/_version.py"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "dirty-tag"
+
 [tool.pytest.ini_options]
-minversion = "7.0"
-testpaths = ["tests"]
 filterwarnings = [
   # elevate conda's deprecated warning to an error
   "error::PendingDeprecationWarning:conda",
@@ -77,37 +96,36 @@ filterwarnings = [
   "ignore:conda.base.constants.CONDA_PACKAGE_EXTENSIONS:PendingDeprecationWarning",
 ]
 markers = [
-    "needs_postgresql",
+  "needs_postgresql",
 ]
-
-[tool.coverage.run]
-concurrency = ["multiprocessing", "thread"]
-source = ["conda_index"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "# pragma: no cover",
-    "if TYPE_CHECKING:",
-    "if typing.TYPE_CHECKING:",
-]
-
-[tool.isort]
-profile = "black"
+minversion = "7.0"
+testpaths = ["tests"]
 
 [tool.ruff]
 exclude = [
-    "tests/split_repo.py",
-    "conda_index/utils_build.py",
+  "tests/split_repo.py",
+  "conda_index/utils_build.py",
 ]
+show-fixes = true
+target-version = "py310"
 
-[tool.hatch.build]
-include = ["conda_index"]
-
-[tool.hatch.build.hooks.vcs]
-version-file = "conda_index/_version.py"
-
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.version.raw-options]
-local_scheme = "dirty-tag"
+[tool.ruff.lint]
+flake8-type-checking = {exempt-modules = [], strict = true}
+ignore = [
+  "E402",  # module level import not at top of file
+  "E722",  # do not use bare 'except'
+  "E731",  # do not assign a lambda expression, use a def
+]
+pycodestyle = {max-line-length = 120}
+# see https://docs.astral.sh/ruff/rules/
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "FA",  # flake8-future-annotations
+  "I",  # isort
+  "ISC",  # flake8-implicit-str-concat
+  "T10",  # flake8-debugger
+  "TCH",  # flake8-type-checking
+  "UP",  # pyupgrade
+  "W",  # pycodestyle warnings
+]
