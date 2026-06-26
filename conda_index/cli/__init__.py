@@ -314,9 +314,9 @@ def _main_impl(
 
     if db == "postgresql":
         try:
-            from ..postgres import cache as postgres_cache
+            from ..postgres.cache import PsqlCache
 
-            cache_class = postgres_cache.PsqlCache
+            cache_class = PsqlCache
             cache_kwargs["db_url"] = db_url
         except ImportError as e:
             error_msg = f"Missing dependencies for postgresql: {e}"
