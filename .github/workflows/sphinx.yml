@@ -24,13 +24,12 @@ jobs:
             /usr/share/miniconda/pkgs/cache
             /home/runner/.conda/pkgs/*.conda
             /home/runner/.conda/pkgs/cache
-          key:
-            ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
-          architecture: "x64"
-          cache: "pip"
+          python-version: 3.x
+          architecture: x64
+          cache: pip
       - name: Setup conda
         run: |
           $CONDA/bin/conda info
@@ -47,7 +46,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
-          path: 'build/html'
+          path: build/html
 
   pages:
 

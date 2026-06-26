@@ -5,7 +5,7 @@ import sys
 from io import StringIO
 from os.path import join
 from pathlib import Path
-from unittest.mock import patch
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,6 +19,9 @@ except ImportError:
     PsqlCache = None
 
 from .utils import fake_download
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 HERE = Path(__file__).parent
 ARBITRARY_YML = HERE / "environment.yml"
@@ -74,18 +77,19 @@ python:
 @pytest.mark.parametrize(
     "cli_option", ["--current-repodata", "--run-exports", "--channeldata"]
 )
-def test_mutual_exclusion_mononlithic_repodata(cli_option: str, tmp_path):
+def test_mutual_exclusion_mononlithic_repodata(
+    cli_option: str, tmp_path, mocker: MockerFixture
+):
     """Test that 'cli_option' is blocked when repodata.json is not written."""
+    mock_stderr = mocker.patch("sys.stderr", new_callable=StringIO)
 
-    # Capture stderr to check for error message
-    with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
-        with pytest.raises(SystemExit) as exc_info:
-            cli(["--no-write-monolithic", cli_option, str(tmp_path)])
+    with pytest.raises(SystemExit) as exc_info:
+        cli(["--no-write-monolithic", cli_option, str(tmp_path)])
 
-        assert exc_info.value.code == 1
-        error_output = mock_stderr.getvalue()
-        assert "Conflicting arguments" in error_output
-        assert cli_option in error_output
+    assert exc_info.value.code == 1
+    error_output = mock_stderr.getvalue()
+    assert "Conflicting arguments" in error_output
+    assert cli_option in error_output
 
 
 @pytest.mark.needs_postgresql
@@ -229,21 +233,21 @@ def test_patch_generator(tmp_path):
     assert "patched-dep" in repodata["packages"][pkg_filename].get("depends", [])
 
 
-def test_postgresql_missing_dependencies():
+def test_postgresql_missing_dependencies(mocker: MockerFixture):
     """Test that --db=postgresql exits with an error when postgres deps are missing."""
+    mocker.patch.dict(sys.modules, {"conda_index.postgres.cache": None})
+    mock_stderr = mocker.patch("sys.stderr", new_callable=StringIO)
 
-    with patch.dict(sys.modules, {"conda_index.postgres.cache": None}):
-        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
-            with pytest.raises(SystemExit) as exc_info:
-                cli(
-                    [
-                        "--db=postgresql",
-                        "--db-url=postgresql://user:pass@localhost/dbname",
-                        "--output=/tmp/output",
-                        "--channeldata",
-                        ".",
-                    ]
-                )
+    with pytest.raises(SystemExit) as exc_info:
+        cli(
+            [
+                "--db=postgresql",
+                "--db-url=postgresql://user:pass@localhost/dbname",
+                "--output=/tmp/output",
+                "--channeldata",
+                ".",
+            ]
+        )
 
     assert exc_info.value.code == 1
     assert "Missing dependencies for postgresql" in mock_stderr.getvalue()
