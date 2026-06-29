@@ -11,7 +11,7 @@ import os
 import sqlite3
 from os.path import join
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Iterator
+from typing import TYPE_CHECKING
 
 import msgpack
 
@@ -26,10 +26,13 @@ from .cache import (
     pack_record,
 )
 from .cache import clear_newline_chars as _clear_newline_chars
-from .fs import MinimalFS
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+    from typing import Any
+
     from .cache import ChangedPackage, HasChecksumsAndSize
+    from .fs import MinimalFS
 
 log = logging.getLogger(__name__)
 

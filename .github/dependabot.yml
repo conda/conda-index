@@ -24,3 +24,11 @@ updates:
       docs:
         patterns:
           - '*'
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      pre-commit:
+        patterns:
+          - '*'

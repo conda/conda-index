@@ -25,7 +25,7 @@ from conda.base.context import context
 import conda_index.api
 import conda_index.index
 from conda_index.index.sqlitecache import CondaIndexCache
-from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, DEFAULT_SUBDIRS
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres.cache import PsqlCache
@@ -817,9 +817,7 @@ def test_patch_instructions_with_missing_subdir(testing_workdir):
     # we use conda-forge's patch instructions because they don't have zos-z
     # data, and that triggers an error
     pkg = "conda-forge-repodata-patches"
-    url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
-        pkg
-    )
+    url = f"https://anaconda.org/conda-forge/{pkg}/20180828/download/noarch/{pkg}-20180828-0.tar.bz2"
     patch_instructions = fake_download(
         url, os.path.join(os.getcwd(), "patches.tar.bz2")
     )

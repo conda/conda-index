@@ -7,15 +7,15 @@ import conda.plugins.types
 
 
 def command(args):
-    import conda_index.cli
+    from . import cli
 
-    return conda_index.cli.run(args)
+    return cli.run(args)
 
 
 def configure_parser(parser):
-    import conda_index.cli
+    from . import cli
 
-    return conda_index.cli.configure_parser(parser)
+    return cli.configure_parser(parser)
 
 
 @conda.plugins.hookimpl

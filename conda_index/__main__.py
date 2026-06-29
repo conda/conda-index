@@ -1,6 +1,6 @@
 import sys
 
-import conda_index.cli
+from .cli import cli
 
 if __name__ == "__main__":
-    conda_index.cli.cli(sys.argv[1:])
+    cli(sys.argv[1:])
