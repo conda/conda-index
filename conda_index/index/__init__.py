@@ -20,12 +20,14 @@ from typing import TYPE_CHECKING, Iterable
 from uuid import uuid4
 
 import msgpack
-import zstandard
+
+if sys.version_info >= (3, 14):  # pragma: no cover
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 from conda.models.version import VersionOrder  # sole remaining conda dependency here?
 from conda_package_streaming import package_streaming
 from jinja2 import Environment, PackageLoader
-
-from conda_index.index.cache import BaseCondaIndexCache
 
 from .. import utils
 from ..utils import (
@@ -34,12 +36,14 @@ from ..utils import (
     CONDA_PACKAGE_EXTENSIONS,
 )
 from . import rss, sqlitecache
-from .fs import FileInfo, MinimalFS
+from .fs import FileInfo
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from typing import Any, NotRequired, TypedDict
 
-    from .cache import IndexedPackages, IndexedShard
+    from .cache import BaseCondaIndexCache, IndexedPackages, IndexedShard
+    from .fs import MinimalFS
 
     V3Section = TypedDict(
         "V3Section",
@@ -65,14 +69,17 @@ log = logging.getLogger(__name__)
 # 16#repodata.json     : 229527083 ->  24457586 (x9.385),   47.6 MB/s, 3797.3 MB/s
 # 17#repodata.json     : 229527083 ->  23358438 (x9.826),   30.2 MB/s, 3977.2 MB/s
 ZSTD_COMPRESS_LEVEL = 16
-ZSTD_COMPRESS_THREADS = -1  # automatic
+# According to https://easyperf.net/blog/2024/05/10/Thread-Count-Scaling-Part3,
+# 5 threads is the maximum useful number. Use cpu_count() // 2 in case of
+# hyperthreading. A value of 0 disables multithreading
+ZSTD_COMPRESS_THREADS = min((os.cpu_count() or 1) // 2, 5)
 
 
 def logging_config():
     """Called by package extraction subprocesses to re-configure logging."""
-    import conda_index.index.logutil
+    from . import logutil
 
-    conda_index.index.logutil.configure()
+    logutil.configure()
 
 
 # use this for debugging, because ProcessPoolExecutor isn't pdb/ipdb friendly
@@ -662,8 +669,6 @@ class ChannelIndex:
         """
         log.info("Subdir: %s Gathering repodata", subdir)
 
-        compressor = zstandard.ZstdCompressor()
-
         shards_from_packages = self.index_subdir_shards(
             subdir, verbose=verbose, progress=progress
         )
@@ -673,7 +678,7 @@ class ChannelIndex:
         patched_path = self.channel_root / subdir / REPODATA_SHARDS_FROM_PKGS_FN
         self._maybe_write(
             patched_path,
-            compressor.compress(sqlitecache.packb_typed(shards_from_packages)),
+            zstd.compress(sqlitecache.packb_typed(shards_from_packages)),
         )  # type: ignore
 
         # Apply patch instructions.
@@ -692,7 +697,7 @@ class ChannelIndex:
         repodata_shards["shards"] = {}
 
         for pkg, record in patched_packages.items():
-            shard_data = compressor.compress(sqlitecache.packb_typed(record))
+            shard_data = zstd.compress(sqlitecache.packb_typed(record))
             shard_hash = hashlib.sha256(shard_data).digest()
             repodata_shards["shards"][pkg] = shard_hash
             output_path = self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
@@ -702,7 +707,7 @@ class ChannelIndex:
         patched_path = self.channel_root / subdir / REPODATA_SHARDS_FN
         self._maybe_write(
             patched_path,
-            compressor.compress(sqlitecache.packb_typed(repodata_shards)),
+            zstd.compress(sqlitecache.packb_typed(repodata_shards)),
         )  # type: ignore
 
         log.debug("%s finish", subdir)
@@ -740,10 +745,6 @@ class ChannelIndex:
                     f"{self.base_url.rstrip('/')}/{subdir}/"
                 )
 
-            # Higher compression levels are a waste of time for tiny gains on this
-            # collection of small objects.
-            compressor = zstandard.ZstdCompressor()
-
             (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
             v3_data = {
@@ -754,9 +755,9 @@ class ChannelIndex:
 
             for shard in cache.indexed_shards():
                 repodata_shard = self._indexed_shard_to_repodata(shard)
-                shard_bytes = compressor.compress(
-                    sqlitecache.packb_typed(repodata_shard)
-                )
+                # Higher compression levels are a waste of time for tiny gains on this
+                # collection of small objects.
+                shard_bytes = zstd.compress(sqlitecache.packb_typed(repodata_shard))
                 shard_hash = hashlib.sha256(shard_bytes).digest()
                 output_path = (
                     self.output_root / subdir / f"{shard_hash.hex()}.msgpack.zst"
@@ -1049,9 +1050,13 @@ class ChannelIndex:
             else:
                 self._maybe_remove(repodata_bz2_path)
             if self.write_zst:
-                repodata_zst_content = zstandard.ZstdCompressor(
-                    level=ZSTD_COMPRESS_LEVEL, threads=ZSTD_COMPRESS_THREADS
-                ).compress(new_repodata.encode("utf-8"))
+                repodata_zst_content = zstd.compress(
+                    new_repodata.encode("utf-8"),
+                    options={
+                        zstd.CompressionParameter.compression_level: ZSTD_COMPRESS_LEVEL,
+                        zstd.CompressionParameter.nb_workers: ZSTD_COMPRESS_THREADS,
+                    },
+                )
                 self._maybe_write(repodata_zst_path, repodata_zst_content)
             else:
                 self._maybe_remove(repodata_zst_path)
@@ -1433,7 +1438,7 @@ class ChannelIndex:
                     shard_path = (
                         self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                     )
-                    shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+                    shard = msgpack.loads(zstd.decompress(shard_path.read_bytes()))
                     yield (
                         pkg,
                         self._create_patch_instructions(subdir, shard, patch_generator),
@@ -1455,7 +1460,7 @@ class ChannelIndex:
                 shard_path = (
                     self.output_root / subdir / f"{reference.hex()}.msgpack.zst"
                 )
-                shard = msgpack.loads(zstandard.decompress(shard_path.read_bytes()))
+                shard = msgpack.loads(zstd.decompress(shard_path.read_bytes()))
                 patched_shard = _apply_instructions(
                     subdir, shard, instructions, new_pkg_fixes=new_pkg_fixes
                 )

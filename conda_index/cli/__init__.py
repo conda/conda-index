@@ -10,9 +10,8 @@ import os.path
 import sys
 from pathlib import Path
 
-from conda_index.index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
-
 from .. import yaml
+from ..index import MAX_THREADS_DEFAULT, ChannelIndex, logutil
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -179,8 +178,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--write-shards",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Write a repodata.msgpack.zst index and many smaller files per CEP-16. "
-        "(Experimental)",
+        help="Write a repodata.msgpack.zst index and many smaller files per CEP-16.",
     )
 
     # Database options
@@ -188,14 +186,14 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--db",
         choices=["sqlite3", "postgresql"],
         default="sqlite3",
-        help='Choose database backend. "sqlite3" (default) or "postgresql" (Experimental)',
+        help='Choose database backend. "sqlite3" (default) or "postgresql"',
     )
 
     parser.add_argument(
         "--db-url",
         default=os.environ.get("CONDA_INDEX_DBURL", "postgresql:///conda_index"),
         help="SQLAlchemy database URL when using --db=postgresql. Alternatively, use "
-        "the CONDA_INDEX_DBURL environment variable. (Experimental)",
+        "the CONDA_INDEX_DBURL environment variable.",
     )
 
     # HTML dependencies and repodata-next
@@ -316,16 +314,16 @@ def _main_impl(
 
     if db == "postgresql":
         try:
-            import conda_index.postgres.cache
+            from ..postgres.cache import PsqlCache
 
-            cache_class = conda_index.postgres.cache.PsqlCache
+            cache_class = PsqlCache
             cache_kwargs["db_url"] = db_url
         except ImportError as e:
             error_msg = f"Missing dependencies for postgresql: {e}"
             print(f"Error: {error_msg}", file=sys.stderr)
             sys.exit(1)
     else:
-        from conda_index.index.sqlitecache import CondaIndexCache
+        from ..index.sqlitecache import CondaIndexCache
 
         cache_class = CondaIndexCache
 

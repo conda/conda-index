@@ -46,6 +46,7 @@ cli
 theory_of_operation
 database
 postgresql
+v3-repodata
 modules
 changelog
 ```

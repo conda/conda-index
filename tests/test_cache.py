@@ -4,10 +4,14 @@ Tests for abstact BaseCondaIndexCache.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from typing import TYPE_CHECKING
 
 from conda_index.index import cache
 from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from typing import Any
 
 
 class DummyCache(cache.BaseCondaIndexCache):

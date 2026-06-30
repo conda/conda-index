@@ -29,9 +29,9 @@ Finally, a join between the `upstream` stage, usually `'fs'`, and the
 patches.
 
 ```sql
-SELECT path, index_json 
+SELECT path, index_json
 FROM stat JOIN index_json
-USING (path) 
+USING (path)
 WHERE stat.stage = :upstream_stage
 ```
 
@@ -61,9 +61,9 @@ either directly or by using `conda-index` APIs. Then, the output query is
 changed to
 
 ```sql
-SELECT path, index_json 
-FROM stat JOIN index_json 
-USING (path) 
+SELECT path, index_json
+FROM stat JOIN index_json
+USING (path)
 WHERE stat.stage in ('fs', 'md')
 ```
 

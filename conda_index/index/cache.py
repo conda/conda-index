@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING
 from zipfile import BadZipFile
 
 from conda_package_streaming import package_streaming
@@ -23,7 +23,8 @@ from ..utils import CONDA_PACKAGE_EXTENSIONS, _checksum
 from .fs import MinimalFS
 
 if TYPE_CHECKING:
-    from typing import IO, Any, Iterator
+    from collections.abc import Iterator
+    from typing import IO, Any, TypedDict
 
     from .fs import FileInfo
 

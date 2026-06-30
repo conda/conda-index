@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tarfile
 import urllib.parse
 from logging import getLogger
@@ -14,13 +15,17 @@ from shutil import rmtree
 
 import conda_package_handling.api
 import pytest
-import zstandard
+
+if sys.version_info >= (3, 14):  # pragma: no cover
+    import compression.zstd as zstd
+else:
+    import backports.zstd as zstd
 from conda.base.context import context
 
 import conda_index.api
 import conda_index.index
 from conda_index.index.sqlitecache import CondaIndexCache
-from conda_index.utils import CONDA_PACKAGE_EXTENSIONS, DEFAULT_SUBDIRS
+from conda_index.utils import CONDA_PACKAGE_EXTENSIONS
 
 try:
     from conda_index.postgres.cache import PsqlCache
@@ -66,7 +71,7 @@ def test_index_on_single_subdir_1(testing_workdir):
     def compare_zst(filename):
         original_path = Path(testing_workdir, "osx-64", filename)
         compressed_path = Path(testing_workdir, "osx-64", filename + ".zst")
-        assert original_path.read_bytes() == zstandard.decompress(
+        assert original_path.read_bytes() == zstd.decompress(
             compressed_path.read_bytes()
         )
 
@@ -812,9 +817,7 @@ def test_patch_instructions_with_missing_subdir(testing_workdir):
     # we use conda-forge's patch instructions because they don't have zos-z
     # data, and that triggers an error
     pkg = "conda-forge-repodata-patches"
-    url = "https://anaconda.org/conda-forge/{0}/20180828/download/noarch/{0}-20180828-0.tar.bz2".format(
-        pkg
-    )
+    url = f"https://anaconda.org/conda-forge/{pkg}/20180828/download/noarch/{pkg}-20180828-0.tar.bz2"
     patch_instructions = fake_download(
         url, os.path.join(os.getcwd(), "patches.tar.bz2")
     )
