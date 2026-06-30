@@ -3,12 +3,10 @@ conda_build utils we need, without configuring logging as an import side effect.
 """
 
 import contextlib
-import hashlib
 import logging
 import os
 import shutil
 import subprocess
-import time
 from os import stat
 from os.path import isdir, isfile, islink
 
@@ -111,6 +109,10 @@ def islist(arg, uniform=False, include_dict=True):
         # ValueError, TypeError: uniform function failed
         return False
 
+
+def get_lock(folder, timeout=900):
+    """Still called, no longer gets a real lock."""
+    return None
 
 
 def _equivalent(base_value, value, path):
