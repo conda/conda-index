@@ -10,11 +10,9 @@ authors = [
   {name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io"},
 ]
 dependencies = [
-  # Disabled due to conda not being available on PyPI
-  # "conda",
+  # no "conda" due to unavailability on pypi
   "backports.zstd >=1.3.0; python_version < '3.14'",
   "conda-package-streaming >=0.12.0",
-  "filelock",
   "jinja2",
   "msgpack >=1.1.1",
   "ruamel.yaml",
