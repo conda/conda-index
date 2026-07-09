@@ -12,6 +12,14 @@ updates:
           - '*'
     cooldown:
       default-days: 7
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      pre-commit:
+        patterns:
+          - '*'
   - package-ecosystem: pip
     directory: /docs/
     schedule:
@@ -22,13 +30,5 @@ updates:
         dependency-type: production
     groups:
       docs:
-        patterns:
-          - '*'
-  - package-ecosystem: pre-commit
-    directory: /
-    schedule:
-      interval: monthly
-    groups:
-      pre-commit:
         patterns:
           - '*'
