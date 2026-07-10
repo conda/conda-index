@@ -455,7 +455,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def store_stat_state(
-        self, stage: str | None, listdir_stat: Iterator[dict[str, Any]]
+        self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
     ):
         """
         Save set of packages to a particular stage.
@@ -471,7 +471,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
 
     def store_md_state(self, listdir_stat: Iterator[dict[str, Any]]):
         """
-        Save package metadata to cache and add write the package's index data to the
+        Save package metadata to cache and write the package's index data to the
         database. Useful for metadata only packages, including non-local packages.
         """
         stats = [stat for stat in listdir_stat]
