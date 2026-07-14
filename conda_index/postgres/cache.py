@@ -503,6 +503,5 @@ class PsqlCache(BaseCondaIndexCache):
         )
         connection: Connection
         with self.engine.begin() as connection:
-            print("run_exports startswith", self.database_prefix)
             for row in connection.execute(query):
                 yield (self.plain_path(row.path), row.run_exports or {})
