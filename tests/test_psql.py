@@ -557,3 +557,13 @@ def test_psql_channel_separation(
                     repodata_paths(json.loads((subdir / "repodata.json").read_text()))
                 )
                 assert actual_packages == expected_packages
+
+                # this would be a better test if any of these packages contained
+                # run_exports:
+                run_exports = set(
+                    repodata_paths(
+                        json.loads((subdir / "run_exports.json").read_text())
+                    )
+                )
+
+                assert run_exports == expected_packages

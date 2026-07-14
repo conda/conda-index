@@ -62,7 +62,7 @@ class PsqlCache(BaseCondaIndexCache):
         channel_url: str | None = None,
         upstream_stage: str = "fs",
         include_stages: list[str] = [],
-        db_url="postgresql://conda_index_test@localhost/conda_index_test",
+        db_url: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -490,12 +490,18 @@ class PsqlCache(BaseCondaIndexCache):
         """
         stat = model.Base.metadata.tables["stat"]
         run_exports = model.Base.metadata.tables["run_exports"]
-        query = stat.join(
-            run_exports, onclause=stat.c.path == run_exports.c.path, isouter=True
+        index_json = model.Base.metadata.tables["index_json"]
+
+        # only packages that are in stat *and* index_json
+        query = select(
+            stat.join(index_json, onclause=stat.c.path == index_json.c.path).join(
+                run_exports, onclause=stat.c.path == run_exports.c.path, isouter=True
+            )
+        ).where(
+            stat.c.stage == self.upstream_stage,
+            stat.c.path.startswith(self.database_prefix, autoescape=True),
         )
         connection: Connection
         with self.engine.begin() as connection:
-            for row in connection.execute(
-                select(query).where(stat.c.stage == self.upstream_stage)
-            ):
+            for row in connection.execute(query):
                 yield (self.plain_path(row.path), row.run_exports or {})
