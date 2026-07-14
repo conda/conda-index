@@ -59,6 +59,7 @@ repos:
           (?x)^(
             \.authors\.yml |
             recipe/meta\.yaml |
+            .github/workflows/build.yml |
             tests/
           )
   - repo: https://github.com/python-jsonschema/check-jsonschema
