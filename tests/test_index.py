@@ -1529,7 +1529,7 @@ def test_index_v3_format(tmp_path):
             "subdir": "noarch",
             "created_at": CREATED_AT,
             "repodata_revisions": {
-                3: {
+                "v3": {
                     "n_packages": 0,
                     "oldest": None,
                     "newest": None,
@@ -1546,7 +1546,7 @@ def test_index_v3_format(tmp_path):
         "info": {
             "subdir": "noarch",
             "repodata_revisions": {
-                3: {
+                "v3": {
                     "n_packages": 0,
                     "oldest": None,
                     "newest": None,

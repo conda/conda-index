@@ -29,7 +29,7 @@ structure:
 {
   "info": {
     "repodata_revisions": {
-      "3": {
+      "v3": {
         "n_packages": 1,
         "newest": 1758039171969,
         "oldest": 1758039171969
