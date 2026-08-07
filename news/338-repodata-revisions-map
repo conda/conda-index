@@ -1,0 +1,4 @@
+### Bug fixes
+
+* Change `info.repodata_revisions` from a list to a map keyed by revision id to
+  be compatible with py-rattler 0.25.0+ (#338)
