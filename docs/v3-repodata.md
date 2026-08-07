@@ -28,14 +28,13 @@ structure:
 ```json
 {
   "info": {
-    "repodata_revisions": [
-      {
+    "repodata_revisions": {
+      "3": {
         "n_packages": 1,
         "newest": 1758039171969,
-        "oldest": 1758039171969,
-        "revision": 3
+        "oldest": 1758039171969
       }
-    ],
+    },
     "subdir": "noarch"
   },
   "packages": {},

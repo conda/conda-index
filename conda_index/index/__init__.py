@@ -46,7 +46,12 @@ if TYPE_CHECKING:
 
     V3Section = TypedDict(
         "V3Section",
-        {"tar.bz2": dict, "conda": dict, "whl": dict},
+        {
+            "tar.bz2": dict[str, dict[str, Any]],
+            "conda": dict[str, dict[str, Any]],
+            "whl": dict[str, dict[str, Any]],
+        },
+        closed=True,
     )
 
     # in this style because "packages.conda" is not a Python identifier
@@ -770,9 +775,9 @@ class ChannelIndex:
                         v3_data[section].update(records)
 
             if self.repodata_v3:
-                shards_index["info"]["repodata_revisions"] = [
-                    self._make_repodata_revision_data(v3_data)
-                ]
+                revision_data = self._make_repodata_revision_data(v3_data)
+                revision = revision_data.pop("revision")
+                shards_index["info"]["repodata_revisions"] = {revision: revision_data}
 
             return shards_index
 
@@ -803,9 +808,9 @@ class ChannelIndex:
             new_repodata["v3"] = v3_packages
             new_repodata["packages"] = {}
             new_repodata["packages.conda"] = {}
-            new_repodata["info"]["repodata_revisions"] = [
-                self._make_repodata_revision_data(v3_packages)
-            ]
+            revision_data = self._make_repodata_revision_data(v3_packages)
+            revision = revision_data.pop("revision")
+            new_repodata["info"]["repodata_revisions"] = {revision: revision_data}
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
@@ -878,7 +883,7 @@ class ChannelIndex:
 
     @staticmethod
     def _make_repodata_revision_data(
-        revision_data: dict[str, dict[str, dict]],
+        revision_data: V3Section,
     ) -> dict[str, int | None]:
         """
         Return { "revision": 3, ... } dict with package statistics derived from
