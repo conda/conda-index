@@ -46,7 +46,12 @@ if TYPE_CHECKING:
 
     V3Section = TypedDict(
         "V3Section",
-        {"tar.bz2": dict, "conda": dict, "whl": dict},
+        {
+            "tar.bz2": dict[str, dict[str, Any]],
+            "conda": dict[str, dict[str, Any]],
+            "whl": dict[str, dict[str, Any]],
+        },
+        closed=True,
     )
 
     # in this style because "packages.conda" is not a Python identifier
@@ -206,7 +211,7 @@ REPODATA_SHARDS_VERSION = (
 )
 CHANNELDATA_VERSION = 1
 RUN_EXPORTS_VERSION = 1
-REPODATA_REVISION_V3 = 3
+REPODATA_REVISION_V3 = "v3"
 REPODATA_JSON_FN = "repodata.json"
 REPODATA_FROM_PKGS_JSON_FN = "repodata_from_packages.json"
 REPODATA_SHARDS_FN = "repodata_shards.msgpack.zst"
@@ -746,7 +751,7 @@ class ChannelIndex:
 
             (self.output_root / subdir).mkdir(parents=True, exist_ok=True)
 
-            v3_data = {
+            v3_data: V3Section = {
                 "tar.bz2": {},
                 "conda": {},
                 "whl": {},
@@ -766,13 +771,13 @@ class ChannelIndex:
                 shards[shard.name] = shard_hash
 
                 if self.repodata_v3:
-                    for section, records in repodata_shard["v3"].items():
+                    for section, records in repodata_shard.get("v3", {}).items():
                         v3_data[section].update(records)
 
             if self.repodata_v3:
-                shards_index["info"]["repodata_revisions"] = [
-                    self._make_repodata_revision_data(v3_data)
-                ]
+                revision_data = self._make_repodata_revision_data(v3_data)
+                revision = revision_data.pop("revision")
+                shards_index["info"]["repodata_revisions"] = {revision: revision_data}
 
             return shards_index
 
@@ -803,9 +808,9 @@ class ChannelIndex:
             new_repodata["v3"] = v3_packages
             new_repodata["packages"] = {}
             new_repodata["packages.conda"] = {}
-            new_repodata["info"]["repodata_revisions"] = [
-                self._make_repodata_revision_data(v3_packages)
-            ]
+            revision_data = self._make_repodata_revision_data(v3_packages)
+            revision = revision_data.pop("revision")
+            new_repodata["info"]["repodata_revisions"] = {revision: revision_data}
 
         if self.base_url:
             # per https://github.com/conda-incubator/ceps/blob/main/cep-15.md
@@ -878,8 +883,8 @@ class ChannelIndex:
 
     @staticmethod
     def _make_repodata_revision_data(
-        revision_data: dict[str, dict[str, dict]],
-    ) -> dict[str, int | None]:
+        revision_data: V3Section,
+    ) -> dict[str, int | str | None]:
         """
         Return { "revision": 3, ... } dict with package statistics derived from
         revision_data, which is similar to monolithic repodata.

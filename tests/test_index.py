@@ -1378,9 +1378,8 @@ def test_repodata_v3(index_data):
 
     noarch = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
 
-    assert set(noarch["info"]["repodata_revisions"][0].keys()) == set(
-        ("revision", "n_packages", "oldest", "newest")
-    )
+    revision_data = list(noarch["info"]["repodata_revisions"].values())[0]
+    assert set(revision_data.keys()) == set(("n_packages", "oldest", "newest"))
 
     assert "v3" in noarch
     assert set(noarch["v3"]) == {"tar.bz2", "conda", "whl"}
@@ -1529,14 +1528,13 @@ def test_index_v3_format(tmp_path):
             "shards_base_url": "",
             "subdir": "noarch",
             "created_at": CREATED_AT,
-            "repodata_revisions": [
-                {
-                    "revision": 3,
+            "repodata_revisions": {
+                "v3": {
                     "n_packages": 0,
                     "oldest": None,
                     "newest": None,
                 }
-            ],
+            },
         },
         "shards": {},
     }
@@ -1547,14 +1545,13 @@ def test_index_v3_format(tmp_path):
         "packages.conda": {},
         "info": {
             "subdir": "noarch",
-            "repodata_revisions": [
-                {
-                    "revision": 3,
+            "repodata_revisions": {
+                "v3": {
                     "n_packages": 0,
                     "oldest": None,
                     "newest": None,
                 }
-            ],
+            },
         },
         "repodata_version": 1,
         "removed": [],
