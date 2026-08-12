@@ -13,6 +13,7 @@ import pytest
 
 from conda_index.index.cache import (
     IndexedStages,
+    UpstreamStages,
     _cache_post_install_details,
     _cache_recipe,
 )
@@ -92,6 +93,92 @@ def test_store_tolerates_null_md5(tmp_path):
     assert row["path"] == "pkg-1.0-py3_none.whl"
     assert row["sha256"] == "a" * 64
     assert row["md5"] is None
+
+
+def test_store_sets_and_preserves_indexed_timestamp(tmp_path):
+    (tmp_path / "noarch").mkdir()
+    filename = "pkg-1.0-0.conda"
+    record = {
+        "name": "pkg",
+        "version": "1.0",
+        "sha256": "a" * 64,
+        "md5": "b" * 32,
+        "size": 1234,
+        "timestamp": 1000,
+        "indexed_timestamp": 1,
+    }
+
+    cache = CondaIndexCache(tmp_path, "noarch")
+    cache.indexed_timestamp = 2000
+    cache.store(filename, 1234, 1, {}, record)
+    stored = json.loads(
+        cache.db.execute(
+            "SELECT index_json FROM index_json WHERE path = ?", (filename,)
+        ).fetchone()[0]
+    )
+    assert stored["indexed_timestamp"] == 2000
+    cache.close()
+
+    cache = CondaIndexCache(tmp_path, "noarch")
+    cache.indexed_timestamp = 3000
+    cache.store(filename, 1234, 2, {}, {**record, "indexed_timestamp": 3000})
+    stored = json.loads(
+        cache.db.execute(
+            "SELECT index_json FROM index_json WHERE path = ?", (filename,)
+        ).fetchone()[0]
+    )
+    assert stored["indexed_timestamp"] == 2000
+
+
+def test_backfill_indexed_timestamp_is_stable(tmp_path):
+    (tmp_path / "noarch").mkdir()
+    cache = CondaIndexCache(tmp_path, "noarch")
+    cache.indexed_timestamp = 3000
+    records = {
+        "from-builder-1.0-0.conda": {
+            "name": "from-builder",
+            "timestamp": 1500,
+            "indexed_timestamp": 1,
+        },
+        "from-mtime-1.0-0.conda": {"name": "from-mtime"},
+    }
+    with cache.db:
+        cache.db.executemany(
+            "INSERT INTO index_json (path, index_json) VALUES (?, json(?))",
+            [(path, json.dumps(record)) for path, record in records.items()],
+        )
+        cache.db.executemany(
+            "INSERT INTO stat (stage, path, mtime, size) VALUES (?, ?, ?, ?)",
+            [
+                (IndexedStages.INDEXED_STAGE.value, next(iter(records)), 2, 1),
+                (
+                    UpstreamStages.LOCAL_FILE_UPSTREAM_STAGE.value,
+                    list(records)[1],
+                    2.5,
+                    1,
+                ),
+            ],
+        )
+
+    cache.backfill_indexed_timestamps()
+    first = {
+        row["path"]: json.loads(row["index_json"])["indexed_timestamp"]
+        for row in cache.db.execute("SELECT path, index_json FROM index_json")
+    }
+    assert first == {
+        "from-builder-1.0-0.conda": 1500,
+        "from-mtime-1.0-0.conda": 2500,
+    }
+
+    with cache.db:
+        cache.db.execute("UPDATE stat SET mtime = 4")
+    cache.indexed_timestamp = 5000
+    cache.backfill_indexed_timestamps()
+    second = {
+        row["path"]: json.loads(row["index_json"])["indexed_timestamp"]
+        for row in cache.db.execute("SELECT path, index_json FROM index_json")
+    }
+    assert second == first
 
 
 def test_store_warns_when_member_data_missing(tmp_path, caplog):
@@ -365,6 +452,8 @@ def test_merge_index_cache(tmp_path):
                 f"INSERT INTO index_json (path, index_json) VALUES ('prefix/{subdir}.conda', '{{}}')"
             )
             migrate(conn)
+            if subdir == "noarch":
+                conn.execute("DROP TABLE indexed_timestamp")
 
     merge_index_cache(tmp_path)
 

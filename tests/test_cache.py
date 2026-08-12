@@ -78,6 +78,11 @@ def test_cache(tmp_path):
     assert c.plain_path(db_path) == package
 
     c.convert()
+    c.backfill_indexed_timestamps()
+    c.indexed_timestamp = 1000
+    index_json = {}
+    c.prepare_index_json(index_json, existing_index_json={}, mtime=0)
+    assert index_json["indexed_timestamp"] == 0
     c.close()
 
     assert c.package_section_for_path("file.whl") == "packages.whl"

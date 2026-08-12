@@ -180,6 +180,72 @@ class CondaIndexCache(BaseCondaIndexCache):
             # prepare to be sent to other thread
             self.close()
 
+    def backfill_indexed_timestamps(self) -> None:
+        with self.db:
+            self.db.execute(
+                """
+                INSERT INTO indexed_timestamp (path, indexed_timestamp)
+                SELECT
+                    record.path,
+                    min(
+                        :indexed_timestamp,
+                        coalesce(
+                            CASE
+                                WHEN json_type(record.index_json, '$.timestamp') IN ('integer', 'real')
+                                THEN CAST(json_extract(record.index_json, '$.timestamp') AS INTEGER)
+                            END,
+                            (
+                                SELECT CAST(mtime * 1000 AS INTEGER)
+                                FROM stat
+                                WHERE stat.path = record.path
+                                    AND stat.stage IN (
+                                        :indexed_stage,
+                                        :upstream_stage
+                                    )
+                                ORDER BY stat.stage = :indexed_stage DESC
+                                LIMIT 1
+                            ),
+                            :indexed_timestamp
+                        )
+                    )
+                FROM index_json AS record
+                LEFT JOIN indexed_timestamp AS timestamp
+                    ON record.path = timestamp.path
+                WHERE record.path LIKE :path_like
+                    AND timestamp.path IS NULL
+                ON CONFLICT (path) DO NOTHING
+                """,
+                {
+                    "indexed_timestamp": self.indexed_timestamp,
+                    "indexed_stage": IndexedStages.INDEXED_STAGE.value,
+                    "upstream_stage": self.upstream_stage,
+                    "path_like": self.database_path_like,
+                },
+            )
+            self.db.execute(
+                """
+                UPDATE index_json AS record
+                SET index_json = json_set(
+                    record.index_json,
+                    '$.indexed_timestamp',
+                    (
+                        SELECT indexed_timestamp
+                        FROM indexed_timestamp
+                        WHERE indexed_timestamp.path = record.path
+                    )
+                )
+                WHERE record.path LIKE :path_like
+                    AND json_extract(
+                        record.index_json, '$.indexed_timestamp'
+                    ) IS NOT (
+                        SELECT indexed_timestamp
+                        FROM indexed_timestamp
+                        WHERE indexed_timestamp.path = record.path
+                    )
+                """,
+                {"path_like": self.database_path_like},
+            )
+
     def store(
         self,
         fn: str,
@@ -193,6 +259,39 @@ class CondaIndexCache(BaseCondaIndexCache):
         """
         database_path = self.database_path(fn)
         with self.db:
+            existing = self.db.execute(
+                """
+                SELECT record.index_json, stat.mtime, timestamp.indexed_timestamp
+                FROM index_json AS record
+                LEFT JOIN stat
+                    ON record.path = stat.path
+                    AND stat.stage = :indexed_stage
+                LEFT JOIN indexed_timestamp AS timestamp
+                    ON record.path = timestamp.path
+                WHERE record.path = :path
+                """,
+                {
+                    "path": database_path,
+                    "indexed_stage": IndexedStages.INDEXED_STAGE.value,
+                },
+            ).fetchone()
+            existing_index_json = (
+                json.loads(existing["index_json"]) if existing else None
+            )
+            existing_mtime = (
+                existing["mtime"]
+                if existing and existing["mtime"] is not None
+                else mtime
+            )
+            self.prepare_index_json(
+                index_json,
+                existing_index_json=existing_index_json,
+                existing_indexed_timestamp=(
+                    existing["indexed_timestamp"] if existing else None
+                ),
+                mtime=existing_mtime,
+            )
+
             for have_path in members:
                 table = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
@@ -219,6 +318,22 @@ class CondaIndexCache(BaseCondaIndexCache):
                     log.exception("table=%s parameters=%s", table, parameters)
                     # XXX delete from cache
                     raise
+
+            self.db.execute(
+                """
+                INSERT INTO indexed_timestamp (path, indexed_timestamp)
+                VALUES (:path, :indexed_timestamp)
+                ON CONFLICT (path) DO NOTHING
+                """,
+                {
+                    "path": database_path,
+                    "indexed_timestamp": index_json["indexed_timestamp"],
+                },
+            )
+            index_json["indexed_timestamp"] = self.db.execute(
+                "SELECT indexed_timestamp FROM indexed_timestamp WHERE path = ?",
+                (database_path,),
+            ).fetchone()[0]
 
             # sqlite json() function removes whitespace and ensures valid json
             self.db.execute(

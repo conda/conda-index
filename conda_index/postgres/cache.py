@@ -126,6 +126,69 @@ class PsqlCache(BaseCondaIndexCache):
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
+    def backfill_indexed_timestamps(self) -> None:
+        insert_query = sqlalchemy.text(
+            """
+            INSERT INTO indexed_timestamp (path, indexed_timestamp)
+            SELECT
+                record.path,
+                LEAST(
+                    CAST(:indexed_timestamp AS BIGINT),
+                    COALESCE(
+                        CASE
+                            WHEN jsonb_typeof(record.index_json -> 'timestamp') = 'number'
+                            THEN CAST(record.index_json ->> 'timestamp' AS BIGINT)
+                        END,
+                        (
+                            SELECT CAST(mtime AS BIGINT) * 1000
+                            FROM stat
+                            WHERE stat.path = record.path
+                                AND stat.stage IN (
+                                    :indexed_stage,
+                                    :upstream_stage
+                                )
+                            ORDER BY stat.stage = :indexed_stage DESC
+                            LIMIT 1
+                        ),
+                        CAST(:indexed_timestamp AS BIGINT)
+                    )
+                )
+            FROM index_json AS record
+            LEFT JOIN indexed_timestamp AS timestamp
+                ON record.path = timestamp.path
+            WHERE LEFT(record.path, LENGTH(:path_prefix)) = :path_prefix
+                AND timestamp.path IS NULL
+            ON CONFLICT (path) DO NOTHING
+            """
+        )
+        update_query = sqlalchemy.text(
+            """
+            UPDATE index_json AS record
+            SET index_json = jsonb_set(
+                record.index_json,
+                '{indexed_timestamp}',
+                to_jsonb(timestamp.indexed_timestamp),
+                true
+            )
+            FROM indexed_timestamp AS timestamp
+            WHERE record.path = timestamp.path
+                AND LEFT(record.path, LENGTH(:path_prefix)) = :path_prefix
+                AND record.index_json -> 'indexed_timestamp'
+                    IS DISTINCT FROM to_jsonb(timestamp.indexed_timestamp)
+            """
+        )
+        with self.engine.begin() as connection:
+            connection.execute(
+                insert_query,
+                {
+                    "indexed_timestamp": self.indexed_timestamp,
+                    "indexed_stage": "indexed",
+                    "upstream_stage": self.upstream_stage,
+                    "path_prefix": self.database_prefix,
+                },
+            )
+            connection.execute(update_query, {"path_prefix": self.database_prefix})
+
     def store_stat_state(
         self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
     ):
@@ -173,6 +236,40 @@ class PsqlCache(BaseCondaIndexCache):
         database_path = self.database_path(fn)
         connection: Connection
         with self.engine.begin() as connection:
+            index_json_table = model.Base.metadata.tables["index_json"]
+            indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+            stat_table = model.Base.metadata.tables["stat"]
+            existing = connection.execute(
+                select(
+                    index_json_table.c.index_json,
+                    stat_table.c.mtime,
+                    indexed_timestamp_table.c.indexed_timestamp,
+                )
+                .select_from(
+                    index_json_table.outerjoin(
+                        stat_table,
+                        (index_json_table.c.path == stat_table.c.path)
+                        & (stat_table.c.stage == "indexed"),
+                    ).outerjoin(
+                        indexed_timestamp_table,
+                        index_json_table.c.path == indexed_timestamp_table.c.path,
+                    )
+                )
+                .where(index_json_table.c.path == database_path)
+            ).first()
+            existing_index_json = existing.index_json if existing else None
+            existing_mtime = (
+                existing.mtime if existing and existing.mtime is not None else mtime
+            )
+            self.prepare_index_json(
+                index_json,
+                existing_index_json=existing_index_json,
+                existing_indexed_timestamp=(
+                    existing.indexed_timestamp if existing else None
+                ),
+                mtime=existing_mtime,
+            )
+
             for have_path in members:
                 table: str = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
@@ -207,6 +304,21 @@ class PsqlCache(BaseCondaIndexCache):
                     log.exception("table=%s parameters=%s", table, parameters)
                     raise
 
+            timestamp_insert = insert(indexed_timestamp_table)
+            connection.execute(
+                timestamp_insert.values(
+                    path=database_path,
+                    indexed_timestamp=index_json["indexed_timestamp"],
+                ).on_conflict_do_nothing(
+                    index_elements=[indexed_timestamp_table.c.path]
+                )
+            )
+            index_json["indexed_timestamp"] = connection.execute(
+                select(indexed_timestamp_table.c.indexed_timestamp).where(
+                    indexed_timestamp_table.c.path == database_path
+                )
+            ).scalar_one()
+
             table = "index_json"
             index_json_table = model.Base.metadata.tables[table]
             insert_obj = insert(index_json_table)
@@ -219,7 +331,6 @@ class PsqlCache(BaseCondaIndexCache):
                 )  # it will cast to jsonb automatically
             )
 
-            stat_table = model.Base.metadata.tables["stat"]
             values = {
                 "path": database_path,
                 "stage": "indexed",
