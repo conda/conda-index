@@ -22,8 +22,14 @@ except ImportError:
 
 
 class MockResult:
+    def __init__(self, value=None):
+        self.value = value
+
     def first(self):
-        return None
+        return self.value
+
+    def scalar_one(self):
+        return self.value
 
 
 class MockConnection:
@@ -235,7 +241,13 @@ def test_psql_store_tolerates_null_md5(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = MockConnection()
+
+    def results_factory():
+        if "SELECT indexed_timestamp.indexed_timestamp" in str(connection.calls[-1][0]):
+            return MockResult(cache.indexed_timestamp)
+        return MockResult()
+
+    connection = MockConnection(results_factory)
     cache.engine = MockEngine(connection)  # type: ignore
 
     cache.store(
@@ -253,12 +265,68 @@ def test_psql_store_tolerates_null_md5(tmp_path: Path):
     )
 
     stat_insert = next(
-        (c for c in connection.calls if "stat" in str(c[0]).lower()),
+        (c for c in connection.calls if "insert into stat" in str(c[0]).lower()),
         None,
     )
     assert stat_insert is not None
     params = stat_insert[1] or {}
     assert params["md5"] is None
+
+
+def test_psql_store_preserves_indexed_timestamp(tmp_path: Path):
+    class ExistingRecord(NamedTuple):
+        index_json: dict
+        mtime: int
+        indexed_timestamp: int
+
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    cache.indexed_timestamp = 3000
+
+    def results_factory():
+        statement = str(connection.calls[-1][0])
+        if "SELECT index_json.index_json" in statement:
+            return MockResult(ExistingRecord({"indexed_timestamp": 1}, 1, 2000))
+        if "SELECT indexed_timestamp.indexed_timestamp" in statement:
+            return MockResult(2000)
+        return MockResult()
+
+    connection = MockConnection(results_factory)
+    cache.engine = MockEngine(connection)  # type: ignore
+    record = {
+        "name": "pkg",
+        "sha256": hashlib.sha256().hexdigest(),
+        "md5": hashlib.md5().hexdigest(),
+        "size": 1234,
+        "indexed_timestamp": 1,
+    }
+
+    cache.store("pkg-1.0-0.conda", 1234, 2, {}, record)
+
+    assert record["indexed_timestamp"] == 2000
+
+
+def test_psql_backfill_indexed_timestamp(tmp_path: Path):
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    cache.indexed_timestamp = 3000
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    cache.backfill_indexed_timestamps()
+
+    insert_query, params = connection.calls[0]
+    update_query, _ = connection.calls[1]
+    assert "insert into indexed_timestamp" in str(insert_query).lower()
+    assert "jsonb_set" in str(update_query)
+    assert params["indexed_timestamp"] == 3000
+    assert params["path_prefix"] == cache.database_prefix
 
 
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
@@ -271,7 +339,13 @@ def test_psql_no_parse_icon_bad_package(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
-    connection = MockConnection()
+
+    def results_factory():
+        if "SELECT indexed_timestamp.indexed_timestamp" in str(connection.calls[-1][0]):
+            return MockResult(cache.indexed_timestamp)
+        return MockResult()
+
+    connection = MockConnection(results_factory)
     cache.engine = MockEngine(connection)  # type: ignore
 
     import conda_index.postgres.cache

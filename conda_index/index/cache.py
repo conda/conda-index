@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -171,6 +172,8 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.include_stages = include_stages
         self.package_extensions = package_extensions
         self.update_only = update_only
+        now = datetime.now(tz=timezone.utc)
+        self.indexed_timestamp = int(now.timestamp() * 1000)
 
         self.fs = fs or MinimalFS()
         self.channel_url = channel_url or str(channel_root)
@@ -181,11 +184,39 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         # used to determine whether to call self.convert()
         self.cache_is_brand_new = False
 
+    def prepare_index_json(
+        self,
+        index_json: HasChecksumsAndSize,
+        *,
+        existing_index_json: dict[str, Any] | None = None,
+        existing_indexed_timestamp: int | None = None,
+        mtime: float | int | None = None,
+    ) -> HasChecksumsAndSize:
+        """Set or preserve the server-controlled index timestamp."""
+        if isinstance(existing_indexed_timestamp, (int, float)):
+            indexed_timestamp = int(existing_indexed_timestamp)
+        else:
+            indexed_timestamp = self.indexed_timestamp
+            if existing_index_json is not None:
+                fallback = existing_index_json.get("timestamp")
+                if not isinstance(fallback, (int, float)):
+                    fallback = mtime * 1000 if isinstance(mtime, (int, float)) else None
+                indexed_timestamp = min(
+                    indexed_timestamp,
+                    int(fallback) if fallback is not None else indexed_timestamp,
+                )
+
+        index_json["indexed_timestamp"] = indexed_timestamp
+        return index_json
+
     @abc.abstractmethod
     def convert(self) -> None:
         """
         Convert filesystem cache to database.
         """
+
+    def backfill_indexed_timestamps(self) -> None:
+        """Persist timestamps for cached records that predate CEP 47."""
 
     def close(self) -> None:
         """
