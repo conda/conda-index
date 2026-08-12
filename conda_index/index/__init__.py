@@ -252,13 +252,20 @@ CHANNELDATA_FIELDS = (
 
 def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
     repodata.setdefault("removed", [])
+
+    def apply_fixes(records, fixes):
+        for filename in records.keys() & fixes.keys():
+            fix = fixes[filename]
+            if "indexed_timestamp" in fix:
+                fix = {
+                    key: value
+                    for key, value in fix.items()
+                    if key != "indexed_timestamp"
+                }
+            utils.merge_or_update_dict(records[filename], fix, merge=False)
+
     # apply to .tar.bz2 packages
-    utils.merge_or_update_dict(
-        repodata.get("packages", {}),
-        instructions.get("packages", {}),
-        merge=False,
-        add_missing_keys=False,
-    )
+    apply_fixes(repodata.get("packages", {}), instructions.get("packages", {}))
 
     if new_pkg_fixes is None:
         # we could have totally separate instructions for .conda than .tar.bz2, but it's easier if we assume
@@ -269,18 +276,11 @@ def _apply_instructions(subdir, repodata, instructions, new_pkg_fixes=None):
         }
 
     # apply .tar.bz2 fixes to packages.conda
-    utils.merge_or_update_dict(
-        repodata.get("packages.conda", {}),
-        new_pkg_fixes,
-        merge=False,
-        add_missing_keys=False,
-    )
+    apply_fixes(repodata.get("packages.conda", {}), new_pkg_fixes)
     # apply .conda-only fixes to packages.conda
-    utils.merge_or_update_dict(
+    apply_fixes(
         repodata.get("packages.conda", {}),
         instructions.get("packages.conda", {}),
-        merge=False,
-        add_missing_keys=False,
     )
 
     for fn in instructions.get("revoke", ()):
@@ -472,9 +472,9 @@ class ChannelIndex:
 
         self.cache_kwargs = cache_kwargs
 
-        # Timestamp for this indexing run (consistent across all subdirs)
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.indexed_timestamp = int(now_dt.timestamp() * 1000)
 
     def cache_for_subdir(self, subdir):
         cache = self.cache_class(
@@ -486,6 +486,7 @@ class ChannelIndex:
             update_only=self.update_only,
             **self.cache_kwargs or {},
         )  # type: ignore
+        cache.indexed_timestamp = self.indexed_timestamp
         if cache.cache_is_brand_new:
             # guaranteed to be only thread doing this?
             cache.convert()
@@ -507,6 +508,10 @@ class ChannelIndex:
                 "ChannelIndex.index(verbose=...) is a no-op. Alter log levels for %s to control verbosity.",
                 __name__,
             )
+
+        now_dt = datetime.now(tz=timezone.utc)
+        self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.indexed_timestamp = int(now_dt.timestamp() * 1000)
 
         subdirs = self.detect_subdirs()
 
@@ -894,7 +899,7 @@ class ChannelIndex:
         for section_records in revision_data.values():
             n_packages += len(section_records)
             for record in section_records.values():
-                timestamp = record.get("timestamp")
+                timestamp = record.get("indexed_timestamp")
                 if isinstance(timestamp, (int, float)):
                     timestamps.append(int(timestamp))
 
@@ -919,6 +924,7 @@ class ChannelIndex:
         Return name of subdir.
         """
         log.debug("%s find packages to extract", subdir)
+        cache.backfill_indexed_timestamps()
 
         # list so tqdm can show progress
         extract = [
@@ -971,7 +977,6 @@ class ChannelIndex:
             len(extract),
             utils.human_bytes(bytes_sec),
         )
-
         return subdir
 
     # region: channeldata

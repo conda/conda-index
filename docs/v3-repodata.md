@@ -56,6 +56,25 @@ structure:
 }
 ```
 
+## Indexed timestamps
+
+Following [CEP 47](https://conda.org/learn/ceps/cep-0047/), every package
+record includes an `indexed_timestamp`. It is the Unix time in milliseconds
+when `conda-index` first added the artifact to its cache. The value is emitted
+in classic repodata, sharded repodata, and v3 repodata.
+
+`conda-index` assigns the current indexing time to new artifacts and ignores
+any `indexed_timestamp` embedded by a package builder. It persists the value in
+the index cache and preserves it across later indexing runs, including when an
+artifact's modification time changes.
+
+Cached records created before this field existed are backfilled once. The
+package `timestamp` is preferred, followed by the file modification time. The
+backfilled value is capped at the current indexing time and then persisted.
+
+For v3 repodata, `info.repodata_revisions.v3.oldest` and `newest` are the
+minimum and maximum `indexed_timestamp` values in that revision.
+
 ## Run-Exports in Shards (CEP 21)
 
 When using sharded repodata (`--write-shards`), each shard includes

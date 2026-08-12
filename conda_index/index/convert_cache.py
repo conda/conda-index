@@ -53,6 +53,7 @@ TYPICAL_DIRECTORIES = {
 TABLE_NAMES = [
     "about",
     "icon",
+    "indexed_timestamp",
     "index_json",
     "post_install",
     "recipe_log",
@@ -78,6 +79,14 @@ def create(conn):
             path TEXT PRIMARY KEY, index_json BLOB,
             name AS (json_extract(index_json, '$.name')),
             sha256 AS (json_extract(index_json, '$.sha256'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS indexed_timestamp (
+            path TEXT PRIMARY KEY,
+            indexed_timestamp INTEGER NOT NULL
         )
         """
     )
@@ -309,6 +318,8 @@ def merge_index_cache(channel_root, output_db="merged.db"):
         cache_db = os.path.join(channel_root, subdir, ".cache", "cache.db")
         if not os.path.exists(cache_db):
             continue
+        with common.connect(cache_db) as source_db:
+            create(source_db)
         channel_prefix = f"{channel_name}/{subdir}/"
         log.info(
             f"Merge {os.path.relpath(cache_db, os.path.dirname(channel_root))} as {channel_prefix}"

@@ -22,8 +22,14 @@ except ImportError:
 
 
 class MockResult:
+    def __init__(self, value=None):
+        self.value = value
+
     def first(self):
-        return None
+        return self.value
+
+    def scalar_one(self):
+        return self.value
 
 
 class MockConnection:
@@ -280,6 +286,7 @@ def test_psql_store_tolerates_null_md5(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
+
     connection = MockConnection()
     cache.engine = MockEngine(connection)  # type: ignore
 
@@ -298,12 +305,211 @@ def test_psql_store_tolerates_null_md5(tmp_path: Path):
     )
 
     stat_insert = next(
-        (c for c in connection.calls if "stat" in str(c[0]).lower()),
+        (c for c in connection.calls if "insert into stat" in str(c[0]).lower()),
         None,
     )
     assert stat_insert is not None
     params = stat_insert[1] or {}
     assert params["md5"] is None
+
+
+def test_psql_store_preserves_index_json(tmp_path: Path):
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    cache.indexed_timestamp = 3000
+
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+    record = {
+        "name": "pkg",
+        "sha256": hashlib.sha256().hexdigest(),
+        "md5": hashlib.md5().hexdigest(),
+        "size": 1234,
+        "indexed_timestamp": 1,
+    }
+
+    cache.store("pkg-1.0-0.conda", 1234, 2, {}, record)
+
+    assert record["indexed_timestamp"] == 1
+    timestamp_insert = next(
+        statement
+        for statement, _params in connection.calls
+        if "insert into indexed_timestamp" in str(statement).lower()
+    )
+    compiled = timestamp_insert.compile()
+    assert 3000 in compiled.params.values()
+    assert "DO NOTHING" in str(timestamp_insert)
+
+
+@pytest.mark.needs_postgresql
+def test_psql_store_keeps_index_json_and_emits_indexed_timestamp(
+    tmp_path: Path, postgresql_database
+):
+    filename = "pkg-1.0-0.conda"
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        upstream_stage="indexed",
+        db_url=postgresql_database.url,
+    )
+    cache.indexed_timestamp = 2000
+    record = {
+        "name": "pkg",
+        "version": "1.0",
+        "sha256": hashlib.sha256().hexdigest(),
+        "md5": hashlib.md5().hexdigest(),
+        "size": 1234,
+        "indexed_timestamp": 1,
+    }
+
+    cache.store(filename, 1234, 1, {}, record)
+
+    index_json_table = model.Base.metadata.tables["index_json"]
+    indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+    database_path = cache.database_path(filename)
+    with cache.engine.begin() as connection:
+        stored = (
+            connection.execute(
+                index_json_table.select().where(
+                    index_json_table.c.path == database_path
+                )
+            )
+            .one()
+            .index_json
+        )
+        indexed_timestamp = (
+            connection.execute(
+                indexed_timestamp_table.select().where(
+                    indexed_timestamp_table.c.path == database_path
+                )
+            )
+            .one()
+            .indexed_timestamp
+        )
+
+    assert stored == record
+    assert indexed_timestamp == 2000
+    assert (
+        cache.indexed_packages().packages_conda[filename]["indexed_timestamp"] == 2000
+    )
+    assert (
+        next(cache.indexed_shards()).packages_conda[filename]["indexed_timestamp"]
+        == 2000
+    )
+
+    cache.indexed_timestamp = 3000
+    updated_record = {**record, "indexed_timestamp": 3000}
+    cache.store(filename, 1234, 2, {}, updated_record)
+
+    with cache.engine.begin() as connection:
+        stored = (
+            connection.execute(
+                index_json_table.select().where(
+                    index_json_table.c.path == database_path
+                )
+            )
+            .one()
+            .index_json
+        )
+        indexed_timestamp = (
+            connection.execute(
+                indexed_timestamp_table.select().where(
+                    indexed_timestamp_table.c.path == database_path
+                )
+            )
+            .one()
+            .indexed_timestamp
+        )
+
+    assert stored == updated_record
+    assert indexed_timestamp == 2000
+    assert (
+        cache.indexed_packages().packages_conda[filename]["indexed_timestamp"] == 2000
+    )
+
+
+@pytest.mark.needs_postgresql
+def test_psql_backfill_rejects_out_of_range_builder_timestamp(
+    tmp_path: Path, postgresql_database
+):
+    filename = "pkg-1.0-0.conda"
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url=postgresql_database.url,
+    )
+    cache.indexed_timestamp = 3000
+    database_path = cache.database_path(filename)
+    index_json_table = model.Base.metadata.tables["index_json"]
+    stat_table = model.Base.metadata.tables["stat"]
+    indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+    with cache.engine.begin() as connection:
+        connection.execute(
+            index_json_table.insert().values(
+                path=database_path,
+                index_json={"name": "pkg", "timestamp": 1e100},
+            )
+        )
+        connection.execute(
+            stat_table.insert().values(
+                path=database_path,
+                stage="indexed",
+                mtime=2,
+                size=1,
+            )
+        )
+
+    cache.backfill_indexed_timestamps()
+
+    with cache.engine.begin() as connection:
+        indexed_timestamp = (
+            connection.execute(
+                indexed_timestamp_table.select().where(
+                    indexed_timestamp_table.c.path == database_path
+                )
+            )
+            .one()
+            .indexed_timestamp
+        )
+    assert indexed_timestamp == 2000
+
+
+def test_psql_backfill_indexed_timestamp(tmp_path: Path):
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+    cache.indexed_timestamp = 3000
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    cache.backfill_indexed_timestamps()
+
+    insert_query, params = connection.calls[0]
+    assert "insert into indexed_timestamp" in str(insert_query).lower()
+    assert len(connection.calls) == 1
+    assert "jsonb_set" not in str(insert_query)
+    assert params["indexed_timestamp"] == 3000
+    assert params["path_prefix"] == cache.database_prefix
+
+
+def test_psql_indexed_records_query_joins_indexed_timestamp(tmp_path: Path):
+    cache = PsqlCache(
+        tmp_path,
+        "noarch",
+        db_url="postgresql://example",
+    )
+
+    compiled = cache._indexed_records_query(include_run_exports=False).compile()
+
+    assert "JOIN indexed_timestamp" in str(compiled)
+    assert "jsonb_build_object" in str(compiled)
+    assert "||" in str(compiled)
+    assert "indexed_timestamp" in compiled.params.values()
 
 
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
@@ -316,6 +522,7 @@ def test_psql_no_parse_icon_bad_package(tmp_path: Path):
         "noarch",
         db_url="postgresql://example",
     )
+
     connection = MockConnection()
     cache.engine = MockEngine(connection)  # type: ignore
 
@@ -368,19 +575,36 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         last_call = connection.calls[-1]
         if len(last_call[0].columns) == 4:
             return [
-                DummyResultWithRunExports("package", "package.notconda", {}, {}),
-                DummyResultWithRunExports("package", "package-1.0.notconda", {}, {}),
                 DummyResultWithRunExports(
-                    "package", "package-1.0.conda", {}, {"weak": ["zlib"]}
+                    "package", "package.notconda", {"indexed_timestamp": 1000}, {}
                 ),
-                DummyResultWithRunExports("package", "package-1.0.tar.bz2", {}, {}),
+                DummyResultWithRunExports(
+                    "package", "package-1.0.notconda", {"indexed_timestamp": 1000}, {}
+                ),
+                DummyResultWithRunExports(
+                    "package",
+                    "package-1.0.conda",
+                    {"indexed_timestamp": 1000},
+                    {"weak": ["zlib"]},
+                ),
+                DummyResultWithRunExports(
+                    "package", "package-1.0.tar.bz2", {"indexed_timestamp": 1000}, {}
+                ),
             ]
         elif len(last_call[0].columns) == 3:
             return [
-                DummyResultWithoutRunExports("package", "package.notconda", {}),
-                DummyResultWithoutRunExports("package", "package-1.0.notconda", {}),
-                DummyResultWithoutRunExports("package", "package-1.0.conda", {}),
-                DummyResultWithoutRunExports("package", "package-1.0.tar.bz2", {}),
+                DummyResultWithoutRunExports(
+                    "package", "package.notconda", {"indexed_timestamp": 1000}
+                ),
+                DummyResultWithoutRunExports(
+                    "package", "package-1.0.notconda", {"indexed_timestamp": 1000}
+                ),
+                DummyResultWithoutRunExports(
+                    "package", "package-1.0.conda", {"indexed_timestamp": 1000}
+                ),
+                DummyResultWithoutRunExports(
+                    "package", "package-1.0.tar.bz2", {"indexed_timestamp": 1000}
+                ),
             ]
 
     # no index.json validation at this step, empty {} as record is passed on.
@@ -394,11 +618,16 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
     assert shard.packages_conda["package-1.0.conda"]["run_exports"] == {
         "weak": ["zlib"]
     }
+    assert shard.packages_conda["package-1.0.conda"]["indexed_timestamp"] == 1000
 
     indexed_packages = cache.indexed_packages()
     assert len(indexed_packages.packages) == 1
     assert len(indexed_packages.packages_conda) == 1
     assert "run_exports" not in indexed_packages.packages_conda["package-1.0.conda"]
+    assert (
+        indexed_packages.packages_conda["package-1.0.conda"]["indexed_timestamp"]
+        == 1000
+    )
 
 
 def test_psql_include_wheel_extension(tmp_path: Path):
