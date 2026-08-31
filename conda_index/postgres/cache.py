@@ -45,7 +45,7 @@ from . import model
 log = logging.getLogger(__name__)
 
 # CEP 26 channel path component syntax. Prefix queries must use autoescape=True.
-CHANNEL_ID_PATTERN = r"^[a-z0-9_][a-z0-9_.-]*$"
+CHANNEL_ID_PATTERN = r"[a-z0-9_][a-z0-9_.-]*"
 
 # XXX convert based on streaming "blob of json's to put in store()"
 
