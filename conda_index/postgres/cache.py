@@ -44,8 +44,8 @@ from . import model
 
 log = logging.getLogger(__name__)
 
-# prevent SQL LIKE abuse
-CHANNEL_ID_PATTERN = r"^[a-zA-Z0-9]*$"
+# CEP 26 channel path component syntax. Prefix queries must use autoescape=True.
+CHANNEL_ID_PATTERN = r"^[a-z0-9_][a-z0-9_.-]*$"
 
 # XXX convert based on streaming "blob of json's to put in store()"
 
@@ -86,7 +86,7 @@ class PsqlCache(BaseCondaIndexCache):
             self.cache_is_brand_new = False
 
         self.channel_id = json.loads(self.db_filename.read_text())["channel_id"]
-        if not re.match(CHANNEL_ID_PATTERN, self.channel_id):
+        if not re.fullmatch(CHANNEL_ID_PATTERN, self.channel_id):
             raise ValueError(
                 f'{self.db_filename} contains invalid channel_id="{self.channel_id}"'
             )

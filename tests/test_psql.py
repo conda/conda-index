@@ -156,13 +156,75 @@ def test_psql_cache_database_prefix_root(tmp_path: Path):
     assert cache.database_prefix == f"{cache.channel_id}/_ROOT/"
 
 
-def test_psql_cache_invalid_channel_id(tmp_path: Path):
+@pytest.mark.parametrize(
+    "channel_id",
+    (
+        "main",
+        "main_hotfix_test",
+        "conda-forge",
+        "my.channel",
+        "_",
+        "_private",
+        "trailing_",
+        "trailing.",
+        "trailing-",
+        "repeated..separator",
+    ),
+)
+def test_psql_cache_valid_channel_id(tmp_path: Path, channel_id: str):
     assert PsqlCache
     cache_dir = tmp_path / ".cache"
     cache_dir.mkdir()
-    (cache_dir / "cache.json").write_text(json.dumps({"channel_id": "bad-id"}))
-    with pytest.raises(ValueError):
+    (cache_dir / "cache.json").write_text(json.dumps({"channel_id": channel_id}))
+
+    cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
+
+    assert cache.channel_id == channel_id
+    assert cache.database_prefix == f"{channel_id}/noarch/"
+
+
+@pytest.mark.parametrize(
+    "channel_id",
+    (
+        "",
+        "UPPERCASE",
+        ".hidden",
+        "-leading-dash",
+        "has/slash",
+        "has\\backslash",
+        "has%percent",
+        "has space",
+        "has\nnewline",
+        "ümlaut",
+    ),
+)
+def test_psql_cache_invalid_channel_id(tmp_path: Path, channel_id: str):
+    assert PsqlCache
+    cache_dir = tmp_path / ".cache"
+    cache_dir.mkdir()
+    (cache_dir / "cache.json").write_text(json.dumps({"channel_id": channel_id}))
+
+    with pytest.raises(ValueError, match="invalid channel_id"):
         PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
+
+
+def test_psql_cache_escapes_channel_id_for_like(tmp_path: Path):
+    assert PsqlCache
+    cache_dir = tmp_path / ".cache"
+    cache_dir.mkdir()
+    (cache_dir / "cache.json").write_text(
+        json.dumps({"channel_id": "main_hotfix_test"})
+    )
+    cache = PsqlCache(tmp_path, "noarch", db_url="postgresql://example")
+    connection = MockConnection()
+    cache.engine = MockEngine(connection)  # type: ignore
+
+    cache.store_fs_state([])
+
+    statement = connection.calls[0][0]
+    compiled = statement.compile()
+    assert "ESCAPE '/'" in str(compiled)
+    assert "main/_hotfix/_test//noarch//" in compiled.params.values()
 
 
 @pytest.mark.parametrize("update_only", (True, False))
@@ -207,23 +269,6 @@ def test_psql_model_create_calls_metadata(monkeypatch):
     engine = object()
     model.create(engine)
     assert called["engine"] is engine
-
-
-def test_psql_bad_channel_id(tmp_path: Path):
-    """
-    Error if channel_id doesn't match a pattern.
-    """
-    assert PsqlCache
-    db_filename = tmp_path / ".cache" / "cache.json"
-    db_filename.parent.mkdir()
-    db_filename.write_text('{"channel_id": "%"}')
-    with pytest.raises(ValueError, match="invalid channel_id"):
-        PsqlCache(
-            tmp_path,
-            "noarch",
-            update_only=False,
-            db_url="",  # doesn't eagerly connect
-        )
 
 
 def test_psql_store_tolerates_null_md5(tmp_path: Path):
@@ -513,11 +558,20 @@ def test_psql_channel_separation(
     them separate.
     """
     output_base = tmp_path / "output"
+    channels = (
+        (index_data, "main_hotfix_test"),
+        (archives_data, "mainxhotfixxtest"),
+    )
+
+    for channel_root, channel_id in channels:
+        cache_dir = channel_root / ".cache"
+        cache_dir.mkdir()
+        (cache_dir / "cache.json").write_text(json.dumps({"channel_id": channel_id}))
 
     # Twice so that combined packages are written to first output if the bug
     # occurs:
     for _ in range(2):
-        for channel_root in (index_data, archives_data):
+        for channel_root, _channel_id in channels:
             # tmp_path is the same as used for the fixtures, contains the
             # index_data, archives_data directories
             output = output_base / channel_root.name  # default same as channel
