@@ -28,10 +28,10 @@
 
 * @dholth
 * @jezdez
-* @kodegard
+* @kenodegard
 * @conda-bot
-* @dependabot[bot]
-* @pre-commit-ci[bot]
+* @dependabot[bot] made their first contribution in https://github.com/conda/conda-index/pull/320
+* @pre-commit-ci[bot] made their first contribution in https://github.com/conda/conda-index/pull/332
 
 
 
