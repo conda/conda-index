@@ -1,5 +1,40 @@
 [//]: # (current developments)
 
+## 0.13.0 (2026-09-01)
+
+### Enhancements
+
+* Switch to stdlib `compression.zstd` or `backports.zstd` instead of `zstandard` dependency (#234)
+* Remove "experimental" disclaimers from CLI help text for `--write-shards` and `--db`, `--db-url` options. (#295)
+* Add Python 3.14 to the GitHub Actions and Nox test matrices. (#351)
+
+### Bug fixes
+
+* Separate `run_exports.json` members properly for postgresql backend (#328)
+* Accept CEP 26 channel path components as PostgreSQL `channel_id` values. (#329)
+* Change `info.repodata_revisions` from a list to a map keyed by revision id to
+  be compatible with py-rattler 0.25.0+. (#338)
+
+### Docs
+
+* Document v3 repodata format and CEP 21 "run_exports in shards". (#276)
+
+### Other
+
+* Require `msgpack >=1.1.1` (#234)
+* Remove `filelock` dependency from `pyproject.toml` and remove related imports and usage in codebase. (#285)
+
+### Contributors
+
+* @dholth
+* @jezdez
+* @kodegard
+* @conda-bot
+* @dependabot[bot]
+* @pre-commit-ci[bot]
+
+
+
 ## 0.12.1 (2026-06-22)
 
 ### Bug fixes
