@@ -1,9 +1,0 @@
-# docs
-conda-sphinx-theme>=0.4.0
-mdit-py-plugins>=0.3.0
-myst-parser>=3.0
-sphinx-argparse
-sphinx-copybutton>=0.5
-sphinx-design>=0.6
-sphinx-sitemap>=2.5
-sphinx>=9.1.0

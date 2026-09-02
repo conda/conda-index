@@ -25,13 +25,18 @@ updates:
     cooldown:
       default-days: 7
   - package-ecosystem: pip
-    directory: /docs/
+    directory: /
     schedule:
       interval: monthly
     allow:
-      # Allow only production updates for Sphinx
+      - dependency-name: conda-sphinx-theme
+      - dependency-name: mdit-py-plugins
+      - dependency-name: myst-parser
       - dependency-name: sphinx
-        dependency-type: production
+      - dependency-name: sphinx-argparse
+      - dependency-name: sphinx-copybutton
+      - dependency-name: sphinx-design
+      - dependency-name: sphinx-sitemap
     groups:
       docs:
         patterns:
