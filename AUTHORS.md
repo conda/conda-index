@@ -14,4 +14,6 @@ Authors are sorted alphabetically.
 * Ryan Keith
 * Sophia Castellarin
 * conda-bot
+* dependabot[bot]
 * jaimergp
+* pre-commit-ci[bot]
