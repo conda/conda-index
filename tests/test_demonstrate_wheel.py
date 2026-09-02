@@ -54,10 +54,17 @@ def test_demonstrate_wheel(tmp_path: Path):
             }
 
     cache.store_md_state(listdir_like())
+    assert all(
+        "indexed_timestamp" not in record for record in input["v3"]["whl"].values()
+    )
 
     # packages from database
     packages = cache.indexed_packages()
     assert len(packages.packages_whl) == len(wheels)
+    assert all(
+        isinstance(record["indexed_timestamp"], int)
+        for record in packages.packages_whl.values()
+    )
 
     # repodata.json without repodata patches applied. Saved to
     # repodata_from_packages in full index() method, but in this case there are
@@ -78,4 +85,6 @@ def test_demonstrate_wheel(tmp_path: Path):
     output = json.loads((tmp_path / "noarch" / "repodata.json").read_text())
 
     # other details differ
+    for record in output["v3"]["whl"].values():
+        assert isinstance(record.pop("indexed_timestamp"), int)
     assert output["v3"]["whl"] == input["v3"]["whl"]
