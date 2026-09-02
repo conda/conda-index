@@ -1,4 +1,4 @@
 ### Docs
 
-* Use `conda-sphinx-theme` for the documentation site and fail documentation
-  builds on warnings.
+* Use `conda-sphinx-theme` and task-oriented navigation for the documentation
+  site, and fail documentation builds on warnings.
