@@ -46,8 +46,7 @@ structure:
       "zstd-1.5.7-h817c040_0": {
         "build": "h817c040_0",
         "build_number": 0,
-        "depends": [...],
-        ...
+        "depends": []
       }
     },
     "tar.bz2": {},
@@ -83,17 +82,15 @@ Each per-package shard (stored as `<hash>.msgpack.zst`) looks something like thi
       "name": "arrow-c-glib",
       "build": "heb0d9f2_0",
       "build_number": 0,
-      "version": "23.0.1"
-      "depends": [...],
-      ...,
+      "version": "23.0.1",
+      "depends": [],
       "run_exports": {
         "weak": [
           "arrow-c-glib >=23.0.1,<23.0.2.0a0"
         ]
-      },
-      ...
+      }
     }
-  },
+  }
 }
 ```
 

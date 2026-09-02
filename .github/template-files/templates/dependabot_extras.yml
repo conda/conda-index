@@ -1,0 +1,19 @@
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    allow:
+      - dependency-name: conda-sphinx-theme
+      - dependency-name: mdit-py-plugins
+      - dependency-name: myst-parser
+      - dependency-name: sphinx
+      - dependency-name: sphinx-argparse
+      - dependency-name: sphinx-copybutton
+      - dependency-name: sphinx-design
+      - dependency-name: sphinx-sitemap
+    groups:
+      docs:
+        patterns:
+          - '*'
+    cooldown:
+      default-days: 7
