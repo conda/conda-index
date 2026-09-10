@@ -26,10 +26,6 @@ repos:
         exclude: recipe/meta\.yaml
       # catch git merge/rebase problems
       - id: check-merge-conflict
-      # sort requirements files
-      - id: file-contents-sorter
-        files: docs/requirements\.txt
-        args: [--unique]
   # Python verification and formatting
   - repo: https://github.com/asottile/blacken-docs
     rev: dda8db18cfc68df532abf33b185ecd12d5b7b326  # frozen: 1.20.0

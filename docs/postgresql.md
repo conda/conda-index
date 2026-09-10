@@ -36,7 +36,7 @@ URL](https://docs.sqlalchemy.org/en/20/core/engines.html#database-urls).
 
 [The
 schema](https://github.com/conda/conda-index/blob/main/conda_index/postgres/model.py)
-is similar to the one [used for sqlite3](./database), except that while sqlite3
+is similar to the one [used for SQLite](database.md), except that while SQLite
 uses a database file per subdirectory, in PostgreSQL all subdirectories are
 stored in the same database. `conda_index` creates a random prefix in
 `[DIR]/.cache/cache.json` to differentiate this channel from any others that may

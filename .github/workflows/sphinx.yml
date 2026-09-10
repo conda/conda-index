@@ -12,11 +12,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   sphinx:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Cache conda packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
@@ -44,7 +50,7 @@ jobs:
           $CONDA/bin/conda create --quiet -n conda-index pip conda
           source $CONDA/envs/conda-index/bin/activate
           pip install -e ".[docs]"
-          make html
+          make html SPHINXOPTS="-W --keep-going"
       - name: Upload artifact
         id: deployment
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -55,7 +61,7 @@ jobs:
   pages:
 
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     needs: [sphinx]
 
     # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
