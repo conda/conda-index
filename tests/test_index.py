@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import bz2
+import copy
 import json
 import os
 import re
@@ -8,12 +9,14 @@ import shutil
 import sys
 import tarfile
 import urllib.parse
+from datetime import datetime
 from logging import getLogger
 from os.path import isfile, join
 from pathlib import Path
 from shutil import rmtree
 
 import conda_package_handling.api
+import msgpack
 import pytest
 
 if sys.version_info >= (3, 14):  # pragma: no cover
@@ -44,6 +47,19 @@ here = os.path.dirname(__file__)
 
 # match ./index_hotfix_pkgs/<subdir>
 TEST_SUBDIR = "osx-64"
+
+
+def without_indexed_timestamps(repodata):
+    repodata = copy.deepcopy(repodata)
+    sections = [
+        repodata.get(section, {})
+        for section in ("packages", "packages.conda", "tar.bz2", "conda", "whl")
+    ]
+    sections.extend(repodata.get("v3", {}).values())
+    for section in sections:
+        for record in section.values():
+            assert isinstance(record.pop("indexed_timestamp"), int)
+    return repodata
 
 
 def test_index_on_single_subdir_1(testing_workdir):
@@ -119,8 +135,10 @@ def test_index_on_single_subdir_1(testing_workdir):
         "removed": [],
         "repodata_version": 1,
     }
-    assert actual_repodata_json == expected_repodata_json
-    assert actual_pkg_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
+    assert (
+        without_indexed_timestamps(actual_pkg_repodata_json) == expected_repodata_json
+    )
 
     # #######################################
     # tests for full channel
@@ -217,8 +235,10 @@ def test_file_index_on_single_subdir_1(testing_workdir):
         "removed": [],
         "repodata_version": 1,
     }
-    assert actual_repodata_json == expected_repodata_json
-    assert actual_pkg_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
+    assert (
+        without_indexed_timestamps(actual_pkg_repodata_json) == expected_repodata_json
+    )
 
     # download two packages here, put them both in the same subdir
     test_package_path = join(testing_workdir, "osx-64", "fly-2.5.2-0.tar.bz2")
@@ -244,8 +264,10 @@ def test_file_index_on_single_subdir_1(testing_workdir):
         actual_pkg_repodata_json = json.loads(fh.read())
         assert actual_pkg_repodata_json
 
-    assert actual_repodata_json == expected_repodata_json
-    assert actual_pkg_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
+    assert (
+        without_indexed_timestamps(actual_pkg_repodata_json) == expected_repodata_json
+    )
 
     # #######################################
     # tests for full channel
@@ -361,8 +383,10 @@ def test_index_noarch_osx64_1(testing_workdir):
         "removed": [],
         "repodata_version": 1,
     }
-    assert actual_repodata_json == expected_repodata_json
-    assert actual_pkg_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
+    assert (
+        without_indexed_timestamps(actual_pkg_repodata_json) == expected_repodata_json
+    )
 
     # #######################################
     # tests for full channel
@@ -568,6 +592,32 @@ def _patch_repodata(repodata, subdir):
             "package_has_been_revoked"
             not in pkg_list["revoke_test-1.0-0.tar.bz2"]["depends"]
         )
+
+
+def test_patch_cannot_change_indexed_timestamp():
+    filename = "pkg-1.0-0.tar.bz2"
+    legacy_filename = "legacy-1.0-0.tar.bz2"
+    repodata = {
+        "packages": {
+            filename: {"indexed_timestamp": 2000, "depends": ["old"]},
+            legacy_filename: {"depends": ["old"]},
+        },
+        "packages.conda": {},
+    }
+    instructions = {
+        "packages": {
+            filename: {"indexed_timestamp": 1, "depends": ["new"]},
+            legacy_filename: {"indexed_timestamp": 1, "depends": ["new"]},
+        }
+    }
+
+    conda_index.index._apply_instructions("noarch", repodata, instructions)
+
+    assert repodata["packages"][filename]["indexed_timestamp"] == 2000
+    assert repodata["packages"][filename]["depends"] == ["new"]
+    assert "indexed_timestamp" not in repodata["packages"][legacy_filename]
+    assert repodata["packages"][legacy_filename]["depends"] == ["new"]
+    assert instructions["packages"][filename]["indexed_timestamp"] == 1
 
 
 def test_channel_patch_instructions_json(testing_workdir):
@@ -776,6 +826,12 @@ def test_index_of_updated_package(testing_workdir):
     )
 
     with index_cache.db as db:
+        indexed_timestamps = {
+            row["path"]: row["indexed_timestamp"]
+            for row in db.execute(
+                "SELECT path, indexed_timestamp FROM indexed_timestamp"
+            )
+        }
         db.execute(f"UPDATE index_json SET index_json='{dummy_index_json}'")
         assert all(
             row["index_json"] == dummy_index_json
@@ -794,6 +850,12 @@ def test_index_of_updated_package(testing_workdir):
             row["index_json"] == dummy_index_json
             for row in db.execute("SELECT index_json FROM index_json")
         )
+        assert {
+            row["path"]: row["indexed_timestamp"]
+            for row in db.execute(
+                "SELECT path, indexed_timestamp FROM indexed_timestamp"
+            )
+        } == indexed_timestamps
         db.execute("UPDATE stat SET mtime = mtime-1")
         db.commit()
     index_cache.close()
@@ -906,7 +968,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
         "removed": [],
         "repodata_version": 1,
     }
-    assert actual_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
 
     # if we clear the stat cache, we force a re-examination.  This
     # re-examination will load files from the cache.  This has been a source of
@@ -921,7 +983,7 @@ def test_new_pkg_format_preferred(testing_workdir, mocker):
     with open(join(testing_workdir, "osx-64", "repodata.json")) as fh:
         actual_repodata_json = json.loads(fh.read())
 
-    assert actual_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
 
     # make sure .conda and .tar.bz2 exist in index.html
     index_html = Path(testing_workdir, "osx-64", "index.html").read_text()
@@ -1002,7 +1064,7 @@ def test_new_pkg_format_stat_cache_used(testing_workdir, mocker):
         "removed": [],
         "repodata_version": 1,
     }
-    assert actual_repodata_json == expected_repodata_json
+    assert without_indexed_timestamps(actual_repodata_json) == expected_repodata_json
 
 
 @pytest.mark.skipif(
@@ -1389,6 +1451,108 @@ def test_repodata_v3(index_data):
     assert noarch["v3"]["tar.bz2"] or noarch["v3"]["conda"]
 
 
+@pytest.mark.parametrize("repodata_v3", (False, True))
+def test_indexed_timestamp_outputs(index_data, repodata_v3, monkeypatch):
+    pkg_dir = Path(index_data, "packages")
+    indexed_timestamp = 2_000_000_000_000
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.fromtimestamp(indexed_timestamp / 1000, tz=tz)
+
+    monkeypatch.setattr(conda_index.index, "datetime", FixedDatetime)
+    channel_index = conda_index.index.ChannelIndex(
+        pkg_dir,
+        None,
+        write_bz2=False,
+        write_zst=False,
+        compact_json=True,
+        threads=1,
+        write_shards=True,
+        repodata_v3=repodata_v3,
+    )
+    channel_index.index(None)
+
+    def records(repodata):
+        sections = (
+            repodata["v3"].values()
+            if repodata_v3
+            else (
+                repodata["packages"],
+                repodata["packages.conda"],
+            )
+        )
+        return [record for section in sections for record in section.values()]
+
+    noarch = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
+    assert records(noarch)
+    assert {record["indexed_timestamp"] for record in records(noarch)} == {
+        indexed_timestamp
+    }
+
+    shard_index = msgpack.loads(
+        zstd.decompress(
+            (pkg_dir / "noarch" / "repodata_shards.msgpack.zst").read_bytes()
+        )
+    )
+    shard_records = []
+    for shard_hash in shard_index["shards"].values():
+        shard = msgpack.loads(
+            zstd.decompress(
+                (pkg_dir / "noarch" / f"{shard_hash.hex()}.msgpack.zst").read_bytes()
+            )
+        )
+        shard_records.extend(records(shard))
+    assert shard_records
+    assert {record["indexed_timestamp"] for record in shard_records} == {
+        indexed_timestamp
+    }
+
+    if repodata_v3:
+        revision = noarch["info"]["repodata_revisions"]["v3"]
+        assert revision["oldest"] == indexed_timestamp
+        assert revision["newest"] == indexed_timestamp
+        shard_revision = shard_index["info"]["repodata_revisions"]["v3"]
+        assert shard_revision["oldest"] == indexed_timestamp
+        assert shard_revision["newest"] == indexed_timestamp
+
+
+def test_indexed_timestamp_refreshes_for_each_index_run(index_data, monkeypatch):
+    pkg_dir = Path(index_data, "packages")
+    channel_index = conda_index.index.ChannelIndex(
+        pkg_dir,
+        None,
+        subdirs=("noarch",),
+        write_bz2=False,
+        write_zst=False,
+        threads=1,
+    )
+    timestamps = iter((2_000_000, 2_000_000, 3_000_000, 3_000_000))
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.fromtimestamp(next(timestamps) / 1000, tz=tz)
+
+    monkeypatch.setattr(conda_index.index, "datetime", FixedDatetime)
+    channel_index.index(None)
+    first_timestamp = channel_index.indexed_timestamp
+
+    source = pkg_dir / "noarch" / "run_exports_versions-1.0-he35c369_0.tar.bz2"
+    destination = pkg_dir / "noarch" / "new-package-1.0-0.tar.bz2"
+    shutil.copyfile(source, destination)
+    channel_index.index(None)
+
+    repodata = json.loads((pkg_dir / "noarch" / "repodata.json").read_text())
+    records = {
+        **repodata["packages"],
+        **repodata["packages.conda"],
+    }
+    assert records[source.name]["indexed_timestamp"] == first_timestamp
+    assert records[destination.name]["indexed_timestamp"] == 3_000_000
+
+
 def test_write_current_repodata(index_data):
     """
     Test that we can skip current_repodata, and that it deletes the old one.
@@ -1761,7 +1925,10 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, v3_repodata, req
         assert len(actual_repodata_json["v3"]["tar.bz2"]) == 1
         assert len(actual_repodata_json["v3"]["conda"]) == 0
         assert len(actual_repodata_json["v3"]["whl"]) == 1
-        assert actual_repodata_json["v3"] == expected_repodata_json_v3
+        assert (
+            without_indexed_timestamps(actual_repodata_json["v3"])
+            == expected_repodata_json_v3
+        )
     else:
         expected_repodata_json_v1 = {
             "info": {"subdir": "noarch"},
@@ -1786,7 +1953,10 @@ def test_index_noarch_with_wheels(testing_workdir, cache_class, v3_repodata, req
             "repodata_version": 1,
         }
         assert "v3" not in actual_repodata_json
-        assert actual_repodata_json == expected_repodata_json_v1
+        assert (
+            without_indexed_timestamps(actual_repodata_json)
+            == expected_repodata_json_v1
+        )
 
 
 @pytest.mark.parametrize(

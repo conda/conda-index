@@ -6,7 +6,16 @@ Used for psqlcache mode instead of low-dependencies sqlite mode.
 
 from __future__ import annotations
 
-from sqlalchemy import TEXT, Column, Computed, Integer, LargeBinary, Table, text
+from sqlalchemy import (
+    TEXT,
+    BigInteger,
+    Column,
+    Computed,
+    Integer,
+    LargeBinary,
+    Table,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 
@@ -15,6 +24,7 @@ from ..index.cache import IndexedStages
 TABLE_NAMES = {
     "about",
     "icon",
+    "indexed_timestamp",
     "index_json",
     "post_install",
     "recipe",
@@ -32,6 +42,8 @@ for table in TABLE_NAMES:
     columns = []
     if table == "icon":
         columns.append(Column("icon_png", LargeBinary))
+    elif table == "indexed_timestamp":
+        columns.append(Column(table, BigInteger, nullable=False))
     else:
         columns.append(Column(table, JSONB))  # or JSONB for postgresql?
     if table == "index_json":
