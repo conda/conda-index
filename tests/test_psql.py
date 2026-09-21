@@ -507,9 +507,8 @@ def test_psql_indexed_records_query_joins_indexed_timestamp(tmp_path: Path):
     compiled = cache._indexed_records_query(include_run_exports=False).compile()
 
     assert "JOIN indexed_timestamp" in str(compiled)
-    assert "jsonb_build_object" in str(compiled)
-    assert "||" in str(compiled)
-    assert "indexed_timestamp" in compiled.params.values()
+    assert "jsonb_build_object" not in str(compiled)
+    assert "indexed_timestamp.indexed_timestamp" in str(compiled)
 
 
 def test_psql_no_parse_icon_bad_package(tmp_path: Path):
@@ -562,48 +561,45 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         name: str
         path: str
         index_json: object
+        indexed_timestamp: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
         index_json: object
+        indexed_timestamp: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return
         # the correct number of columns.
         last_call = connection.calls[-1]
-        if len(last_call[0].columns) == 4:
+        if len(last_call[0].columns) == 5:
             return [
+                DummyResultWithRunExports("package", "package.notconda", {}, 1000, {}),
                 DummyResultWithRunExports(
-                    "package", "package.notconda", {"indexed_timestamp": 1000}, {}
-                ),
-                DummyResultWithRunExports(
-                    "package", "package-1.0.notconda", {"indexed_timestamp": 1000}, {}
+                    "package", "package-1.0.notconda", {}, 1000, {}
                 ),
                 DummyResultWithRunExports(
                     "package",
                     "package-1.0.conda",
-                    {"indexed_timestamp": 1000},
+                    {},
+                    1000,
                     {"weak": ["zlib"]},
                 ),
                 DummyResultWithRunExports(
-                    "package", "package-1.0.tar.bz2", {"indexed_timestamp": 1000}, {}
+                    "package", "package-1.0.tar.bz2", {}, 1000, {}
                 ),
             ]
-        elif len(last_call[0].columns) == 3:
+        elif len(last_call[0].columns) == 4:
             return [
+                DummyResultWithoutRunExports("package", "package.notconda", {}, 1000),
                 DummyResultWithoutRunExports(
-                    "package", "package.notconda", {"indexed_timestamp": 1000}
+                    "package", "package-1.0.notconda", {}, 1000
                 ),
+                DummyResultWithoutRunExports("package", "package-1.0.conda", {}, 1000),
                 DummyResultWithoutRunExports(
-                    "package", "package-1.0.notconda", {"indexed_timestamp": 1000}
-                ),
-                DummyResultWithoutRunExports(
-                    "package", "package-1.0.conda", {"indexed_timestamp": 1000}
-                ),
-                DummyResultWithoutRunExports(
-                    "package", "package-1.0.tar.bz2", {"indexed_timestamp": 1000}
+                    "package", "package-1.0.tar.bz2", {}, 1000
                 ),
             ]
 
@@ -645,26 +641,28 @@ def test_psql_include_wheel_extension(tmp_path: Path):
         name: str
         path: str
         index_json: object
+        indexed_timestamp: object
         run_exports: object
 
     class DummyResultWithoutRunExports(NamedTuple):
         name: str
         path: str
         index_json: object
+        indexed_timestamp: object
 
     def results_factory():
         # Get the last call to determine which query is being executed, and return
         # the correct number of columns.
         last_call = connection.calls[-1]
-        if len(last_call[0].columns) == 4:
+        if len(last_call[0].columns) == 5:
             return [
-                DummyResultWithRunExports("package", "package.whl", {}, {}),
-                DummyResultWithRunExports("package", "package.conda", {}, {}),
+                DummyResultWithRunExports("package", "package.whl", {}, 1000, {}),
+                DummyResultWithRunExports("package", "package.conda", {}, 1000, {}),
             ]
-        elif len(last_call[0].columns) == 3:
+        elif len(last_call[0].columns) == 4:
             return [
-                DummyResultWithoutRunExports("package", "package.whl", {}),
-                DummyResultWithoutRunExports("package", "package.conda", {}),
+                DummyResultWithoutRunExports("package", "package.whl", {}, 1000),
+                DummyResultWithoutRunExports("package", "package.conda", {}, 1000),
             ]
 
     connection.results_factory = results_factory

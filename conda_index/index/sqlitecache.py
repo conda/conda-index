@@ -426,11 +426,7 @@ class CondaIndexCache(BaseCondaIndexCache):
         # load cached packages
         for row in self.db.execute(
             f"""
-            SELECT path, json_set(
-                index_json.index_json,
-                '$.indexed_timestamp',
-                indexed_timestamp.indexed_timestamp
-            ) AS index_json
+            SELECT path, index_json.index_json, indexed_timestamp.indexed_timestamp
             FROM stat
             JOIN index_json USING (path)
             JOIN indexed_timestamp USING (path)
@@ -439,8 +435,9 @@ class CondaIndexCache(BaseCondaIndexCache):
             """,
             check_stages,
         ):
-            path, index_json = row
+            path, index_json, indexed_timestamp = row
             index_json = json.loads(index_json)
+            index_json["indexed_timestamp"] = indexed_timestamp
 
             section = self.package_section_for_path(path)
             if section is None:
@@ -471,11 +468,8 @@ class CondaIndexCache(BaseCondaIndexCache):
         for name, rows in itertools.groupby(
             self.db.execute(
                 f"""SELECT index_json.name, index_json.path,
-                    json_set(
-                        index_json.index_json,
-                        '$.indexed_timestamp',
-                        indexed_timestamp.indexed_timestamp
-                    ) AS index_json,
+                    index_json.index_json,
+                    indexed_timestamp.indexed_timestamp,
                     run_exports.run_exports
                 FROM stat
                 JOIN index_json USING (path)
@@ -499,12 +493,13 @@ class CondaIndexCache(BaseCondaIndexCache):
                 packages_whl=shard_dict["packages.whl"],
             )
             for row in rows:
-                _, path, index_json, run_exports = row
+                _, path, index_json, indexed_timestamp, run_exports = row
                 key = self.package_section_for_path(path)
                 if key is None:
                     log.warning("%s has unsupported extension", path)
                     continue
                 record = json.loads(index_json)
+                record["indexed_timestamp"] = indexed_timestamp
                 record["run_exports"] = json.loads(run_exports or "{}")
                 shard_dict[key][path] = pack_record(record)
 

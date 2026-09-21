@@ -381,7 +381,8 @@ class PsqlCache(BaseCondaIndexCache):
                     packages_whl=shard_dict["packages.whl"],
                 )
                 for row in rows:
-                    _, path, record, run_exports = row
+                    _, path, record, indexed_timestamp, run_exports = row
+                    record["indexed_timestamp"] = indexed_timestamp
                     record["run_exports"] = run_exports or {}
                     path = self.plain_path(path)
 
@@ -398,7 +399,7 @@ class PsqlCache(BaseCondaIndexCache):
 
     def _indexed_records_query(self, *, include_run_exports: bool):
         """
-        Query package records and server-controlled indexed timestamps.
+        Query package records joined with server-controlled indexed timestamps.
         """
         index_json_table = model.Base.metadata.tables["index_json"]
         indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
@@ -407,12 +408,8 @@ class PsqlCache(BaseCondaIndexCache):
         columns = [
             index_json_table.c.name,
             index_json_table.c.path,
-            index_json_table.c.index_json.op("||")(
-                sqlalchemy.func.jsonb_build_object(
-                    "indexed_timestamp",
-                    indexed_timestamp_table.c.indexed_timestamp,
-                )
-            ).label("index_json"),
+            index_json_table.c.index_json,
+            indexed_timestamp_table.c.indexed_timestamp,
         ]
         from_clause = join(
             index_json_table,
@@ -460,7 +457,9 @@ class PsqlCache(BaseCondaIndexCache):
                 if key is None:
                     log.warning("%s has unsupported extension", path)
                     continue
-                shard_dict[key][path] = row.index_json
+                record = row.index_json
+                record["indexed_timestamp"] = row.indexed_timestamp
+                shard_dict[key][path] = record
 
         return IndexedPackages(
             packages=shard_dict["packages"],
