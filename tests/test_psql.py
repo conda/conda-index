@@ -496,10 +496,9 @@ def test_psql_backfill_indexed_timestamp(tmp_path: Path):
     assert "jsonb_set" not in sql
     compiled = insert_query.compile()
     assert 3000 in compiled.params.values()
-    assert any(
-        str(value).startswith(cache.database_prefix)
-        for value in compiled.params.values()
-    )
+    # startswith(autoescape=True) escapes the LIKE metacharacters in the prefix
+    escaped_prefix = cache.database_prefix.replace("/", "//").replace("_", "/_")
+    assert escaped_prefix in compiled.params.values()
 
 
 def test_psql_indexed_records_query_joins_indexed_timestamp(tmp_path: Path):
