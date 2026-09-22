@@ -7,7 +7,7 @@ requires = [
 
 [project]
 authors = [
-  {name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io"},
+  { name = "Anaconda, Inc. & Contributors", email = "conda@continuum.io" },
 ]
 dependencies = [
   # no "conda" due to unavailability on pypi
@@ -18,7 +18,7 @@ dependencies = [
   "ruamel.yaml",
 ]
 dynamic = ["version", "description"]
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 name = "conda_index"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -108,7 +108,7 @@ show-fixes = true
 target-version = "py310"
 
 [tool.ruff.lint]
-flake8-type-checking = {exempt-modules = [], strict = true}
+flake8-type-checking = { exempt-modules = [], strict = true }
 ignore = [
   "E402",  # module level import not at top of file
   "E501",  # line too long
@@ -116,7 +116,7 @@ ignore = [
   "E731",  # do not assign a lambda expression, use a def
   "UP031",  # do not fix printf-style string formatting
 ]
-pycodestyle = {max-line-length = 120}
+pycodestyle = { max-line-length = 120 }
 # see https://docs.astral.sh/ruff/rules/
 select = [
   "E",  # pycodestyle errors

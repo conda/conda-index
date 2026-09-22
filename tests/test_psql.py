@@ -489,12 +489,17 @@ def test_psql_backfill_indexed_timestamp(tmp_path: Path):
 
     cache.backfill_indexed_timestamps()
 
-    insert_query, params = connection.calls[0]
-    assert "insert into indexed_timestamp" in str(insert_query).lower()
+    insert_query, _params = connection.calls[0]
+    sql = str(insert_query).lower()
+    assert "insert into indexed_timestamp" in sql
     assert len(connection.calls) == 1
-    assert "jsonb_set" not in str(insert_query)
-    assert params["indexed_timestamp"] == 3000
-    assert params["path_prefix"] == cache.database_prefix
+    assert "jsonb_set" not in sql
+    compiled = insert_query.compile()
+    assert 3000 in compiled.params.values()
+    assert any(
+        str(value).startswith(cache.database_prefix)
+        for value in compiled.params.values()
+    )
 
 
 def test_psql_indexed_records_query_joins_indexed_timestamp(tmp_path: Path):

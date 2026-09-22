@@ -13,13 +13,25 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import cte, join, or_, select
+from sqlalchemy import (
+    BigInteger,
+    Numeric,
+    and_,
+    case,
+    cast,
+    cte,
+    func,
+    join,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import insert
 
 from ..index.cache import (
     BaseCondaIndexCache,
     IndexedPackages,
     IndexedShard,
+    IndexedStages,
     clear_newline_chars,
     pack_record,
 )
@@ -127,56 +139,71 @@ class PsqlCache(BaseCondaIndexCache):
         log.warning(f"{self.__class__}.convert() is not implemented")
 
     def backfill_indexed_timestamps(self) -> None:
-        insert_query = sqlalchemy.text(
-            """
-            INSERT INTO indexed_timestamp (path, indexed_timestamp)
-            SELECT
-                record.path,
-                LEAST(
-                    CAST(:indexed_timestamp AS BIGINT),
-                    COALESCE(
-                        CASE
-                            WHEN jsonb_typeof(record.index_json -> 'timestamp') = 'number'
-                                AND trunc(CAST(record.index_json ->> 'timestamp' AS NUMERIC))
-                                    BETWEEN -9223372036854775808
-                                    AND 9223372036854775807
-                            THEN CAST(
-                                trunc(CAST(record.index_json ->> 'timestamp' AS NUMERIC))
-                                AS BIGINT
-                            )
-                        END,
-                        (
-                            SELECT CAST(mtime AS BIGINT) * 1000
-                            FROM stat
-                            WHERE stat.path = record.path
-                                AND stat.stage IN (
-                                    :indexed_stage,
-                                    :upstream_stage
-                                )
-                            ORDER BY stat.stage = :indexed_stage DESC
-                            LIMIT 1
-                        ),
-                        CAST(:indexed_timestamp AS BIGINT)
+        index_json_table = model.Base.metadata.tables["index_json"]
+        indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+        stat_table = model.Base.metadata.tables["stat"]
+
+        indexed_stage = IndexedStages.INDEXED_STAGE.value
+        indexed_ts = cast(self.indexed_timestamp, BigInteger)
+        timestamp_json = index_json_table.c.index_json.op("->")("timestamp")
+        truncated_builder_ts = func.trunc(
+            cast(index_json_table.c.index_json.op("->>")("timestamp"), Numeric)
+        )
+        builder_timestamp = case(
+            (
+                and_(
+                    func.jsonb_typeof(timestamp_json) == "number",
+                    truncated_builder_ts.between(
+                        -9223372036854775808,
+                        9223372036854775807,
+                    ),
+                ),
+                cast(truncated_builder_ts, BigInteger),
+            )
+        )
+        mtime_ms = (
+            select(cast(stat_table.c.mtime, BigInteger) * 1000)
+            .where(
+                stat_table.c.path == index_json_table.c.path,
+                stat_table.c.stage.in_((indexed_stage, self.upstream_stage)),
+            )
+            .order_by((stat_table.c.stage == indexed_stage).desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        insert_query = (
+            insert(indexed_timestamp_table)
+            .from_select(
+                [
+                    indexed_timestamp_table.c.path,
+                    indexed_timestamp_table.c.indexed_timestamp,
+                ],
+                select(
+                    index_json_table.c.path,
+                    func.least(
+                        indexed_ts,
+                        func.coalesce(builder_timestamp, mtime_ms, indexed_ts),
+                    ),
+                )
+                .select_from(
+                    join(
+                        index_json_table,
+                        indexed_timestamp_table,
+                        index_json_table.c.path == indexed_timestamp_table.c.path,
+                        isouter=True,
                     )
                 )
-            FROM index_json AS record
-            LEFT JOIN indexed_timestamp AS timestamp
-                ON record.path = timestamp.path
-            WHERE LEFT(record.path, LENGTH(:path_prefix)) = :path_prefix
-                AND timestamp.path IS NULL
-            ON CONFLICT (path) DO NOTHING
-            """
+                .where(
+                    index_json_table.c.path.startswith(
+                        self.database_prefix, autoescape=True
+                    ),
+                    indexed_timestamp_table.c.path.is_(None),
+                ),
+            )
+            .on_conflict_do_nothing(index_elements=[indexed_timestamp_table.c.path])
         )
         with self.engine.begin() as connection:
-            connection.execute(
-                insert_query,
-                {
-                    "indexed_timestamp": self.indexed_timestamp,
-                    "indexed_stage": "indexed",
-                    "upstream_stage": self.upstream_stage,
-                    "path_prefix": self.database_prefix,
-                },
-            )
+            connection.execute(insert_query)
 
     def store_stat_state(
         self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
