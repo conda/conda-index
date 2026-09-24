@@ -1,7 +1,64 @@
-# Welcome to conda-index's documentation!
+# conda-index
 
-```{include} ../README.md
+`conda-index` creates conda channels from collections of conda packages. It
+extracts package metadata and writes the `repodata.json` and channel metadata
+that conda uses for dependency solving.
+
+Place packages in the matching platform subdirectories of a channel directory,
+including `noarch`, then create the index:
+
+```console
+$ conda index <path-to-channel>
 ```
+
+## Explore the documentation
+
+::::{grid} 1 1 2 2
+:gutter: 3
+
+:::{grid-item-card} {octicon}`terminal` Command-line interface
+:link: cli
+:link-type: doc
+
+Run `conda index` or `python -m conda_index` and look up every option.
+:::
+
+:::{grid-item-card} {octicon}`workflow` How indexing works
+:link: theory_of_operation
+:link-type: doc
+
+Follow package discovery, metadata caching, and repodata generation.
+:::
+
+:::{grid-item-card} {octicon}`database` Cache database
+:link: database
+:link-type: doc
+
+Inspect the SQLite metadata cache schema and sample queries.
+:::
+
+:::{grid-item-card} {octicon}`server` PostgreSQL
+:link: postgresql
+:link-type: doc
+
+Configure a shared PostgreSQL metadata database.
+:::
+
+:::{grid-item-card} {octicon}`code` Python API
+:link: modules
+:link-type: doc
+
+Use `update_index`, `ChannelIndex`, and the filesystem abstraction.
+:::
+
+:::{grid-item-card} {octicon}`log` Changelog
+:link: changelog
+:link-type: doc
+
+See what changed in each conda-index release.
+:::
+
+::::
 
 ## History
 
@@ -40,19 +97,32 @@
 * Reformat code.
 
 ```{toctree}
-:caption: 'Contents:'
-:maxdepth: 2
-cli
-theory_of_operation
-database
+:hidden:
+:caption: How-to guides
+
 postgresql
-v3-repodata
-modules
-changelog
 ```
 
-# Indices and tables
+```{toctree}
+:hidden:
+:caption: Reference
 
-- {ref}`genindex`
-- {ref}`modindex`
-- {ref}`search`
+cli
+database
+v3-repodata
+modules
+```
+
+```{toctree}
+:hidden:
+:caption: Explanation
+
+theory_of_operation
+```
+
+```{toctree}
+:hidden:
+:caption: Project
+
+changelog
+```
