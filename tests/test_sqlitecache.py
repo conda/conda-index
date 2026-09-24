@@ -517,8 +517,6 @@ def test_merge_index_cache(tmp_path):
                 f"INSERT INTO index_json (path, index_json) VALUES ('prefix/{subdir}.conda', '{{}}')"
             )
             migrate(conn)
-            if subdir == "noarch":
-                conn.execute("DROP TABLE indexed_timestamp")
 
     merge_index_cache(tmp_path)
 
