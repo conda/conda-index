@@ -578,7 +578,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
         # Get the last call to determine which query is being executed, and return
         # the correct number of columns.
         last_call = connection.calls[-1]
-        if len(last_call[0].columns) == 5:
+        if len(last_call[0].selected_columns) == 5:
             return [
                 DummyResultWithRunExports("package", "package.notconda", {}, 1000, {}),
                 DummyResultWithRunExports(
@@ -595,7 +595,7 @@ def test_psql_skip_unknown_extension(tmp_path: Path):
                     "package", "package-1.0.tar.bz2", {}, 1000, {}
                 ),
             ]
-        elif len(last_call[0].columns) == 4:
+        elif len(last_call[0].selected_columns) == 4:
             return [
                 DummyResultWithoutRunExports("package", "package.notconda", {}, 1000),
                 DummyResultWithoutRunExports(
@@ -658,12 +658,12 @@ def test_psql_include_wheel_extension(tmp_path: Path):
         # Get the last call to determine which query is being executed, and return
         # the correct number of columns.
         last_call = connection.calls[-1]
-        if len(last_call[0].columns) == 5:
+        if len(last_call[0].selected_columns) == 5:
             return [
                 DummyResultWithRunExports("package", "package.whl", {}, 1000, {}),
                 DummyResultWithRunExports("package", "package.conda", {}, 1000, {}),
             ]
-        elif len(last_call[0].columns) == 4:
+        elif len(last_call[0].selected_columns) == 4:
             return [
                 DummyResultWithoutRunExports("package", "package.whl", {}, 1000),
                 DummyResultWithoutRunExports("package", "package.conda", {}, 1000),
