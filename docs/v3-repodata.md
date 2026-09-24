@@ -67,9 +67,11 @@ any `indexed_timestamp` embedded by a package builder. It persists the value in
 the index cache and preserves it across later indexing runs, including when an
 artifact's modification time changes.
 
-Cached records created before this field existed are backfilled once. The
-package `timestamp` is preferred, followed by the file modification time. The
-backfilled value is capped at the current indexing time and then persisted.
+Cached records created before this field existed are backfilled once (every time
+conda-index runs, it checks for paths that are missing `indexed_timestamp`). The
+package `timestamp` is preferred, the file modification time is used if the
+package has no `timestamp`. The current time is used in the unlikely case that
+`timestamp` is in the future.
 
 For v3 repodata, `info.repodata_revisions.v3.oldest` and `newest` are the
 minimum and maximum `indexed_timestamp` values in that revision.
