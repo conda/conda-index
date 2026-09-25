@@ -180,6 +180,49 @@ class CondaIndexCache(BaseCondaIndexCache):
             # prepare to be sent to other thread
             self.close()
 
+    def backfill_indexed_timestamps(self) -> None:
+        with self.db:
+            self.db.execute(
+                """
+                INSERT INTO indexed_timestamp (path, indexed_timestamp)
+                SELECT
+                    record.path,
+                    min(
+                        :indexed_timestamp,
+                        coalesce(
+                            CASE
+                                WHEN json_type(record.index_json, '$.timestamp') IN ('integer', 'real')
+                                THEN CAST(json_extract(record.index_json, '$.timestamp') AS INTEGER)
+                            END,
+                            (
+                                SELECT CAST(mtime * 1000 AS INTEGER)
+                                FROM stat
+                                WHERE stat.path = record.path
+                                    AND stat.stage IN (
+                                        :indexed_stage,
+                                        :upstream_stage
+                                    )
+                                ORDER BY stat.stage = :indexed_stage DESC
+                                LIMIT 1
+                            ),
+                            :indexed_timestamp
+                        )
+                    )
+                FROM index_json AS record
+                LEFT JOIN indexed_timestamp AS timestamp
+                    ON record.path = timestamp.path
+                WHERE record.path LIKE :path_like
+                    AND timestamp.path IS NULL
+                ON CONFLICT (path) DO NOTHING
+                """,
+                {
+                    "indexed_timestamp": self.indexed_timestamp,
+                    "indexed_stage": IndexedStages.INDEXED_STAGE.value,
+                    "upstream_stage": self.upstream_stage,
+                    "path_like": self.database_path_like,
+                },
+            )
+
     def store(
         self,
         fn: str,
@@ -219,6 +262,18 @@ class CondaIndexCache(BaseCondaIndexCache):
                     log.exception("table=%s parameters=%s", table, parameters)
                     # XXX delete from cache
                     raise
+
+            self.db.execute(
+                """
+                INSERT INTO indexed_timestamp (path, indexed_timestamp)
+                VALUES (:path, :indexed_timestamp)
+                ON CONFLICT (path) DO NOTHING
+                """,
+                {
+                    "path": database_path,
+                    "indexed_timestamp": self.indexed_timestamp,
+                },
+            )
 
             # sqlite json() function removes whitespace and ensures valid json
             self.db.execute(
@@ -371,14 +426,18 @@ class CondaIndexCache(BaseCondaIndexCache):
         # load cached packages
         for row in self.db.execute(
             f"""
-            SELECT path, index_json FROM stat JOIN index_json USING (path)
+            SELECT path, index_json.index_json, indexed_timestamp.indexed_timestamp
+            FROM stat
+            JOIN index_json USING (path)
+            JOIN indexed_timestamp USING (path)
             WHERE stat.stage IN ({stages_placeholders})
             ORDER BY path
             """,
             check_stages,
         ):
-            path, index_json = row
+            path, index_json, indexed_timestamp = row
             index_json = json.loads(index_json)
+            index_json["indexed_timestamp"] = indexed_timestamp
 
             section = self.package_section_for_path(path)
             if section is None:
@@ -408,9 +467,13 @@ class CondaIndexCache(BaseCondaIndexCache):
 
         for name, rows in itertools.groupby(
             self.db.execute(
-                f"""SELECT index_json.name, index_json.path, index_json.index_json, run_exports.run_exports
+                f"""SELECT index_json.name, index_json.path,
+                    index_json.index_json,
+                    indexed_timestamp.indexed_timestamp,
+                    run_exports.run_exports
                 FROM stat
                 JOIN index_json USING (path)
+                JOIN indexed_timestamp USING (path)
                 LEFT JOIN run_exports USING (path)
                 WHERE stat.stage IN ({stages_placeholders})
                 ORDER BY index_json.name, index_json.path""",
@@ -430,12 +493,13 @@ class CondaIndexCache(BaseCondaIndexCache):
                 packages_whl=shard_dict["packages.whl"],
             )
             for row in rows:
-                _, path, index_json, run_exports = row
+                _, path, index_json, indexed_timestamp, run_exports = row
                 key = self.package_section_for_path(path)
                 if key is None:
                     log.warning("%s has unsupported extension", path)
                     continue
                 record = json.loads(index_json)
+                record["indexed_timestamp"] = indexed_timestamp
                 record["run_exports"] = json.loads(run_exports or "{}")
                 shard_dict[key][path] = pack_record(record)
 

@@ -13,13 +13,25 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy
 from psycopg2 import OperationalError
-from sqlalchemy import cte, join, or_, select
+from sqlalchemy import (
+    BigInteger,
+    Numeric,
+    and_,
+    case,
+    cast,
+    cte,
+    func,
+    join,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import insert
 
 from ..index.cache import (
     BaseCondaIndexCache,
     IndexedPackages,
     IndexedShard,
+    IndexedStages,
     clear_newline_chars,
     pack_record,
 )
@@ -126,6 +138,73 @@ class PsqlCache(BaseCondaIndexCache):
         # or call model.create(engine) here?
         log.warning(f"{self.__class__}.convert() is not implemented")
 
+    def backfill_indexed_timestamps(self) -> None:
+        index_json_table = model.Base.metadata.tables["index_json"]
+        indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+        stat_table = model.Base.metadata.tables["stat"]
+
+        indexed_stage = IndexedStages.INDEXED_STAGE.value
+        indexed_ts = cast(self.indexed_timestamp, BigInteger)
+        timestamp_json = index_json_table.c.index_json.op("->")("timestamp")
+        truncated_builder_ts = func.trunc(
+            cast(index_json_table.c.index_json.op("->>")("timestamp"), Numeric)
+        )
+        builder_timestamp = case(
+            (
+                and_(
+                    func.jsonb_typeof(timestamp_json) == "number",
+                    truncated_builder_ts.between(
+                        -9223372036854775808,
+                        9223372036854775807,
+                    ),
+                ),
+                cast(truncated_builder_ts, BigInteger),
+            )
+        )
+        mtime_ms = (
+            select(cast(stat_table.c.mtime, BigInteger) * 1000)
+            .where(
+                stat_table.c.path == index_json_table.c.path,
+                stat_table.c.stage.in_((indexed_stage, self.upstream_stage)),
+            )
+            .order_by((stat_table.c.stage == indexed_stage).desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        insert_query = (
+            insert(indexed_timestamp_table)
+            .from_select(
+                [
+                    indexed_timestamp_table.c.path,
+                    indexed_timestamp_table.c.indexed_timestamp,
+                ],
+                select(
+                    index_json_table.c.path,
+                    func.least(
+                        indexed_ts,
+                        func.coalesce(builder_timestamp, mtime_ms, indexed_ts),
+                    ),
+                )
+                .select_from(
+                    join(
+                        index_json_table,
+                        indexed_timestamp_table,
+                        index_json_table.c.path == indexed_timestamp_table.c.path,
+                        isouter=True,
+                    )
+                )
+                .where(
+                    index_json_table.c.path.startswith(
+                        self.database_prefix, autoescape=True
+                    ),
+                    indexed_timestamp_table.c.path.is_(None),
+                ),
+            )
+            .on_conflict_do_nothing(index_elements=[indexed_timestamp_table.c.path])
+        )
+        with self.engine.begin() as connection:
+            connection.execute(insert_query)
+
     def store_stat_state(
         self, stage: str | None, listdir_stat: Iterable[dict[str, Any]]
     ):
@@ -173,6 +252,10 @@ class PsqlCache(BaseCondaIndexCache):
         database_path = self.database_path(fn)
         connection: Connection
         with self.engine.begin() as connection:
+            index_json_table = model.Base.metadata.tables["index_json"]
+            indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
+            stat_table = model.Base.metadata.tables["stat"]
+
             for have_path in members:
                 table: str = PATH_TO_TABLE[have_path]
                 if table in TABLE_NO_CACHE or table == "index_json":
@@ -207,6 +290,16 @@ class PsqlCache(BaseCondaIndexCache):
                     log.exception("table=%s parameters=%s", table, parameters)
                     raise
 
+            timestamp_insert = insert(indexed_timestamp_table)
+            connection.execute(
+                timestamp_insert.values(
+                    path=database_path,
+                    indexed_timestamp=self.indexed_timestamp,
+                ).on_conflict_do_nothing(
+                    index_elements=[indexed_timestamp_table.c.path]
+                )
+            )
+
             table = "index_json"
             index_json_table = model.Base.metadata.tables[table]
             insert_obj = insert(index_json_table)
@@ -219,7 +312,6 @@ class PsqlCache(BaseCondaIndexCache):
                 )  # it will cast to jsonb automatically
             )
 
-            stat_table = model.Base.metadata.tables["stat"]
             values = {
                 "path": database_path,
                 "stage": "indexed",
@@ -316,7 +408,8 @@ class PsqlCache(BaseCondaIndexCache):
                     packages_whl=shard_dict["packages.whl"],
                 )
                 for row in rows:
-                    _, path, record, run_exports = row
+                    _, path, record, indexed_timestamp, run_exports = row
+                    record["indexed_timestamp"] = indexed_timestamp
                     record["run_exports"] = run_exports or {}
                     path = self.plain_path(path)
 
@@ -333,20 +426,27 @@ class PsqlCache(BaseCondaIndexCache):
 
     def _indexed_records_query(self, *, include_run_exports: bool):
         """
-        Query package records from index_json + stat, optionally joining run_exports.
+        Query package records joined with server-controlled indexed timestamps.
         """
         index_json_table = model.Base.metadata.tables["index_json"]
+        indexed_timestamp_table = model.Base.metadata.tables["indexed_timestamp"]
         stat_table = model.Base.metadata.tables["stat"]
 
         columns = [
             index_json_table.c.name,
             index_json_table.c.path,
             index_json_table.c.index_json,
+            indexed_timestamp_table.c.indexed_timestamp,
         ]
         from_clause = join(
             index_json_table,
             stat_table,
             index_json_table.c.path == stat_table.c.path,
+        )
+        from_clause = join(
+            from_clause,
+            indexed_timestamp_table,
+            index_json_table.c.path == indexed_timestamp_table.c.path,
         )
 
         if include_run_exports:
@@ -384,7 +484,9 @@ class PsqlCache(BaseCondaIndexCache):
                 if key is None:
                     log.warning("%s has unsupported extension", path)
                     continue
-                shard_dict[key][path] = row.index_json
+                record = row.index_json
+                record["indexed_timestamp"] = row.indexed_timestamp
+                shard_dict[key][path] = record
 
         return IndexedPackages(
             packages=shard_dict["packages"],

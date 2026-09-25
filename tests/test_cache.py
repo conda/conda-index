@@ -78,6 +78,7 @@ def test_cache(tmp_path):
     assert c.plain_path(db_path) == package
 
     c.convert()
+    c.backfill_indexed_timestamps()
     c.close()
 
     assert c.package_section_for_path("file.whl") == "packages.whl"
