@@ -47,7 +47,7 @@ jobs:
         run: |
           curl -s https://api.ipify.org
 
-      - uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
           python-version: ${{ matrix.python-version }}
           channels: defaults
@@ -63,7 +63,7 @@ jobs:
           pytest --cov ${{ matrix.postgresql == '' && '-m "not needs_postgresql"' || '' }}
 
       - name: Upload Coverage
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           flags: ${{ runner.os }},${{ runner.arch }},${{ matrix.python-version }}
           token: ${{ secrets.CODECOV_TOKEN }}  # required
