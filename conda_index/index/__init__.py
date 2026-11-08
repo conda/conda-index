@@ -511,7 +511,8 @@ class ChannelIndex:
 
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.indexed_timestamp = int(now_dt.timestamp() * 1000)
+        # indexed_timestamp is already set once in __init__; do not overwrite it
+        # here so all subdirs in one run share the same timestamp.
 
         subdirs = self.detect_subdirs()
 
