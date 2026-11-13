@@ -9,8 +9,16 @@ import json
 # conda internals
 from conda.base.context import context
 from conda.core.subdir_data import SubdirData
-from conda.exports import MatchSpec, Resolve, VersionOrder
 from conda.models.channel import Channel
+from conda.models.match_spec import MatchSpec
+from conda.models.version import VersionOrder
+
+try:
+    # conda >=26.10 ships the classic solver as a separate plugin
+    from conda_pycosat_solver.resolve import Resolve
+except ImportError:
+    # older conda releases still bundle it
+    from conda.exports import Resolve
 
 from ..utils import CONDA_PACKAGE_EXTENSION_V1, CONDA_PACKAGE_EXTENSION_V2
 
