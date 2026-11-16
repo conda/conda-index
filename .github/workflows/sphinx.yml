@@ -42,7 +42,7 @@ jobs:
         with:
           channels: defaults
           show-channel-urls: true
-          activate-environment: ""
+          activate-environment: ''
           pkgs-dirs: /home/runner/.conda/pkgs
       - name: Build Documentation
         shell: bash -el {0}
