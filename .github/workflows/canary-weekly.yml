@@ -58,7 +58,7 @@ jobs:
           conda install -c conda-canary/label/dev conda-build "pip>=22"
           pip install -e .[test]
           conda info -a
-          pytest
+          pytest -m "not needs_postgresql"
 
   analyze:
     name: Analyze test results
