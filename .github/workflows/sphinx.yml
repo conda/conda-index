@@ -27,11 +27,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
           # Increase this value to reset cache
-          CACHE_NUMBER: 1
+          CACHE_NUMBER: 2
         with:
           path: |
-            /usr/share/miniconda/pkgs/*.conda
-            /usr/share/miniconda/pkgs/cache
             /home/runner/.conda/pkgs/*.conda
             /home/runner/.conda/pkgs/cache
           key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('pyproject.toml') }}
@@ -40,15 +38,17 @@ jobs:
           python-version: 3.x
           architecture: x64
           cache: pip
-      - name: Setup conda
-        run: |
-          $CONDA/bin/conda info
-          # conda init doesn't do what we want here
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          channels: defaults
+          show-channel-urls: true
+          activate-environment: ''
+          pkgs-dirs: /home/runner/.conda/pkgs
       - name: Build Documentation
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
-          $CONDA/bin/conda create --quiet -n conda-index pip conda
-          source $CONDA/envs/conda-index/bin/activate
+          conda create --quiet -n conda-index pip conda
+          conda activate conda-index
           pip install -e ".[docs]"
           make html SPHINXOPTS="-W --keep-going"
       - name: Upload artifact

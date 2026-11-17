@@ -58,7 +58,7 @@ jobs:
           conda install -c conda-canary/label/dev conda-build "pip>=22"
           pip install -e .[test]
           conda info -a
-          pytest
+          pytest -m "not needs_postgresql"
 
   analyze:
     name: Analyze test results
@@ -87,3 +87,40 @@ jobs:
         uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
+
+  report-failure:
+    needs: [linux]
+    if: >-
+      always()
+      && !github.event.repository.fork
+      && needs.linux.result == 'failure'
+      && github.event_name == 'schedule'
+    runs-on: ubuntu-slim
+    steps:
+      - name: Report test failure
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_REPORT_TEST_FAILURE }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          TITLE="${{ github.workflow }} failed \`${BRANCH}\`"
+          BODY="The ${{ github.workflow }} workflow failed on ${BRANCH} at $(date -u '+%Y-%m-%d %H:%M') UTC
+
+          Full run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          existing=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --search "\"${TITLE}\" in:title label:source::auto sort:created-desc" \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" \
+              --repo "${{ github.repository }}" \
+              --body "$BODY"
+          else
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "$TITLE" \
+              --body "$BODY" \
+              --label "¡blocking!,type::bug,type::testing,source::auto"
+          fi
