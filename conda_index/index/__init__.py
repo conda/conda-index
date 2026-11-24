@@ -12,7 +12,7 @@ import os
 import sys
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from os.path import basename, getmtime, getsize, isfile, join
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -310,7 +310,7 @@ def _get_jinja2_environment():
         if isinstance(dt, (int, float)):
             if dt > 253402300799:  # 9999-12-31
                 dt //= 1000  # convert milliseconds to seconds; see #1988
-            dt = datetime.fromtimestamp(dt, tz=timezone.utc)
+            dt = datetime.fromtimestamp(dt, tz=UTC)
         return dt.strftime(dt_format)
 
     def _filter_add_href(text, link, **kwargs):
@@ -353,7 +353,7 @@ def _make_subdir_index_html(
     rendered_html = template.render(
         title="{}/{}".format(channel_name or "", subdir),
         packages=repodata_packages,
-        current_time=datetime.now(timezone.utc),
+        current_time=datetime.now(UTC),
         extra_paths=extra_paths,
         html_dependencies=html_dependencies,
     )
@@ -367,7 +367,7 @@ def _make_channeldata_index_html(channel_name, channeldata):
         title=channel_name,
         packages=channeldata["packages"],
         subdirs=channeldata["subdirs"],
-        current_time=datetime.now(timezone.utc),
+        current_time=datetime.now(UTC),
     )
     return rendered_html
 
@@ -472,7 +472,7 @@ class ChannelIndex:
 
         self.cache_kwargs = cache_kwargs
 
-        now_dt = datetime.now(tz=timezone.utc)
+        now_dt = datetime.now(tz=UTC)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         self.indexed_timestamp = int(now_dt.timestamp() * 1000)
 
@@ -509,7 +509,7 @@ class ChannelIndex:
                 __name__,
             )
 
-        now_dt = datetime.now(tz=timezone.utc)
+        now_dt = datetime.now(tz=UTC)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         self.indexed_timestamp = int(now_dt.timestamp() * 1000)
 
