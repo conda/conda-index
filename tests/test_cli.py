@@ -41,8 +41,8 @@ def test_cli(tmp_path):
     current_index_versions.write_text(
         """
 python:
-    - 3.11
-    - 3.12
+    - 3.8
+    - 3.9
 """
     )
 

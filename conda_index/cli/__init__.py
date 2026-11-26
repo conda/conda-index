@@ -103,7 +103,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "-m",
         help="YAML file containing name of package as key, and list of versions as values. "
         "The current_index.json will contain the newest from this series of versions. "
-        "For example: python: [3.14, 3.15] will keep python 3.14.X and 3.15.Y in the "
+        "For example: python: [3.8, 3.9] will keep python 3.8.X and 3.9.Y in the "
         "current_index.json, instead of only the very latest python version.",
     )
 
