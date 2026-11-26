@@ -472,6 +472,17 @@ class ChannelIndex:
 
         self.cache_kwargs = cache_kwargs
 
+        self._set_run_timestamps()
+
+    def _set_run_timestamps(self):
+        """
+        Set ``created_at`` and ``indexed_timestamp`` for an indexing run.
+
+        Called from ``__init__`` so methods like ``index_subdir()`` work
+        without ``index()``, and from each ``index()`` call so that a reused
+        ``ChannelIndex`` stamps new packages with the time of the run that
+        found them.
+        """
         now_dt = datetime.now(tz=timezone.utc)
         self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         self.indexed_timestamp = int(now_dt.timestamp() * 1000)
@@ -509,9 +520,7 @@ class ChannelIndex:
                 __name__,
             )
 
-        now_dt = datetime.now(tz=timezone.utc)
-        self.created_at = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.indexed_timestamp = int(now_dt.timestamp() * 1000)
+        self._set_run_timestamps()
 
         subdirs = self.detect_subdirs()
 
