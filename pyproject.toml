@@ -21,7 +21,7 @@ dynamic = ["version", "description"]
 license = { file = "LICENSE" }
 name = "conda_index"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.entry-points.conda]
 index = "conda_index.plugin"
@@ -108,7 +108,7 @@ exclude = [
   "conda_index/utils_build.py",
 ]
 show-fixes = true
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 flake8-type-checking = { exempt-modules = [], strict = true }

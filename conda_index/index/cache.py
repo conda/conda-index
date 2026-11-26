@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -172,7 +172,7 @@ class BaseCondaIndexCache(metaclass=abc.ABCMeta):
         self.include_stages = include_stages
         self.package_extensions = package_extensions
         self.update_only = update_only
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         self.indexed_timestamp = int(now.timestamp() * 1000)
 
         self.fs = fs or MinimalFS()

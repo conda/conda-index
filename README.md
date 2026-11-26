@@ -36,7 +36,7 @@ python -m conda_index --verbose --threads=1 <path to channel directory>
 ## Contributing
 
 ```sh
-conda create -n conda-index "python >=3.9" conda conda-build "pip >=22"
+conda create -n conda-index "python >=3.11" conda conda-build "pip >=22"
 
 git clone https://github.com/conda/conda-index.git
 pip install -e conda-index[test]
